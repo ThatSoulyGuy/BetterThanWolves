@@ -1,0 +1,400 @@
+// Root project: shared config, setupVanilla, resource extraction
+
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:5.2.0'
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    group = 'net.minecraft.btw'
+    version = rootProject.modVersion
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    repositories {
+        mavenCentral()
+        maven { url = 'https://libraries.minecraft.net' }
+    }
+
+    tasks.withType(JavaCompile) {
+        options.encoding = 'Cp1252'
+        options.compilerArgs << '-nowarn' << '-Xmaxerrs' << '9999'
+    }
+}
+
+task buildAll {
+    group = 'build'
+    description = 'Builds both client and server JARs'
+    dependsOn ':Client:jar', ':Server:jar'
+}
+
+// ---------------------------------------------------------------------------
+// Vanilla MC setup — downloads MCP 7.51, decompiles MC 1.5.2, applies patches
+// ---------------------------------------------------------------------------
+
+def MC_CLIENT_URL = 'https://launcher.mojang.com/v1/objects/465378c9dc2f779ae1d6e8046ebc46fb53a57968/client.jar'
+def MC_SERVER_URL = 'https://launcher.mojang.com/v1/objects/f9ae3f651319151ce99a0bfad6b34fa16eb6775f/server.jar'
+def MCP_MEDIAFIRE_PAGE = 'https://www.mediafire.com/file/95vlzp1a4n4wjqw/mcp751.zip/file'
+def PYTHON2 = System.getenv('PYTHON2') ?: (org.gradle.internal.os.OperatingSystem.current().isWindows()
+    ? 'C:/Python27/python.exe' : 'python2')
+
+task setupVanilla {
+    group = 'setup'
+    description = 'Downloads MCP 7.51, decompiles MC 1.5.2, applies BTW patches'
+
+    doLast {
+        def vanillaClient = file('vanilla/client')
+        def vanillaServer = file('vanilla/server')
+
+        def marker = file('vanilla/.setup-complete')
+        if (marker.exists()) {
+            logger.lifecycle('vanilla/ already set up — delete vanilla/ to redo')
+            return
+        }
+
+        def cache = file('.gradle/mc-cache')
+        cache.mkdirs()
+
+        // --- Download MCP 7.51 ---
+        def mcpZip = new File(cache, 'mcp751.zip')
+        def mcpDir = new File(cache, 'mcp751')
+
+        if (!mcpZip.exists()) {
+            logger.lifecycle('Downloading MCP 7.51 from Mediafire...')
+            def pageOut = new ByteArrayOutputStream()
+            exec {
+                commandLine 'curl', '-sL', MCP_MEDIAFIRE_PAGE
+                standardOutput = pageOut
+            }
+            def m = pageOut.toString() =~ /https:\/\/download[^"]+mcp751[^"]+/
+            if (!m.find()) throw new GradleException(
+                'Could not find MCP download link. Download manually from Mediafire and place at: ' + mcpZip.absolutePath)
+            exec {
+                commandLine 'curl', '-sL', '-o', mcpZip.absolutePath, m.group()
+            }
+        }
+
+        if (!mcpDir.exists()) {
+            logger.lifecycle('Extracting MCP 7.51...')
+            copy { from zipTree(mcpZip); into mcpDir }
+        }
+
+        // --- Download MC 1.5.2 jars ---
+        def clientJar = new File(mcpDir, 'jars/bin/minecraft.jar')
+        def serverJar = new File(mcpDir, 'jars/minecraft_server.jar')
+
+        if (!clientJar.exists()) {
+            logger.lifecycle('Downloading MC 1.5.2 client...')
+            clientJar.parentFile.mkdirs()
+            ant.get(src: MC_CLIENT_URL, dest: clientJar)
+        }
+        if (!serverJar.exists()) {
+            logger.lifecycle('Downloading MC 1.5.2 server...')
+            ant.get(src: MC_SERVER_URL, dest: serverJar)
+        }
+
+        // --- Copy LWJGL libs into MCP workspace ---
+        def binDir = new File(mcpDir, 'jars/bin')
+        ['lwjgl', 'lwjgl_util', 'jinput'].each { lib ->
+            def target = new File(binDir, "${lib}.jar")
+            if (!target.exists()) {
+                project(':Client').configurations.compileClasspath.files.each { f ->
+                    if (f.name.startsWith(lib) && f.name.endsWith('.jar')) {
+                        ant.copy(file: f, tofile: target)
+                    }
+                }
+            }
+        }
+
+        // --- Set up LWJGL natives for MCP ---
+        def nativesDir = new File(mcpDir, 'jars/bin/natives')
+        if (!nativesDir.exists()) {
+            nativesDir.mkdirs()
+            ['https://libraries.minecraft.net/org/lwjgl/lwjgl/lwjgl-platform/2.9.0/lwjgl-platform-2.9.0-natives-windows.jar',
+             'https://libraries.minecraft.net/net/java/jinput/jinput-platform/2.0.5/jinput-platform-2.0.5-natives-windows.jar'].each { url ->
+                def tmp = new File(cache, 'natives-tmp.jar')
+                ant.get(src: url, dest: tmp)
+                copy { from zipTree(tmp); into nativesDir; exclude 'META-INF/**' }
+                tmp.delete()
+            }
+        }
+
+        // --- Decompile with MCP 7.51 ---
+        def decompiledMarker = new File(mcpDir, 'src/minecraft/net/minecraft/src/Block.java')
+        if (!decompiledMarker.exists()) {
+            logger.lifecycle('Decompiling with MCP 7.51 (requires Python 2.7)...')
+            exec {
+                workingDir mcpDir
+                commandLine PYTHON2, 'runtime/decompile.py'
+                ignoreExitValue true
+            }
+            if (!decompiledMarker.exists()) {
+                throw new GradleException('MCP decompile failed — Block.java not found')
+            }
+        }
+
+        // --- Copy decompiled source to vanilla/ ---
+        logger.lifecycle('Copying decompiled source...')
+        vanillaClient.mkdirs()
+        vanillaServer.mkdirs()
+        copy { from new File(mcpDir, 'src/minecraft'); into vanillaClient }
+        copy { from "${mcpDir}/src/minecraft_server/net"; into "${vanillaServer}/net" }
+
+        // --- Normalize line endings to LF ---
+        logger.lifecycle('Normalizing line endings...')
+        fileTree('vanilla').matching { include '**/*.java' }.each { f ->
+            f.text = f.text.replace('\r\n', '\n').replace('\r', '\n')
+        }
+
+        // --- Create LF versions of patches ---
+        def patchLf = { File src, File dst ->
+            dst.text = src.text.replace('\r\n', '\n').replace('\r', '\n')
+        }
+        def p1 = new File(cache, 'patch_client.txt')
+        def p2 = new File(cache, 'patch_clientonly.txt')
+        def p3 = new File(cache, 'patch_server.txt')
+        patchLf(file('Src/patch.txt'), p1)
+        patchLf(file('SrcClient/patch.txt'), p2)
+        patchLf(file('SrcServer/patch.txt'), p3)
+
+        // --- Apply BTW patches ---
+        logger.lifecycle('Applying BTW patches...')
+        exec {
+            workingDir new File(vanillaClient, 'net/minecraft/src')
+            commandLine 'patch', '-R', '-p0', '--force'
+            standardInput = p1.newInputStream()
+            ignoreExitValue true
+        }
+        exec {
+            workingDir new File(vanillaClient, 'net/minecraft/client')
+            commandLine 'patch', '-R', '-p0', '--force'
+            standardInput = p2.newInputStream()
+            ignoreExitValue true
+        }
+        exec {
+            workingDir new File(vanillaServer, 'net/minecraft/src')
+            commandLine 'patch', '-R', '-p0', '--force'
+            standardInput = p3.newInputStream()
+            ignoreExitValue true
+        }
+
+        // --- Apply manual fixes for hunks that fail ---
+        logger.lifecycle('Applying manual fixups...')
+        applyFixups(vanillaClient, vanillaServer)
+
+        fileTree('vanilla').matching { include '**/*.rej' }.each { it.delete() }
+
+        marker.text = 'Setup completed at ' + new Date()
+        logger.lifecycle('=== Vanilla setup complete ===')
+    }
+}
+
+def applyFixups(File clientDir, File serverDir) {
+    def fixFile = { File f, Map<String,String> replacements ->
+        if (!f.exists()) return
+        def text = f.text
+        replacements.each { from, to -> text = text.replace(from, to) }
+        f.text = text
+    }
+
+    fixFile(new File(clientDir, 'net/minecraft/src/GuiIngame.java'), [
+        'this.drawString(var8, var45, var6 - var8.getStringWidth(var45) - 2, 12, 14737632);\n            var47':
+        'this.drawString(var8, var45, var6 - var8.getStringWidth(var45) - 2, 12, 14737632);\n            // FCMOD: Removed (client only)\n            /*\n            var47',
+    ])
+
+    fixFile(new File(clientDir, 'net/minecraft/src/ItemRenderer.java'), [
+        'else if ( var19 == EnumAction.miscUse )': 'else if ( var20 == EnumAction.miscUse )',
+    ])
+
+    def codecMus = new File(clientDir, 'net/minecraft/src/CodecMus.java')
+    if (codecMus.exists() && codecMus.text.contains('this.url')) {
+        codecMus.text = '''package net.minecraft.src;
+
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.net.URL;
+import java.net.URLConnection;
+import paulscode.sound.codecs.CodecJOrbis;
+
+public class CodecMus extends CodecJOrbis
+{
+    protected InputStream openInputStream()
+    {
+        try
+        {
+            Field urlField = CodecJOrbis.class.getDeclaredField("url");
+            urlField.setAccessible(true);
+            URL url = (URL)urlField.get(this);
+            Field ucField = CodecJOrbis.class.getDeclaredField("urlConnection");
+            ucField.setAccessible(true);
+            URLConnection urlConnection = (URLConnection)ucField.get(this);
+            return new MusInputStream(this, url, urlConnection.getInputStream());
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+}
+'''
+    }
+
+    fixFile(new File(clientDir, 'net/minecraft/src/RenderPlayer.java'), [
+        'if (var22.itemID < 256 && RenderBlocks.renderItemIn3d(Block.blocksList[var22.itemID].getRenderType()))':
+            'if ( var22.itemID < 4096 && Block.blocksList[var22.itemID] != null && Block.blocksList[var22.itemID].DoesItemRenderAsBlock( var22.getItemDamage() ) )',
+        'else if (var22.itemID == Item.bow.itemID)':
+            'else if (var22.itemID == Item.bow.itemID || var22.itemID == FCBetterThanWolves.fcItemCompositeBow.itemID )',
+    ])
+
+    [new File(clientDir, 'net/minecraft/src/SpawnerAnimals.java'),
+     new File(serverDir, 'net/minecraft/src/SpawnerAnimals.java')].each { f ->
+        if (!f.exists()) return
+        def text = f.text
+        text = text.replace(
+            '            }\n\n            var4 = 0;\n            ChunkCoordinates var32 = par0WorldServer.getSpawnPoint();',
+            '            }\n            */\n        \tLinkedList<ChunkCoordIntPair> activeChunks = par0WorldServer.GetActiveChunksCoordsList();\n\n            int var4;\n            int var7;\n            // END FCMOD\n\n            var4 = 0;\n            // FCMOD: Removed\n            //ChunkCoordinates var32 = par0WorldServer.getSpawnPoint();')
+        text = text.replace(
+            'par0WorldServer.countEntities(var35.getCreatureClass()) <= var35.getMaxNumberOfCreature() * eligibleChunksForSpawning.size() / 256)',
+            'par0WorldServer.CountEntitiesThatApplyToSpawnCap( var35.getCreatureClass() ) <=\n            \t\tvar35.getMaxNumberOfCreature() * activeChunks.size() / 256 )\n            \t// END FCMOD')
+        text = text.replace('eligibleChunksForSpawning.keySet().iterator()', 'activeChunks.iterator()')
+        text = text.replaceAll(/Iterator (var3[67]) = activeChunks/, 'Iterator var37 = activeChunks')
+        text = text.replaceAll(/while \(var3[67]\.hasNext\(\)\)/, 'while (var37.hasNext())')
+        text = text.replaceAll(/ChunkCoordIntPair (var3[67]) = \(ChunkCoordIntPair\)var3[67]\.next\(\)/, 'ChunkCoordIntPair var36 = (ChunkCoordIntPair)var37.next()')
+        text = text.replaceAll(
+            /if \(!\(\(Boolean\)eligibleChunksForSpawning\.get\(var3[67]\)\)\.booleanValue\(\)\)/,
+            '// FCMOD: Removed')
+        text = text.replace(
+            'par0WorldServer.getBlockMaterial(var13, var14, var15) == var35.getCreatureMaterial())',
+            'CanCreatureTypeSpawnInMaterial( var35,\n                        \tpar0WorldServer.getBlockMaterial( var13, var14, var15 ) ) )\n                        // END FCMOD')
+        text = text.replaceAll(/getRandomSpawningPointInChunk\(par0WorldServer, var3[67]\.chunkXPos, var3[67]\.chunkZPos\)/,
+            'getRandomSpawningPointInChunk(par0WorldServer, var36.chunkXPos, var36.chunkZPos)')
+        f.text = text
+    }
+
+    // --- Add btw subpackage imports to all vanilla files ---
+    def allBtwPkgs = ['core','block','item','entity','crafting','tileentity','api','util',
+        'world','behavior','properties','model','command']
+    def clientPkgs = allBtwPkgs + ['client']
+    def serverPkgs = allBtwPkgs
+
+    def addBtwImports = { File dir, Collection<String> pkgs ->
+        fileTree(dir).matching { include '**/*.java' }.each { f2 ->
+            if (f2.text.contains('btw.core')) return
+            def imports = pkgs.collect { "import net.minecraft.src.btw.${it}.*;" }.join('\n')
+            f2.text = f2.text.replaceFirst(/(?m)(^package [^;]+;\s*\n)/, "\$1${imports}\n")
+        }
+    }
+    addBtwImports(clientDir, clientPkgs)
+    addBtwImports(serverDir, serverPkgs)
+
+    // Fix Minecraft.java FQN reference
+    def mcJava = new File(clientDir, 'net/minecraft/client/Minecraft.java')
+    if (mcJava.exists()) {
+        mcJava.text = mcJava.text.replace('net.minecraft.src.FCAddOnHandler', 'net.minecraft.src.btw.core.FCAddOnHandler')
+    }
+
+    // --- Widen vanilla access modifiers for cross-package compatibility ---
+    [clientDir, serverDir].each { vDir ->
+        def v = new File(vDir, 'net/minecraft/src')
+        if (!v.exists()) return
+        // Blanket: protected → public for all vanilla files
+        fileTree(v).matching { include '*.java' }.each { f2 ->
+            f2.text = f2.text.replaceAll(/(?m)^    protected /, '    public ')
+        }
+        // Package-private specific members → public
+        def makePkgPrivatePublic = { File f2, String pattern ->
+            if (f2?.exists()) f2.text = f2.text.replace(pattern, 'public ' + pattern)
+        }
+        makePkgPrivatePublic(new File(v, 'BlockLeaves.java'), '    int[] adjacentTreeBlocks')
+        makePkgPrivatePublic(new File(v, 'WorldGenBigTree.java'), '    static final byte[] otherCoordPairs')
+        makePkgPrivatePublic(new File(v, 'WorldGenBigTree.java'), '    int[] basePos')
+        makePkgPrivatePublic(new File(v, 'WorldGenBigTree.java'), '    int heightLimit')
+        makePkgPrivatePublic(new File(v, 'WorldGenBigTree.java'), '    World worldObj')
+        ['void genTreeLayer','void placeBlockLine','int checkBlockLine','void generateLeafNodeBases','boolean validTreeLocation'].each { m ->
+            makePkgPrivatePublic(new File(v, 'WorldGenBigTree.java'), "    ${m}")
+        }
+        makePkgPrivatePublic(new File(v, 'EntityAIAttackOnCollide.java'), '    EntityLiving attacker')
+        makePkgPrivatePublic(new File(v, 'EntityAICreeperSwell.java'), '    EntityCreeper creeperAttackTarget')
+        makePkgPrivatePublic(new File(v, 'EntityAICreeperSwell.java'), '    EntityLiving creeperAttackTarget')
+        makePkgPrivatePublic(new File(v, 'EntityVillager.java'), '    Village villageObj')
+        makePkgPrivatePublic(new File(v, 'ModelSquid.java'), '    ModelRenderer squidBody')
+        makePkgPrivatePublic(new File(v, 'ModelSquid.java'), '    ModelRenderer[] squidTentacles')
+        ['ShapedRecipes addRecipe','ShapelessRecipes AddShapelessRecipe','ShapedRecipes AddShapedRecipeWithCustomClass'].each { m ->
+            makePkgPrivatePublic(new File(v, 'CraftingManager.java'), "    ${m}")
+        }
+        makePkgPrivatePublic(new File(v, 'Packet.java'), '    static void addIdClassMapping')
+        makePkgPrivatePublic(new File(v, 'ChunkProviderServer.java'), '    IChunkProvider GetCurrentProvider')
+        // Package-private classes → public
+        ['DispenserBehaviorFilledBucket','DispenserBehaviorPotion','DispenserBehaviorEmptyBucket'].each { cls ->
+            def f2 = new File(v, "${cls}.java")
+            if (f2?.exists()) f2.text = f2.text.replaceFirst(/(?m)^(final )?class /, 'public $1class ')
+        }
+        // Fix override visibility mismatches
+        ['EntityPlayer.java','EntityAnimal.java','EntityMagmaCube.java','EntityPigZombie.java',
+         'EntityXPOrb.java','EntityItem.java','BlockCrops.java','EntityAgeable.java'].each { fname ->
+            def f2 = new File(v, fname)
+            if (f2?.exists()) f2.text = f2.text.replaceAll(/(?m)^\tprotected /, '\tpublic ')
+        }
+    }
+
+    // --- Add implements clauses for Api interfaces to vanilla classes ---
+    [clientDir, serverDir].each { vDir ->
+        def v = new File(vDir, 'net/minecraft/src')
+        if (!v.exists()) return
+        // Fix EntityPlayerMP override visibility
+        def epmp = new File(v, 'EntityPlayerMP.java')
+        if (epmp?.exists()) {
+            epmp.text = epmp.text.replace('\tprotected void UpdateHungerPenaltyLevel', '\tpublic void UpdateHungerPenaltyLevel')
+            epmp.text = epmp.text.replace('\tprotected void UpdateHealthPenaltyLevel', '\tpublic void UpdateHealthPenaltyLevel')
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BTW resource extraction
+// ---------------------------------------------------------------------------
+
+def BTW_MOD_ZIP = 'BTWMod4-B0000003.zip'
+
+task extractBtwResources {
+    group = 'setup'
+    description = 'Extracts BTW textures/lang/assets from the mod distribution zip'
+    def resDir = file("$buildDir/btw-resources")
+    outputs.dir resDir
+
+    doLast {
+        if (new File(resDir, '.extracted').exists()) return
+        def modZip = file(BTW_MOD_ZIP)
+        if (!modZip.exists()) {
+            logger.warn("BTW mod zip not found at ${modZip} — textures will be missing")
+            return
+        }
+        def tempDir = new File(buildDir, 'btw-resources-temp')
+        tempDir.mkdirs()
+        copy { from zipTree(modZip); into tempDir }
+        resDir.mkdirs()
+        ['MINECRAFT-JAR', 'MINECRAFT_SERVER-JAR'].each { dir ->
+            def src = new File(tempDir, dir)
+            if (src.exists()) {
+                copy { from src; into resDir; exclude '**/*.class' }
+            }
+        }
+        delete tempDir
+        new File(resDir, '.extracted').text = 'done'
+    }
+}
+
+task cleanVanilla(type: Delete) {
+    group = 'setup'
+    delete 'vanilla'
+}

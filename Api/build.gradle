@@ -1,0 +1,5 @@
+plugins {
+    id 'java-library'
+}
+
+// Pure interface module — zero Minecraft dependencies

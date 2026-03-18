@@ -1,0 +1,811 @@
+// migrate_fc.gradle
+// ==========================================================================
+// Comprehensive FC code migration script
+// Transforms ~1,070 FC files to use API interfaces instead of concrete
+// vanilla Minecraft types, AND to use the Abstract* bridge class pattern.
+//
+// Usage:  gradle -b migrate_fc.gradle migrate
+//
+// This script is idempotent — safe to run multiple times.
+// ==========================================================================
+
+import java.util.regex.Pattern
+import java.util.regex.Matcher
+
+defaultTasks 'migrate'
+
+// ==========================================================================
+// Configuration
+// ==========================================================================
+
+ext {
+
+    // Source directories to scan for FC files
+    sourceDirs = [
+        file("${projectDir}/Common/src"),
+        file("${projectDir}/Client/src"),
+        file("${projectDir}/Server/src"),
+    ]
+
+    // Vanilla source directories (to build set of vanilla class names)
+    vanillaDirs = [
+        file("${projectDir}/vanilla/server/net/minecraft/src"),
+        file("${projectDir}/vanilla/client/net/minecraft/src"),
+    ]
+
+    // Adapter source directory (to discover Abstract* bridge classes)
+    adapterDir = file("${projectDir}/Adapter/src/main/java/btw/adapter")
+
+    // ------------------------------------------------------------------
+    // Type mappings: concrete -> interface
+    // IMPORTANT: Ordered by name length descending so that longer names
+    // (EntityLiving, EntityPlayer) are processed before shorter ones
+    // (Entity) to prevent partial replacements.
+    // ------------------------------------------------------------------
+    typeReplacements = new LinkedHashMap<String, String>()
+    typeReplacements.put('NBTTagCompound', 'INBTTagCompound')
+    typeReplacements.put('AxisAlignedBB',  'IAxisAlignedBB')
+    typeReplacements.put('DamageSource',   'IDamageSource')
+    typeReplacements.put('EntityLiving',   'IEntityLiving')
+    typeReplacements.put('EntityPlayer',   'IEntityPlayer')
+    typeReplacements.put('TileEntity',     'ITileEntity')
+    typeReplacements.put('ItemStack',      'IItemStack')
+    typeReplacements.put('Material',       'IMaterial')
+    typeReplacements.put('Entity',         'IEntity')
+    typeReplacements.put('Block',          'IBlock')
+    typeReplacements.put('World',          'IWorld')
+    typeReplacements.put('Vec3',           'IVec3')
+
+    // ------------------------------------------------------------------
+    // Vanilla types that get bridged in Abstract* classes.
+    // When an @Override method has a parameter of one of these types,
+    // the method needs the _btw rename + param type change.
+    // This must match the typeMap in generate_abstracts.gradle.
+    // ------------------------------------------------------------------
+    bridgedTypeMap = new LinkedHashMap<String, String>()
+    bridgedTypeMap.put('EntityFallingSand', 'IEntityFallingSand')
+    bridgedTypeMap.put('EntityThrowable',   'IEntityThrowable')
+    bridgedTypeMap.put('EntityCreature',    'IEntityCreature')
+    bridgedTypeMap.put('EntityLiving',      'IEntityLiving')
+    bridgedTypeMap.put('EntityPlayer',      'IEntityPlayer')
+    bridgedTypeMap.put('EntityAnimal',      'IEntityAnimal')
+    bridgedTypeMap.put('EntityArrow',       'IEntityArrow')
+    bridgedTypeMap.put('EntityItem',        'IEntityItem')
+    bridgedTypeMap.put('ItemStack',         'IItemStack')
+    bridgedTypeMap.put('Entity',            'IEntity')
+    bridgedTypeMap.put('Block',             'IBlock')
+    bridgedTypeMap.put('World',             'IWorld')
+    bridgedTypeMap.put('Item',              'IItem')
+
+    // ------------------------------------------------------------------
+    // Block constants (from vanilla Block.java)
+    // Block.<name> -> Blocks.<name>
+    // ------------------------------------------------------------------
+    blockConstants = [
+        // Sorted by length descending for safe replacement
+        'pressurePlatePlanks', 'pressurePlateStone', 'pressurePlateGold',
+        'pressurePlateIron',
+        'torchRedstoneActive', 'torchRedstoneIdle',
+        'redstoneLampActive', 'redstoneLampIdle',
+        'oreRedstoneGlowing',
+        'blockNetherQuartz', 'stairsNetherQuartz',
+        'mushroomCapBrown', 'mushroomCapRed',
+        'stairsCobblestone', 'stairsNetherBrick', 'stairsStoneBrick',
+        'stairsSandStone', 'stairsWoodBirch', 'stairsWoodJungle',
+        'stairsWoodOak', 'stairsWoodSpruce',
+        'cobblestoneWall', 'cobblestoneMossy',
+        'enchantmentTable', 'endPortalFrame',
+        'pistonStickyBase', 'pistonExtension', 'pistonMoving',
+        'blockDiamond', 'blockEmerald', 'blockRedstone',
+        'pumpkinLantern',
+        'stoneDoubleSlab', 'stoneSingleSlab',
+        'woodDoubleSlab', 'woodSingleSlab',
+        'chestTrapped',
+        'cobblestone', 'commandBlock',
+        'blockGold', 'blockIron', 'blockLapis', 'blockSnow', 'blockClay',
+        'brewingStand', 'cocoaPlant',
+        'enderChest', 'endPortal',
+        'netherBrick', 'netherFence', 'netherStalk',
+        'oreNetherQuartz',
+        'railActivator', 'railDetector', 'railPowered',
+        'stairsBrick',
+        'waterMoving', 'waterStill',
+        'lavaMoving', 'lavaStill',
+        'bookShelf',
+        'pistonBase',
+        'oreDiamond', 'oreEmerald', 'oreRedstone',
+        'fenceIron', 'fenceGate',
+        'furnaceBurning', 'furnaceIdle',
+        'flowerPot',
+        'pumpkinStem', 'melonStem',
+        'netherrack',
+        'mobSpawner',
+        'lockedChest',
+        'stoneBrick', 'stoneButton',
+        'sandStone',
+        'tallGrass', 'deadBush',
+        'thinGlass',
+        'tilledField',
+        'woodenButton',
+        'glowStone',
+        'dragonEgg',
+        'dispenser',
+        'obsidian',
+        'endStone',
+        'whiteStone',
+        'signPost', 'signWall',
+        'silverfish',
+        'torchWood',
+        'workbench',
+        'slowSand',
+        'trapdoor',
+        'tripWire',
+        'waterlily',
+        'anvil', 'bed', 'bedrock', 'brick', 'cactus', 'cake', 'carrot',
+        'chest', 'cloth', 'crops', 'dirt', 'doorIron', 'doorWood',
+        'dropper', 'fence', 'fire', 'glass', 'grass', 'gravel',
+        'ice', 'jukebox', 'ladder', 'leaves', 'lever', 'melon',
+        'music', 'oreCoal', 'oreGold', 'oreIron', 'oreLapis',
+        'planks', 'portal', 'potato', 'pumpkin', 'rail', 'reed',
+        'sand', 'sapling', 'skull', 'snow', 'sponge', 'stone',
+        'tnt', 'vine', 'web', 'wood',
+    ]
+
+    // ------------------------------------------------------------------
+    // Field access -> getter mappings
+    // [fieldName, getterName]
+    // Matched as: <variable>.<field> -> <variable>.<getter>()
+    // Excludes this.<field> and super.<field>
+    // ------------------------------------------------------------------
+    fieldToGetter = [
+        // Entity position/motion fields
+        ['posX',          'getPosX'],
+        ['posY',          'getPosY'],
+        ['posZ',          'getPosZ'],
+        ['motionX',       'getMotionX'],
+        ['motionY',       'getMotionY'],
+        ['motionZ',       'getMotionZ'],
+        // Entity misc fields
+        ['worldObj',      'getWorldObj'],      // also on TileEntity
+        ['rand',          'getRandom'],        // also on World
+        ['boundingBox',   'getBoundingBox'],
+        ['onGround',      'getOnGround'],
+        ['isDead',        'getIsDead'],
+        ['inWater',       'isInWater'],
+        // Block fields
+        ['blockID',       'getBlockID'],
+        ['blockMaterial', 'getBlockMaterial'],
+        ['blockHardness', 'getHardness'],
+        // ItemStack fields
+        ['itemID',        'getItemID'],
+        ['stackSize',     'getStackSize'],
+        // World fields — isRemote is special (already a method name)
+        ['isRemote',      'isRemote'],
+        // TileEntity coordinate fields
+        ['xCoord',        'getXCoord'],
+        ['yCoord',        'getYCoord'],
+        ['zCoord',        'getZCoord'],
+    ]
+
+    // ------------------------------------------------------------------
+    // API imports to add after package statement
+    // ------------------------------------------------------------------
+    apiImportBlock = '''\
+import btw.api.block.IBlock;
+import btw.api.item.*;
+import btw.api.entity.*;
+import btw.api.world.IWorld;
+import btw.api.material.IMaterial;
+import btw.api.tileentity.ITileEntity;
+import btw.api.util.*;
+import btw.api.registry.*;'''
+
+    // ------------------------------------------------------------------
+    // Adapter imports to add (for Abstract* classes)
+    // ------------------------------------------------------------------
+    adapterImportBlock = '''\
+import btw.adapter.block.*;
+import btw.adapter.entity.*;
+import btw.adapter.item.*;
+import btw.adapter.tileentity.*;
+import btw.adapter.crafting.*;
+import btw.adapter.world.*;
+import btw.adapter.misc.*;'''
+}
+
+// ==========================================================================
+// Main migration task
+// ==========================================================================
+
+task migrate {
+    doLast {
+        int totalFiles = 0
+        int modifiedFiles = 0
+        int totalTransformations = 0
+
+        // ==============================================================
+        // PHASE 0: Build data structures needed by later passes
+        // ==============================================================
+
+        // 0a: Build set of ALL vanilla class names (without .java extension)
+        //     by scanning vanilla/server/ and vanilla/client/ directories
+        def vanillaClassNames = new HashSet<String>()
+        vanillaDirs.each { vDir ->
+            if (!vDir.exists()) return
+            vDir.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                if (f.name.endsWith('.java')) {
+                    vanillaClassNames << f.name.replace('.java', '')
+                }
+            }
+        }
+        println "Found ${vanillaClassNames.size()} vanilla class names"
+
+        // 0b: Build a map of bridge methods by scanning Abstract* classes
+        //     in the Adapter module. For each Abstract* file, parse:
+        //       - Which vanilla class it extends
+        //       - Which methods have the _btw bridge pattern
+        //       - The parameter type mappings for each bridged method
+        //
+        //     bridgeMethodMap: Map<String methodName, List<BridgeMethodInfo>>
+        //     where BridgeMethodInfo = [methodName, btwParams (interface types), vanillaParams (concrete types)]
+        //
+        //     We also build abstractClassMap: Map<String vanillaClass, String abstractClass>
+        def abstractClassMap = new LinkedHashMap<String, String>()  // e.g. "Block" -> "AbstractBlock"
+        def abstractPackageMap = new LinkedHashMap<String, String>() // e.g. "Block" -> "btw.adapter.block"
+
+        // bridgeMethodsByClass: Map<vanillaClass, Set<methodName>>
+        // Tracks which method names are bridged for each vanilla class
+        def bridgeMethodsByClass = new LinkedHashMap<String, Set<String>>()
+
+        // bridgeMethodSignatures: Map<"vanillaClass.methodName(paramTypes)", BridgeInfo>
+        // where BridgeInfo has the _btw parameter types for that specific overload
+        def bridgeMethodSignatures = new LinkedHashMap<String, Map>()
+
+        if (adapterDir.exists()) {
+            adapterDir.eachFileRecurse(groovy.io.FileType.FILES) { absFile ->
+                if (!absFile.name.startsWith('Abstract') || !absFile.name.endsWith('.java')) return
+
+                def absText = absFile.text
+                def absClassName = absFile.name.replace('.java', '')
+
+                // Find: public abstract class AbstractFoo extends Foo implements IFoo
+                def classPattern = ~/class\s+(Abstract\w+)\s+extends\s+(\w+)/
+                def classMatcher = classPattern.matcher(absText)
+                if (!classMatcher.find()) return
+
+                def abstractName = classMatcher.group(1)
+                def vanillaName = classMatcher.group(2)
+
+                abstractClassMap[vanillaName] = abstractName
+
+                // Determine package from file path
+                def pathParts = absFile.parentFile.absolutePath.replace('\\', '/').split('/')
+                def adapterIdx = pathParts.findIndexOf { it == 'adapter' }
+                if (adapterIdx >= 0 && adapterIdx < pathParts.length - 1) {
+                    def subPkg = pathParts[(adapterIdx+1)..-1].join('.')
+                    abstractPackageMap[vanillaName] = "btw.adapter.${subPkg}"
+                }
+
+                def bridgedMethods = new HashSet<String>()
+
+                // Find bridge method pairs:
+                //   public final <returnType> <methodName>(<vanillaParams>) {
+                //       <methodName>_btw(<castArgs>);
+                //   }
+                // We parse the "public final" methods to find bridged method names
+                def finalMethodPattern = ~/public\s+final\s+\S+\s+(\w+)\s*\(([^)]*)\)\s*\{/
+                def finalMatcher = finalMethodPattern.matcher(absText)
+                while (finalMatcher.find()) {
+                    def methodName = finalMatcher.group(1)
+                    def rawParams = finalMatcher.group(2).trim()
+                    bridgedMethods << methodName
+
+                    // Parse param types
+                    def paramTypes = []
+                    if (!rawParams.isEmpty()) {
+                        rawParams.split(/\s*,\s*/).each { p ->
+                            def parts = p.trim().split(/\s+/)
+                            if (parts.length >= 2) {
+                                paramTypes << parts[0]
+                            }
+                        }
+                    }
+
+                    def sigKey = "${vanillaName}.${methodName}(${paramTypes.join(',')})"
+                    bridgeMethodSignatures[sigKey] = [
+                        methodName: methodName,
+                        vanillaClass: vanillaName,
+                        paramTypes: paramTypes,
+                    ]
+                }
+
+                bridgeMethodsByClass[vanillaName] = bridgedMethods
+                println "  Abstract class: ${abstractName} extends ${vanillaName} — ${bridgedMethods.size()} bridged methods"
+            }
+        }
+        println "Found ${abstractClassMap.size()} Abstract* bridge classes"
+        println "Bridge methods discovered: ${bridgeMethodSignatures.size()}"
+
+        // 0c: Build the full set of bridged method names across ALL abstract classes.
+        //     This is the union of all method names from all Abstract* classes.
+        //     Used for quick lookup when processing @Override methods.
+        def allBridgedMethodNames = new HashSet<String>()
+        bridgeMethodsByClass.values().each { allBridgedMethodNames.addAll(it) }
+        println "Total unique bridged method names: ${allBridgedMethodNames.size()}"
+
+        // 0d: Build set of all FC class names (to distinguish FC extends FC from FC extends vanilla)
+        def fcClassNames = new HashSet<String>()
+        sourceDirs.each { srcDir ->
+            if (!srcDir.exists()) return
+            srcDir.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                if (f.name.startsWith('FC') && f.name.endsWith('.java')) {
+                    fcClassNames << f.name.replace('.java', '')
+                }
+            }
+        }
+        println "Found ${fcClassNames.size()} FC class names"
+
+        // 0e: Build inheritance chain knowledge.
+        //     For FC classes that extend other FC classes, we need to know if
+        //     the root ancestor is a vanilla class (which would have an Abstract* version).
+        //     We solve this by checking: is the parent an FC class? If yes, skip
+        //     the extends transformation. If no, check if it's a vanilla class.
+        //     The parent FC class itself should already have been changed to extend Abstract*.
+
+        // ==============================================================
+        // PHASE 1: Process each FC file
+        // ==============================================================
+        sourceDirs.each { srcDir ->
+            if (!srcDir.exists()) {
+                println "SKIP: ${srcDir} does not exist"
+                return // continue
+            }
+
+            println "Scanning: ${srcDir}"
+
+            srcDir.eachFileRecurse(groovy.io.FileType.FILES) { javaFile ->
+                if (!javaFile.name.startsWith('FC') || !javaFile.name.endsWith('.java')) {
+                    return // continue
+                }
+
+                totalFiles++
+                String original = javaFile.text
+                String content = original
+                int xforms = 0
+
+                // ==================================================
+                // PASS 1: Add API imports (idempotent)
+                // ==================================================
+                if (!content.contains('import btw.api.block.IBlock;')) {
+                    def m = (content =~ /(?m)(^package\s+[^;]+;\s*\n)/)
+                    if (m.find()) {
+                        def insertPos = m.end()
+                        content = content.substring(0, insertPos) +
+                                  '\n' + apiImportBlock + '\n' +
+                                  content.substring(insertPos)
+                        xforms++
+                    }
+                }
+
+                // ==================================================
+                // PASS 1b: Add Adapter imports (idempotent)
+                // ==================================================
+                if (!content.contains('import btw.adapter.block.*;')) {
+                    def m = (content =~ /(?m)(^package\s+[^;]+;\s*\n)/)
+                    if (m.find()) {
+                        def insertPos = m.end()
+                        // Insert after the API imports if present, otherwise after package
+                        def apiMarker = 'import btw.api.registry.*;'
+                        int apiPos = content.indexOf(apiMarker)
+                        if (apiPos >= 0) {
+                            insertPos = apiPos + apiMarker.length()
+                            // Skip past newline after marker
+                            if (insertPos < content.length() && content.charAt(insertPos) == '\n') {
+                                insertPos++
+                            }
+                        }
+                        content = content.substring(0, insertPos) +
+                                  '\n' + adapterImportBlock + '\n' +
+                                  content.substring(insertPos)
+                        xforms++
+                    }
+                }
+
+                // ==================================================
+                // PASS 2: Change "extends VanillaClass" to
+                //         "extends AbstractVanillaClass"
+                //
+                // Only for CLASS DECLARATIONS where the parent is a
+                // vanilla class (not an FC class).
+                // ==================================================
+                // Pattern: class FCFoo extends ParentClass
+                // We match the full declaration to ensure we're in a class declaration context.
+                def extendsPattern = ~/(?m)((?:public\s+|protected\s+|private\s+|abstract\s+|final\s+)*class\s+FC\w+\s+extends\s+)(\w+)/
+                def extMatcher = extendsPattern.matcher(content)
+                StringBuffer extSb = new StringBuffer()
+                while (extMatcher.find()) {
+                    String prefix = extMatcher.group(1)
+                    String parentClass = extMatcher.group(2)
+
+                    // Only change if:
+                    //   1. Parent is a vanilla class (exists in vanilla dirs)
+                    //   2. Parent is NOT an FC class
+                    //   3. An Abstract* version exists (or will exist) for this vanilla class
+                    //   4. Not already changed to Abstract*
+                    if (!parentClass.startsWith('Abstract') &&
+                        !parentClass.startsWith('FC') &&
+                        vanillaClassNames.contains(parentClass) &&
+                        !fcClassNames.contains(parentClass)) {
+
+                        // Check if an Abstract* class exists or is expected
+                        // We use the abstractClassMap if populated, but also
+                        // accept ANY vanilla class since Abstract* generation
+                        // is happening in parallel
+                        if (abstractClassMap.containsKey(parentClass)) {
+                            def abstractName = abstractClassMap[parentClass]
+                            extMatcher.appendReplacement(extSb, Matcher.quoteReplacement("${prefix}${abstractName}"))
+                            xforms++
+                        } else {
+                            // No Abstract* class found yet — leave unchanged
+                            extMatcher.appendReplacement(extSb, Matcher.quoteReplacement("${prefix}${parentClass}"))
+                        }
+                    } else {
+                        extMatcher.appendReplacement(extSb, Matcher.quoteReplacement("${prefix}${parentClass}"))
+                    }
+                }
+                extMatcher.appendTail(extSb)
+                content = extSb.toString()
+
+                // ==================================================
+                // PASS 3: Change @Override methods with vanilla params
+                //         to _btw pattern.
+                //
+                // When FC code has:
+                //   @Override
+                //   public void updateTick(World world, int x, ...) {
+                //
+                // And this method is bridged in an Abstract* class,
+                // change to:
+                //   @Override
+                //   public void updateTick_btw(IWorld world, int x, ...) {
+                //
+                // Also handles the parameter type changes.
+                // ==================================================
+                if (!allBridgedMethodNames.isEmpty()) {
+                    // Build a pattern that matches @Override followed by a method declaration
+                    // with one of the bridged method names.
+                    // We process line by line to handle multi-line method signatures.
+                    def lines = content.split('\n', -1)
+                    def newLines = []
+                    int i = 0
+
+                    while (i < lines.length) {
+                        String line = lines[i]
+                        String trimmed = line.trim()
+
+                        // Look for @Override
+                        if (trimmed == '@Override' && i + 1 < lines.length) {
+                            // Peek at next lines to find method signature
+                            // Collect lines until we see the opening brace or semicolon
+                            def sigLines = []
+                            int j = i + 1
+                            boolean foundSig = false
+                            while (j < lines.length && j <= i + 5) {
+                                sigLines << lines[j]
+                                String joined = sigLines.join(' ')
+                                if (joined.contains('{') || joined.contains(';')) {
+                                    foundSig = true
+                                    break
+                                }
+                                j++
+                            }
+
+                            if (foundSig) {
+                                String fullSig = sigLines.join(' ').trim()
+
+                                // Parse method name and params from signature
+                                def sigMatch = (fullSig =~ /(?:public|protected|private)?\s*(?:static\s+)?(?:final\s+)?(\S+)\s+(\w+)\s*\(([^)]*)\)/)
+                                if (sigMatch.find()) {
+                                    String returnType = sigMatch.group(1)
+                                    String methodName = sigMatch.group(2)
+                                    String rawParams = sigMatch.group(3).trim()
+
+                                    // Check if this method name is bridged AND has bridged param types
+                                    boolean isBridged = allBridgedMethodNames.contains(methodName)
+                                    boolean hasBridgedParams = false
+                                    boolean alreadyConverted = methodName.endsWith('_btw')
+
+                                    if (isBridged && !alreadyConverted && !rawParams.isEmpty()) {
+                                        // Check if any param type is a bridged type
+                                        def paramParts = rawParams.split(/\s*,\s*/)
+                                        for (pp in paramParts) {
+                                            def parts = pp.trim().split(/\s+/)
+                                            if (parts.length >= 2 && bridgedTypeMap.containsKey(parts[0])) {
+                                                hasBridgedParams = true
+                                                break
+                                            }
+                                        }
+                                    }
+
+                                    if (isBridged && hasBridgedParams && !alreadyConverted) {
+                                        // Transform the method: rename to _btw and change param types
+                                        // We need to transform each of the sigLines
+                                        newLines << line  // Keep @Override
+
+                                        for (int si = 0; si < sigLines.size(); si++) {
+                                            String sigLine = sigLines[si]
+
+                                            // Rename method: methodName( -> methodName_btw(
+                                            // Only rename the first occurrence (the declaration)
+                                            if (sigLine.contains("${methodName}(") || sigLine.contains("${methodName} (")) {
+                                                sigLine = sigLine.replaceFirst(
+                                                    Pattern.quote(methodName) + /\s*\(/,
+                                                    "${methodName}_btw("
+                                                )
+                                            }
+
+                                            // Replace bridged param types in the signature line
+                                            bridgedTypeMap.each { concreteType, ifaceType ->
+                                                // Match: Type paramName (as word boundary)
+                                                // But only in parameter declarations, not in method body
+                                                def paramTypePattern = ~/(?<!\w)${Pattern.quote(concreteType)}(?=\s+\w+\s*[,)])/
+                                                sigLine = paramTypePattern.matcher(sigLine).replaceAll(ifaceType)
+                                            }
+
+                                            newLines << sigLine
+                                        }
+
+                                        xforms++
+                                        i = j + 1
+                                        continue
+                                    }
+                                }
+                            }
+                        }
+
+                        newLines << line
+                        i++
+                    }
+
+                    content = newLines.join('\n')
+                }
+
+                // ==================================================
+                // PASS 4: Change super.method() calls to
+                //         super.method_btw() for bridged methods.
+                //
+                // When FC code calls:
+                //   super.updateTick(world, ...)
+                // Change to:
+                //   super.updateTick_btw(world, ...)
+                //
+                // Only if the method is bridged in an Abstract* class.
+                // ==================================================
+                allBridgedMethodNames.each { String methodName ->
+                    // Pattern: super.methodName( but NOT super.methodName_btw(
+                    // The negative lookahead (?!_btw) ensures we don't re-transform
+                    // already-converted calls, making this idempotent.
+                    def superPattern = ~/(?<!\w)super\.${Pattern.quote(methodName)}(?!_btw)\s*\(/
+                    xforms += countAndReplace(content, superPattern) { match ->
+                        "super.${methodName}_btw("
+                    }.with { pair -> content = pair[0]; pair[1] }
+                }
+
+                // ==================================================
+                // PASS 5: Static registry transformations
+                // Must happen BEFORE type replacements since they
+                // reference Block. and Item. prefixes
+                // ==================================================
+
+                // 5a: Block.blocksList[expr] -> BlockRegistry.get(expr)
+                xforms += countAndReplace(content, ~/Block\.blocksList\[([^\]]+)\]/) { match ->
+                    "BlockRegistry.get(${match.group(1)})"
+                }.with { pair -> content = pair[0]; pair[1] }
+
+                // 5b: Item.itemsList[expr] -> ItemRegistry.get(expr)
+                xforms += countAndReplace(content, ~/Item\.itemsList\[([^\]]+)\]/) { match ->
+                    "ItemRegistry.get(${match.group(1)})"
+                }.with { pair -> content = pair[0]; pair[1] }
+
+                // 5c: Block.<constant> -> Blocks.<constant>
+                // Process longest names first (list is pre-sorted by length)
+                blockConstants.each { constName ->
+                    def p = ~/(?<!\w)Block\.${Pattern.quote(constName)}(?!\w)/
+                    xforms += countAndReplace(content, p) { match ->
+                        "Blocks.${constName}"
+                    }.with { pair -> content = pair[0]; pair[1] }
+                }
+
+                // ==================================================
+                // PASS 6: Field access -> getter transformations
+                // Must happen BEFORE type replacements
+                // ==================================================
+                fieldToGetter.each { entry ->
+                    String fieldName = entry[0]
+                    String getterName = entry[1]
+
+                    def p = ~/(?<!\w)((?!this\b|super\b)[a-z_]\w*)\.${Pattern.quote(fieldName)}(?!\w)(?!\s*\()/
+                    xforms += countAndReplace(content, p) { match ->
+                        "${match.group(1)}.${getterName}()"
+                    }.with { pair -> content = pair[0]; pair[1] }
+                }
+
+                // ==================================================
+                // PASS 7: Type replacements
+                // For each type mapping (longest first), replace in
+                // all valid contexts using a single pass.
+                // ==================================================
+                typeReplacements.each { concreteType, interfaceType ->
+                    def p = ~/(?<!\w)${Pattern.quote(concreteType)}(?!\w)/
+
+                    xforms += contextualTypeReplace(content, p, concreteType, interfaceType)
+                        .with { pair -> content = pair[0]; pair[1] }
+                }
+
+                // ==================================================
+                // Write file if changed
+                // ==================================================
+                if (content != original) {
+                    javaFile.text = content
+                    modifiedFiles++
+                    totalTransformations += xforms
+
+                    if (modifiedFiles % 100 == 0) {
+                        println "  ... ${modifiedFiles} files modified so far ..."
+                    }
+                }
+            }
+        }
+
+        println ""
+        println "========================================="
+        println " FC Migration Complete"
+        println "========================================="
+        println " Total FC files scanned:    ${totalFiles}"
+        println " Files modified:            ${modifiedFiles}"
+        println " Total transformations:     ${totalTransformations}"
+        println " Vanilla classes known:     ${vanillaClassNames.size()}"
+        println " Abstract classes found:    ${abstractClassMap.size()}"
+        println " Bridge methods discovered: ${bridgeMethodSignatures.size()}"
+        println "========================================="
+    }
+}
+
+// ==========================================================================
+// Helper: Count-and-replace with a closure that produces the replacement
+// Returns [newContent, count]
+// ==========================================================================
+
+List countAndReplace(String content, Pattern pattern, Closure<String> replacer) {
+    int count = 0
+    Matcher m = pattern.matcher(content)
+    StringBuffer sb = new StringBuffer()
+    while (m.find()) {
+        String replacement = replacer(m)
+        m.appendReplacement(sb, Matcher.quoteReplacement(replacement))
+        count++
+    }
+    m.appendTail(sb)
+    return [sb.toString(), count]
+}
+
+// ==========================================================================
+// Helper: Contextual type replacement
+//
+// For each match of the concrete type name as a standalone word, checks
+// the surrounding context to decide whether to replace:
+//
+//   REPLACE in these contexts:
+//     - instanceof Type
+//     - (Type) cast
+//     - Type varName (parameter, local var, field declaration)
+//     - return type in method signature
+//     - generic type parameter <Type>
+//
+//   DO NOT REPLACE in these contexts:
+//     - extends Type  (now handled separately in PASS 2)
+//     - implements Type
+//     - new Type(
+//     - import ...Type;
+//     - .class reference: Type.class
+//     - Static method call: Type.methodName(  (uppercase method or known static)
+//
+// Returns [newContent, count]
+// ==========================================================================
+
+List contextualTypeReplace(String content, Pattern pattern, String concreteType, String interfaceType) {
+    int count = 0
+    Matcher m = pattern.matcher(content)
+    StringBuffer sb = new StringBuffer()
+
+    while (m.find()) {
+        int matchStart = m.start()
+        int matchEnd = m.end()
+
+        // Get the context before the match (up to 40 chars back)
+        int ctxStart = Math.max(0, matchStart - 40)
+        String before = content.substring(ctxStart, matchStart)
+
+        // Get the context after the match (up to 20 chars ahead)
+        int ctxEnd = Math.min(content.length(), matchEnd + 20)
+        String after = content.substring(matchEnd, ctxEnd)
+
+        boolean shouldReplace = true
+
+        // --- Exclusion checks ---
+
+        // 1. extends Type  or  extends SomeType, Type
+        if (before =~ /(?:extends|implements)\s+$/ ||
+            before =~ /(?:extends|implements)\s+\w+\s*,\s*$/) {
+            shouldReplace = false
+        }
+
+        // 2. new Type(  or  new Type[  or  new Type<
+        if (before =~ /new\s+$/) {
+            shouldReplace = false
+        }
+
+        // 3. import statement: import ...Type;
+        if (before =~ /(?m)import\s+[\w.]*$/) {
+            shouldReplace = false
+        }
+
+        // 4. Type.class reference
+        if (after =~ /^\s*\.class\b/) {
+            shouldReplace = false
+        }
+
+        // 5. Type.staticMethod( — static method call on the concrete class
+        if (after =~ /^\s*\.\s*[A-Z]/) {
+            shouldReplace = false
+        }
+
+        // 6. Type. followed by known static fields/methods
+        if (after =~ /^\s*\./) {
+            shouldReplace = false
+        }
+
+        // 7. Already the interface type — handled by pattern (IEntity won't match Entity)
+
+        // 8. Inside a string literal — basic check
+        int lineStart = content.lastIndexOf('\n', matchStart) + 1
+        String linePrefix = content.substring(lineStart, matchStart)
+        int quoteCount = linePrefix.count('"') - linePrefix.count('\\"')
+        if (quoteCount % 2 != 0) {
+            shouldReplace = false
+        }
+
+        // 9. Inside a comment — basic check for // comments
+        if (linePrefix.contains('//')) {
+            shouldReplace = false
+        }
+
+        // 10. Part of a package declaration
+        if (before =~ /package\s+[\w.]*$/) {
+            shouldReplace = false
+        }
+
+        // 11. Inside an Abstract* class reference — don't replace
+        //     e.g., "AbstractBlock" should not have "Block" replaced within it
+        if (matchStart > 0) {
+            // Check if preceded by "Abstract" (forming "AbstractBlock" etc.)
+            int absStart = Math.max(0, matchStart - 8)
+            String absPrefix = content.substring(absStart, matchStart)
+            if (absPrefix.endsWith('Abstract')) {
+                shouldReplace = false
+            }
+        }
+
+        // 12. Inside a _btw method name — don't replace the type in the method name itself
+        //     e.g., "updateTick_btw" should not interfere
+
+        if (shouldReplace) {
+            m.appendReplacement(sb, Matcher.quoteReplacement(interfaceType))
+            count++
+        } else {
+            m.appendReplacement(sb, Matcher.quoteReplacement(concreteType))
+        }
+    }
+    m.appendTail(sb)
+    return [sb.toString(), count]
+}

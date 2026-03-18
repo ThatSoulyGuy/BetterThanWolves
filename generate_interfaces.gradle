@@ -1,0 +1,210 @@
+// Generates btw.api interfaces from vanilla class method signatures
+// Run: ./gradlew -b generate_interfaces.gradle generateInterfaces
+
+import java.util.regex.Pattern
+
+task generateInterfaces {
+    doLast {
+        def projectDir = file('.')
+        def apiDir = file('Api/src/main/java/btw/api')
+        def vanillaServer = file('vanilla/server/net/minecraft/src')
+        def vanillaClient = file('vanilla/client/net/minecraft/src')
+
+        // Map of vanilla class → [interface name, api subpackage, source dir]
+        def interfaceDefs = [
+            // Tier 1
+            ['Block',           'IBlock',           'block',      vanillaServer],
+            ['Item',            'IItem',            'item',       vanillaServer],
+            ['World',           'IWorld',           'world',      vanillaServer],
+            ['Entity',          'IEntity',          'entity',     vanillaServer],
+            ['EntityLiving',    'IEntityLiving',    'entity',     vanillaServer],
+            ['ItemStack',       'IItemStack',       'item',       vanillaServer],
+            ['Material',        'IMaterial',        'material',   vanillaServer],
+            // Tier 2
+            ['EntityPlayer',    'IEntityPlayer',    'entity',     vanillaServer],
+            ['EntityCreature',  'IEntityCreature',  'entity',     vanillaServer],
+            ['EntityAnimal',    'IEntityAnimal',    'entity',     vanillaServer],
+            ['TileEntity',      'ITileEntity',      'tileentity', vanillaServer],
+            ['Container',       'IContainer',       'crafting',   vanillaServer],
+            ['AxisAlignedBB',   'IAxisAlignedBB',   'util',       vanillaServer],
+            ['DamageSource',    'IDamageSource',    'util',       vanillaServer],
+            ['NBTTagCompound',  'INBTTagCompound',  'util',       vanillaServer],
+            ['Vec3',            'IVec3',            'util',       vanillaServer],
+            ['Potion',          'IPotion',          'util',       vanillaServer],
+            // Tier 3 - Block subclasses
+            ['BlockContainer',  'IBlockContainer',  'block',      vanillaServer],
+            ['BlockFlowing',    'IBlockFlowing',    'block',      vanillaServer],
+            ['BlockFluid',      'IBlockFluid',      'block',      vanillaServer],
+            // Tier 3 - Item subclasses
+            ['ItemFood',        'IItemFood',        'item',       vanillaServer],
+            ['ItemArmor',       'IItemArmor',       'item',       vanillaServer],
+            ['ItemSword',       'IItemSword',       'item',       vanillaServer],
+            ['ItemBlock',       'IItemBlock',       'item',       vanillaServer],
+            ['ItemTool',        'IItemTool',        'item',       vanillaServer],
+            // Tier 3 - Entity subclasses
+            ['EntityArrow',     'IEntityArrow',     'entity',     vanillaServer],
+            ['EntityItem',      'IEntityItem',      'entity',     vanillaServer],
+            ['EntityFallingSand','IEntityFallingSand','entity',    vanillaServer],
+            ['EntityThrowable', 'IEntityThrowable', 'entity',     vanillaServer],
+            // Client-only
+            ['RenderBlocks',    'IRenderBlocks',    'client',     vanillaClient],
+            ['EntityFX',        'IEntityFX',        'client',     vanillaClient],
+        ]
+
+        // Inheritance map for interfaces
+        def parentInterfaces = [
+            'IEntityLiving': 'IEntity',
+            'IEntityPlayer': 'IEntityLiving',
+            'IEntityCreature': 'IEntityLiving',
+            'IEntityAnimal': 'IEntityCreature',
+            'IEntityArrow': 'IEntity',
+            'IEntityItem': 'IEntity',
+            'IEntityFallingSand': 'IEntity',
+            'IEntityThrowable': 'IEntity',
+            'IBlockContainer': 'IBlock',
+            'IBlockFlowing': 'IBlock',
+            'IBlockFluid': 'IBlock',
+            'IItemFood': 'IItem',
+            'IItemArmor': 'IItem',
+            'IItemSword': 'IItem',
+            'IItemBlock': 'IItem',
+            'IItemTool': 'IItem',
+            'IEntityFX': 'IEntity',
+        ]
+
+        // Types to replace in signatures with interface equivalents
+        def typeMap = [
+            'World': 'IWorld', 'Block': 'IBlock', 'Item': 'IItem',
+            'Entity': 'IEntity', 'EntityLiving': 'IEntityLiving',
+            'EntityPlayer': 'IEntityPlayer', 'ItemStack': 'IItemStack',
+            'Material': 'IMaterial', 'TileEntity': 'ITileEntity',
+            'AxisAlignedBB': 'IAxisAlignedBB', 'Vec3': 'IVec3',
+            'DamageSource': 'IDamageSource', 'NBTTagCompound': 'INBTTagCompound',
+        ]
+
+        // Extract public method signatures from a Java source file
+        def extractMethods = { File srcFile ->
+            if (!srcFile.exists()) return []
+            def methods = []
+            def text = srcFile.text
+            // Match public method declarations (not constructors, not static initializers)
+            def pattern = ~/(?m)^\s+public\s+(?!static\s+final\s+\w+\s+\w+\s*[;=])(?!class\b)(.+?\(.*?\))\s*[\{;]/
+            def matcher = pattern.matcher(text)
+            while (matcher.find()) {
+                def sig = matcher.group(1).trim()
+                // Skip constructors (method name == class name)
+                def className = srcFile.name.replace('.java', '')
+                if (sig.startsWith(className + '(')) continue
+                // Clean up multi-line signatures
+                sig = sig.replaceAll(/\s+/, ' ')
+                methods << sig
+            }
+            return methods.unique()
+        }
+
+        // Extract public fields for getter generation
+        def extractFields = { File srcFile ->
+            if (!srcFile.exists()) return []
+            def fields = []
+            def text = srcFile.text
+            def pattern = ~/(?m)^\s+public\s+(?!static\s+final)(?!class)(\w+(?:\[\])?)\s+(\w+)\s*[;=]/
+            def matcher = pattern.matcher(text)
+            while (matcher.find()) {
+                fields << [type: matcher.group(1), name: matcher.group(2)]
+            }
+            return fields
+        }
+
+        int generated = 0
+        interfaceDefs.each { entry ->
+            def (className, ifaceName, pkg, srcDir) = entry
+            def srcFile = new File(srcDir, "${className}.java")
+            if (!srcFile.exists()) {
+                println "SKIP: ${srcFile} not found"
+                return
+            }
+
+            // Skip IBlock - already hand-written
+            if (ifaceName == 'IBlock') {
+                println "SKIP: ${ifaceName} (hand-written)"
+                return
+            }
+
+            def pkgDir = new File(apiDir, pkg)
+            pkgDir.mkdirs()
+            def outFile = new File(pkgDir, "${ifaceName}.java")
+
+            def methods = extractMethods(srcFile)
+            def fields = extractFields(srcFile)
+
+            def parentIface = parentInterfaces[ifaceName]
+            def extendsClause = parentIface ? " extends ${parentIface}" : ""
+
+            // Collect needed imports
+            def imports = new TreeSet<String>()
+            if (parentIface) {
+                // Find parent's package
+                def parentPkg = interfaceDefs.find { it[1] == parentIface }
+                if (parentPkg) {
+                    def parentFullPkg = "btw.api.${parentPkg[2]}"
+                    if (parentFullPkg != "btw.api.${pkg}") {
+                        imports << "import ${parentFullPkg}.${parentIface};"
+                    }
+                }
+            }
+
+            def sb = new StringBuilder()
+            sb << "package btw.api.${pkg};\n\n"
+            if (imports) {
+                imports.each { sb << "${it}\n" }
+                sb << "\n"
+            }
+            sb << "/**\n"
+            sb << " * Interface abstracting ${className}.\n"
+            sb << " * Generated from vanilla MCP source.\n"
+            sb << " */\n"
+            sb << "public interface ${ifaceName}${extendsClause} {\n\n"
+
+            // Add field getters
+            fields.each { f ->
+                def getterName = "get${f.name.capitalize()}"
+                sb << "    ${f.type} ${getterName}();\n"
+            }
+            if (fields) sb << "\n"
+
+            // Add method signatures (simplified - keep return type and name)
+            def seen = new HashSet()
+            methods.each { sig ->
+                // Extract return type and method name for dedup
+                def parts = sig.split(/\(/, 2)
+                if (parts.length < 2) return
+                def beforeParen = parts[0].trim()
+                def lastSpace = beforeParen.lastIndexOf(' ')
+                if (lastSpace < 0) return
+                def returnType = beforeParen.substring(0, lastSpace).trim()
+                def methodName = beforeParen.substring(lastSpace + 1).trim()
+                def params = parts[1].replaceAll(/\)\s*$/, '')
+
+                // Skip some noise
+                if (methodName.startsWith('func_')) return
+                if (methodName == 'toString' || methodName == 'hashCode' || methodName == 'equals') return
+
+                def key = "${methodName}(${params.replaceAll(/\w+ (\w+)/, '$1')})"
+                if (seen.contains(key)) return
+                seen << key
+
+                // Simplify parameter names
+                params = params.replaceAll(/\bpar\d+\w*/, { it[0] })
+
+                sb << "    ${returnType} ${methodName}(${params});\n"
+            }
+
+            sb << "}\n"
+            outFile.text = sb.toString()
+            generated++
+            println "Generated: ${ifaceName} (${methods.size()} methods, ${fields.size()} fields)"
+        }
+
+        println "\nGenerated ${generated} interfaces in ${apiDir}"
+    }
+}

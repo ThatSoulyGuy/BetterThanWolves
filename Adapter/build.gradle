@@ -1,0 +1,197 @@
+apply plugin: 'java'
+apply plugin: 'com.github.johnrengelman.shadow'
+
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
+// MCP Backend: Bridges btw.api and net.minecraft.src via bytecode remapping.
+//
+// Build pipeline:
+//   1. Api/Common/Client/Server compile against btw.api (already done)
+//   2. Shadow task remaps btw.api.* -> net.minecraft.src.* in FC bytecode
+//   3. Vanilla compiles against remapped FC code (sees net.minecraft.src types)
+//   4. Final JAR = vanilla + remapped FC code
+
+// --- Step 1: Create remapped FC JAR ---
+
+task remapFcCode(type: ShadowJar) {
+    description = 'Remaps btw.api.* to net.minecraft.src.* in compiled FC code'
+    archiveBaseName = 'fc-remapped'
+    archiveClassifier = ''
+    destinationDirectory = file("$buildDir/remapped")
+
+    // Include compiled FC code from all modules.
+    // Client output is listed FIRST so its versions win for duplicate classes
+    // (Client has client-only methods that Server versions lack).
+    // Server is included for server-only classes like FCCommandServerLoc.
+    from project(':Client').sourceSets.main.output
+    from project(':Api').sourceSets.main.output
+    from project(':Common').sourceSets.main.output
+    from project(':Server').sourceSets.main.output
+
+    // Client classes win over Server duplicates
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // The key operation: rewrite all btw/api/* references to net/minecraft/src/*
+    relocate 'btw.api', 'net.minecraft.src'
+
+    // Don't pull in transitive deps
+    configurations = []
+}
+
+remapFcCode.dependsOn ':Api:compileJava', ':Common:compileJava', ':Client:compileJava', ':Server:compileJava'
+
+// --- Step 2: Compile vanilla against remapped FC code ---
+
+sourceSets {
+    client {
+        java {
+            srcDirs = ["${rootDir}/vanilla/client"]
+            exclude '**/*.txt'
+        }
+    }
+}
+
+dependencies {
+    // Vanilla sees the remapped FC code (btw.api.* is now net.minecraft.src.*)
+    clientImplementation fileTree(dir: "$buildDir/remapped", include: ['*.jar'])
+
+    // Third-party libraries needed by vanilla
+    clientImplementation 'org.lwjgl.lwjgl:lwjgl:2.9.0'
+    clientImplementation 'org.lwjgl.lwjgl:lwjgl_util:2.9.0'
+    clientImplementation 'net.java.jinput:jinput:2.0.5'
+    clientImplementation 'com.google.guava:guava:14.0'
+    clientImplementation 'com.google.code.gson:gson:2.2.4'
+    clientImplementation 'commons-io:commons-io:2.4'
+    clientImplementation 'org.apache.commons:commons-lang3:3.1'
+    clientImplementation 'commons-codec:commons-codec:1.9'
+    clientImplementation 'commons-logging:commons-logging:1.1.3'
+    clientImplementation 'org.apache.httpcomponents:httpclient:4.1.3'
+    clientImplementation 'org.apache.httpcomponents:httpcore:4.1.3'
+    clientCompileOnly 'org.bouncycastle:bcprov-jdk15on:1.47'  // compile-only; MC bundles its own BC at runtime
+    clientImplementation 'com.paulscode:codecjorbis:20101023'
+    clientImplementation 'com.paulscode:codecwav:20101023'
+    clientImplementation 'com.paulscode:libraryjavasound:20101123'
+    clientImplementation 'com.paulscode:librarylwjglopenal:20100824'
+    clientImplementation 'com.paulscode:soundsystem:20120107'
+    clientImplementation fileTree(dir: "${rootDir}/libs", include: ['*.jar'])
+}
+
+compileClientJava.dependsOn remapFcCode, ':setupVanilla'
+
+// --- Step 3: Parity verification ---
+
+task verifyApiParity {
+    group = 'verification'
+    description = 'Checks which btw.api classes have no vanilla counterpart'
+    dependsOn remapFcCode, 'compileClientJava'
+
+    doLast {
+        def remappedJar = fileTree(dir: "$buildDir/remapped", include: '*.jar').files.first()
+        def vanillaDir = sourceSets.client.output.classesDirs.files.first()
+
+        def remappedClasses = []
+        zipTree(remappedJar).matching { include 'net/minecraft/src/*.class' }.each { f ->
+            if (!f.name.contains('$')) {
+                remappedClasses << f.name.replace('.class', '')
+            }
+        }
+
+        def missing = []
+        remappedClasses.each { name ->
+            def vanillaFile = new File(vanillaDir, "net/minecraft/src/${name}.class")
+            if (!vanillaFile.exists()) {
+                missing << name
+            }
+        }
+
+        logger.lifecycle("Remapped FC classes in net.minecraft.src: ${remappedClasses.size()}")
+        logger.lifecycle("Missing vanilla counterparts: ${missing.size()}")
+        if (missing) {
+            missing.sort().each { logger.lifecycle("  NO VANILLA: $it") }
+            logger.lifecycle("")
+            logger.lifecycle("These classes exist only in FC/Api and will be included in the final JAR as-is.")
+        }
+    }
+}
+
+// --- Step 4: Final assembly JAR ---
+
+task assembleClient(type: Jar) {
+    group = 'build'
+    description = 'Assembles final client JAR: remapped FC code + vanilla'
+    archiveBaseName = 'BetterThanWolves-client-assembled'
+    dependsOn remapFcCode, 'compileClientJava'
+
+    // Include vanilla compiled classes
+    from sourceSets.client.output
+
+    // Include remapped FC code
+    from {
+        fileTree(dir: "$buildDir/remapped", include: '*.jar').files.collect { zipTree(it) }
+    }
+
+    manifest {
+        attributes(
+            'Implementation-Title': 'Better Than Wolves',
+            'Implementation-Version': project.version
+        )
+    }
+
+    // Handle duplicates: vanilla wins over remapped api stubs
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// --- Step 5: Run client with assembled code ---
+
+configurations {
+    natives
+}
+
+dependencies {
+    natives 'org.lwjgl.lwjgl:lwjgl-platform:2.9.0:natives-windows'
+    natives 'org.lwjgl.lwjgl:lwjgl-platform:2.9.0:natives-linux'
+    natives 'org.lwjgl.lwjgl:lwjgl-platform:2.9.0:natives-osx'
+    natives 'net.java.jinput:jinput-platform:2.0.5:natives-windows'
+    natives 'net.java.jinput:jinput-platform:2.0.5:natives-linux'
+    natives 'net.java.jinput:jinput-platform:2.0.5:natives-osx'
+}
+
+task extractNatives(type: Copy) {
+    group = 'setup'
+    from configurations.natives.collect { zipTree(it) }
+    into "$buildDir/natives"
+    exclude 'META-INF/**'
+}
+
+task runClient(type: JavaExec) {
+    group = 'run'
+    description = 'Runs the Minecraft client with BTW (using remapped + vanilla code)'
+    dependsOn remapFcCode, 'compileClientJava', extractNatives, ':extractBtwResources'
+
+    def btwRes = file("${rootDir}/build/btw-resources")
+
+    def mcJar = file("${rootDir}/.gradle/mc-cache/mcp751/jars/bin/minecraft.jar")
+
+    // Classpath order matters: vanilla FIRST (real implementations), then remapped FC code.
+    // MC JAR provides resources AND bundled libraries (BouncyCastle, etc.)
+    // Use runtimeClasspath (excludes compileOnly deps like BouncyCastle which MC bundles)
+    classpath = sourceSets.client.output +                       // vanilla compiled classes (FIRST)
+        fileTree(dir: "$buildDir/remapped", include: '*.jar') + // remapped FC code
+        files(mcJar) +                                           // MC JAR (resources + bundled BC)
+        sourceSets.client.runtimeClasspath +                     // third-party libs (no compileOnly)
+        files(btwRes)
+
+    main = 'net.minecraft.client.Minecraft'
+
+    def nativesDir = file("$buildDir/natives")
+    systemProperty 'java.library.path', nativesDir.absolutePath
+    systemProperty 'org.lwjgl.librarypath', nativesDir.absolutePath
+    systemProperty 'net.java.games.input.librarypath', nativesDir.absolutePath
+
+    workingDir = file("${rootDir}/run")
+    doFirst { workingDir.mkdirs() }
+    jvmArgs '-Xmx1G', '-Xms512M'
+
+    def username = project.hasProperty('mcUsername') ? project.property('mcUsername') : 'Dev'
+    args '--username', username, '--session', '-'
+}

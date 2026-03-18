@@ -1,0 +1,6 @@
+package btw.api;
+
+public class CrashReport {
+    public CrashReport(String description, Throwable throwable) {}
+    public String getDescription() { return ""; }
+}

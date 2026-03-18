@@ -1,0 +1,208 @@
+// Standalone Gradle script to reorganize FC files into nested subpackages
+// Run with: ./gradlew -b reorganize_nested.gradle reorganize
+
+task reorganize {
+    doLast {
+        def projectDir = file('.')
+
+        def getNestedPackage = { String name ->
+            // Block subcategories
+            if (name =~ /FCBlock.*(Slab|Siding|Moulding|Stairs|Corner|Decorative|Column|Table|Pedestal|Slat|Grate|BoneSlab)/) return 'block.decoration'
+            if (name =~ /FCBlock.*(Ore|ChunkOre|Gravel|SandStone|Stone|Cobble|Bedrock|Clay|Brick|Mortar|Loose|Dirt|Dung|Cement|SoulforgedSteel|BlackStone|WhiteStone|Cooked|Bone(?!Slab))/) return 'block.terrain'
+            if (name =~ /FCBlock.*(Furnace|Anvil|Crucible|Kiln|Vessel|Cauldron|Hopper|BBQ|Campfire|BrewingStand|Dispenser|Workbench|Infernal|Basket|Hamper|Barrel|Chest|Bucket|Arcane)/) return 'block.container'
+            if (name =~ /FCBlock.*(Axle|Gear|Pulley|Bellows|Saw|Turntable|Mill|Crank|Platform|Anchor|Rope|ScrewPump|Shaft|Power)/) return 'block.mechanical'
+            if (name =~ /FCBlock.*(Redstone|Detector(?!Rail)|Buddy|Button|Pressure|Lever|Clutch|Comparator|Repeater|LightBulb)/) return 'block.redstone'
+            if (name =~ /FCBlock.*(Crop|Wheat|Hemp|Planter|Sapling|Mushroom|Pumpkin|Melon|Cactus|Vine|Plant|Weed|Blood|NetherGrowth|Log|Leaves|Flower|Reed|TallGrass|Cocoa|Carrot|Potato|Blight|Vegetation)/) return 'block.nature'
+            if (name =~ /FCBlock.*(Torch|Fire|Candle|Magma|Ember|Hibachi|Smouldering|Ash)/) return 'block.fire'
+            if (name =~ /FCBlock.*(Water|Lava|Flowing|Stationary|Ice|Snow|Sponge|Fluid)/) return 'block.fluid'
+            if (name.startsWith('FCBlock') || name.startsWith('AaaFCBlock')) return 'block.misc'
+            // Item subcategories
+            if (name =~ /FCItem.*(Block|Slab|Siding|PlacesAs)/) return 'item.itemblock'
+            if (name =~ /FCItem.*(Food|Stew|Soup|Dough|Flour|Bread|Cookie|Meat|Pork|Chicken|Beef|Fish|Egg|Seeds|Cocoa|Carrot|Potato|Apple|Sugar|Chocolate|Kibble|Chowder|Oyster|Mutton|Wolf|Mushroom)/) return 'item.food'
+            if (name =~ /FCItem.*(Tool|Sword|Axe|Pick|Shovel|Hoe|Shears|Chisel|Mattock)/) return 'item.tool'
+            if (name =~ /FCItem.*(Armor|Boots|Helmet|Plate|Legging)/) return 'item.armor'
+            if (name =~ /FCItem.*(Bow|Arrow|Dynamite)/) return 'item.weapon'
+            if (name.startsWith('FCItem') || name.startsWith('AaaFCItem')) return 'item.misc'
+            // Entity subcategories
+            if (name.startsWith('FCEntityAI')) return 'entity.ai'
+            if (name =~ /FCSpawn/) return 'entity.spawn'
+            if (name.startsWith('FCEntity')) return 'entity.mob'
+            // Crafting subcategories
+            if (name =~ /FC(Container|Inventory)/) return 'crafting.container'
+            if (name =~ /FC(CraftingManager|Recipes)/) return 'crafting.recipe'
+            // Client stays flat
+            if (name.startsWith('FCClient')) return 'client'
+            // Other flat packages
+            if (name.startsWith('FCTileEntity')) return 'tileentity'
+            if (name =~ /^FCI[A-Z]/) return 'api'
+            if (name =~ /FC(Utils|Closest|Magnetic|Map|Packet|Chunk)/) return 'util'
+            if (name =~ /FC(Biome|World|Explosion|Beacon)/) return 'world'
+            if (name.startsWith('FCBehavior')) return 'behavior'
+            if (name =~ /FC(Material|Enum|Damage|Step)/) return 'properties'
+            if (name.startsWith('FCModel')) return 'model'
+            if (name.startsWith('FCCommand')) return 'command'
+            if (name =~ /FC(Add|Better)/) return 'core'
+            return 'core'
+        }
+
+        // Collect all nested package names
+        def allPackages = ['core','block.decoration','block.terrain','block.container','block.mechanical',
+            'block.redstone','block.nature','block.fire','block.fluid','block.misc',
+            'item.itemblock','item.food','item.tool','item.armor','item.weapon','item.misc',
+            'entity.ai','entity.mob','entity.spawn','crafting.recipe','crafting.container',
+            'tileentity','client','api','util','world','behavior','properties','model','command'] as Set
+
+        // Build import block
+        def importBlock = 'import net.minecraft.src.*;\n'
+        allPackages.each { pkg ->
+            importBlock += "import net.minecraft.src.btw.${pkg}.*;\n"
+        }
+
+        def moveCount = 0
+
+        ['Common', 'Client', 'Server'].each { mod ->
+            def srcDir = file("${mod}/src/main/java/net/minecraft/src")
+            if (!srcDir.exists()) return
+
+            srcDir.listFiles().findAll { it.name.endsWith('.java') && (it.name.startsWith('FC') || it.name.startsWith('Aaa')) }.each { f ->
+                def baseName = f.name.replace('.java', '')
+                def pkg = getNestedPackage(baseName)
+                def pkgPath = pkg.replace('.', '/')
+                def targetDir = file("${mod}/src/main/java/net/minecraft/src/btw/${pkgPath}")
+                targetDir.mkdirs()
+
+                // Skip client imports for Common and Server
+                def filteredImports = importBlock
+                if (mod != 'Client') {
+                    filteredImports = filteredImports.readLines().findAll { !it.contains('btw.client') }.join('\n') + '\n'
+                }
+
+                def content = f.text
+                // Remove old package line
+                content = content.replaceFirst(/(?m)^package net\.minecraft\.src;\s*\n?/, '')
+                // Write new file
+                def newContent = "package net.minecraft.src.btw.${pkg};\n\n${filteredImports}\n${content}"
+                new File(targetDir, f.name).text = newContent
+                f.delete()
+                moveCount++
+            }
+        }
+
+        println "Moved ${moveCount} files into nested subpackages"
+
+        // Widen FC access modifiers
+        println "Widening FC access modifiers..."
+        ['Common', 'Client', 'Server'].each { mod ->
+            fileTree("${mod}/src/main/java/net/minecraft/src/btw").matching { include '**/*.java' }.each { f ->
+                def text = f.text
+                text = text.replaceAll(/(?m)^(    |\t)protected /, '$1public ')
+                text = text.replaceAll(/(?m)^(    |\t)abstract protected /, '$1abstract public ')
+                f.text = text
+            }
+        }
+
+        // Add imports to vanilla files
+        println "Adding btw imports to vanilla files..."
+        def clientPkgs = allPackages
+        def serverPkgs = allPackages.findAll { it != 'client' }
+
+        def addImports = { File dir, Collection<String> pkgs ->
+            fileTree(dir).matching { include '**/*.java' }.each { f ->
+                if (f.text.contains('btw.core')) return // already done
+                def imports = pkgs.collect { "import net.minecraft.src.btw.${it}.*;" }.join('\n')
+                f.text = f.text.replaceFirst(/(?m)(^package [^;]+;\s*\n)/, "\$1${imports}\n")
+            }
+        }
+        addImports(file('vanilla/client'), clientPkgs)
+        addImports(file('vanilla/server'), serverPkgs)
+
+        // Fix Minecraft.java FQN
+        def mcJava = file('vanilla/client/net/minecraft/client/Minecraft.java')
+        if (mcJava.exists()) {
+            mcJava.text = mcJava.text.replace('net.minecraft.src.FCAddOnHandler', 'net.minecraft.src.btw.core.FCAddOnHandler')
+        }
+
+        // Widen vanilla access modifiers
+        println "Widening vanilla access modifiers..."
+        def widenVanilla = { String dir ->
+            def v = file("${dir}/net/minecraft/src")
+            if (!v.exists()) return
+            def fixes = [
+                'Block.java': ['protected float blockHardness':'public float blockHardness','protected float blockResistance':'public float blockResistance',
+                    'protected Block setHardness':'public Block setHardness','protected Block setResistance':'public Block setResistance',
+                    'protected Block setStepSound':'public Block setStepSound','protected Block setLightValue':'public Block setLightValue',
+                    'protected void dropBlockAsItem_do':'public void dropBlockAsItem_do','protected boolean CanFallIntoBlockAtPos':'public boolean CanFallIntoBlockAtPos',
+                    'protected void OnFallingUpdate':'public void OnFallingUpdate','protected void ScheduleCheckForFall':'public void ScheduleCheckForFall',
+                    'protected Icon blockIcon':'public Icon blockIcon','protected void RenderCrossHatch':'public void RenderCrossHatch'],
+                'Item.java': ['protected Item(int':'public Item(int','protected Item setPotionEffect':'public Item setPotionEffect','protected Icon itemIcon':'public Icon itemIcon'],
+                'Entity.java': ['protected Random rand':'public Random rand','protected boolean inWater':'public boolean inWater',
+                    'protected void dealFireDamage':'public void dealFireDamage','protected void setBeenAttacked':'public void setBeenAttacked'],
+                'EntityLiving.java': ['protected int health':'public int health','protected boolean isLivingDead':'public boolean isLivingDead',
+                    'protected float moveSpeed':'public float moveSpeed','protected void jump':'public void jump'],
+                'EntityCreature.java': ['protected Entity entityToAttack':'public Entity entityToAttack',
+                    'protected boolean IsPossessed':'public boolean IsPossessed','protected boolean IsFullyPossessed':'public boolean IsFullyPossessed'],
+                'EntityPlayer.java': ['protected FoodStats foodStats':'public FoodStats foodStats','protected boolean IsWearingSoulforgedBoots':'public boolean IsWearingSoulforgedBoots','protected void jump':'public void jump'],
+                'EntityAnimal.java': ['protected int m_iGrazeProgressCounter':'public int m_iGrazeProgressCounter','protected void jump':'public void jump','protected int GetTicksForChildToGrow':'public int GetTicksForChildToGrow'],
+                'EntityAgeable.java': ['protected int GetTicksForChildToGrow':'public int GetTicksForChildToGrow'],
+                'World.java': ['protected WorldInfo worldInfo':'public WorldInfo worldInfo'],
+                'TileEntity.java': ['protected World worldObj':'public World worldObj'],
+                'Material.java': ['protected Material setRequiresTool':'public Material setRequiresTool','protected Material setBurning':'public Material setBurning',
+                    'protected Material setNoPushMobility':'public Material setNoPushMobility','protected Material setTranslucent':'public Material setTranslucent'],
+                'AxisAlignedBB.java': ['protected AxisAlignedBB(double':'public AxisAlignedBB(double'],
+                'Vec3.java': ['protected Vec3 setComponents':'public Vec3 setComponents'],
+                'DamageSource.java': ['protected DamageSource setDamageBypassesArmor':'public DamageSource setDamageBypassesArmor'],
+                'Potion.java': ['protected Potion(int':'public Potion(int','protected Potion setIconIndex':'public Potion setIconIndex'],
+                'BlockLeavesBase.java': ['protected boolean graphicsLevel':'public boolean graphicsLevel'],
+                'BiomeDecorator.java': ['protected WorldGenerator reedGen':'public WorldGenerator reedGen'],
+                'StructureStart.java': ['protected StructureBoundingBox boundingBox':'public StructureBoundingBox boundingBox'],
+                'RenderBlocks.java': ['protected boolean RenderStandardFullBlockMovedByPiston':'public boolean RenderStandardFullBlockMovedByPiston',
+                    'protected void RenderStandardFullBlockMovedByPiston':'public void RenderStandardFullBlockMovedByPiston'],
+                'EntityFX.java': ['protected float particleScale':'public float particleScale'],
+                'EntityXPOrb.java': ['protected void dealFireDamage':'public void dealFireDamage'],
+                'EntityItem.java': ['protected void dealFireDamage':'public void dealFireDamage'],
+                'EntityMagmaCube.java': ['protected void jump':'public void jump','protected EntitySlime createInstance':'public EntitySlime createInstance',
+                    'protected boolean canDamagePlayer':'public boolean canDamagePlayer','protected boolean makesSoundOnLand':'public boolean makesSoundOnLand',
+                    'protected void fall':'public void fall'],
+                'EntityPigZombie.java': ['protected void dropRareDrop':'public void dropRareDrop','protected void addRandomArmor':'public void addRandomArmor'],
+                'BlockCrops.java': ['protected boolean CanGrowOnBlock':'public boolean CanGrowOnBlock'],
+                'CraftingManager.java': ['    ShapedRecipes addRecipe':'    public ShapedRecipes addRecipe','    void AddShapeless':'    public void AddShapeless',
+                    '    ShapedRecipes AddShaped':'    public ShapedRecipes AddShaped','    ShapelessRecipes AddShapeless':'    public ShapelessRecipes AddShapeless',
+                    '    void addRecipe':'    public void addRecipe'],
+                'WorldGenBigTree.java': ['    void genTreeLayer':'    public void genTreeLayer','    void placeBlockLine':'    public void placeBlockLine',
+                    '    int checkBlockLine':'    public int checkBlockLine','    void generateLeafNodeBases':'    public void generateLeafNodeBases',
+                    '    boolean validTreeLocation':'    public boolean validTreeLocation',
+                    '    static final byte[] otherCoordPairs':'    public static final byte[] otherCoordPairs'],
+                'Packet.java': ['    static void addIdClassMapping':'    public static void addIdClassMapping'],
+                'ChunkProviderServer.java': ['    IChunkProvider GetCurrentProvider':'    public IChunkProvider GetCurrentProvider'],
+            ]
+            // Package-private classes
+            ['DispenserBehaviorFilledBucket','DispenserBehaviorPotion','DispenserBehaviorEmptyBucket'].each { cls ->
+                def f = new File(v, "${cls}.java")
+                if (f.exists()) f.text = f.text.replaceFirst(/(?m)^(final )?class /, 'public $1class ')
+            }
+            // Package-private fields
+            ['BlockLeaves.java': /    int\[\] adjacentTreeBlocks/, 'EntityAIAttackOnCollide.java': /    EntityLiving attacker/,
+             'EntityAICreeperSwell.java': /    (EntityCreeper creeperAttackTarget|EntityLiving creeperAttackTarget)/,
+             'EntityVillager.java': /    Village villageObj/, 'WorldGenBigTree.java': /    World worldObj/,
+             'ModelSquid.java': /    ModelRenderer squidBody/, 'ModelSquid.java:2': /    ModelRenderer\[\] squidTentacles/].each { entry ->
+                def fileName = entry.key.replaceFirst(/:\d+$/, '')
+                def f = new File(v, fileName)
+                if (f.exists()) {
+                    f.text = f.text.replaceAll(/(?m)^(    )(${entry.value.pattern()})/, '$1public $2')
+                }
+            }
+            fixes.each { fileName, replacements ->
+                def f = new File(v, fileName)
+                if (f.exists()) {
+                    def text = f.text
+                    replacements.each { from, to -> text = text.replace(from, to) }
+                    f.text = text
+                }
+            }
+        }
+        widenVanilla('vanilla/client')
+        widenVanilla('vanilla/server')
+
+        println "=== Done! ==="
+    }
+}

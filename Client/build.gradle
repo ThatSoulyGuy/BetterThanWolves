@@ -1,0 +1,91 @@
+plugins {
+    id 'java-library'
+}
+
+configurations {
+    natives
+}
+
+// Client FC code. Depends on Api + Common ONLY.
+// Vanilla client code will move to MCP backend module.
+
+sourceSets {
+    stubs {
+        java {
+            srcDirs = [
+                "${rootDir}/Server/src/main/java",
+                "${rootDir}/Common/src/main/java"
+            ]
+            exclude '**/*.txt'
+        }
+    }
+    main {
+        java.srcDirs = ['src/main/java']
+        compileClasspath += sourceSets.stubs.output
+    }
+}
+
+dependencies {
+    stubsImplementation project(':Api')
+    api project(':Api')
+    api project(':Common')
+
+    // Client FC code uses OpenGL directly
+    implementation 'org.lwjgl.lwjgl:lwjgl:2.9.0'
+    implementation 'org.lwjgl.lwjgl:lwjgl_util:2.9.0'
+}
+
+compileStubsJava.dependsOn ':Api:compileJava'
+compileJava.dependsOn compileStubsJava
+
+jar {
+    archiveBaseName = 'BetterThanWolves-client'
+    from project(':Common').sourceSets.main.output
+    manifest {
+        attributes(
+            'Implementation-Title': 'Better Than Wolves',
+            'Implementation-Version': version
+        )
+    }
+}
+
+// --- Runtime configuration (kept for later use) ---
+
+dependencies {
+    natives 'org.lwjgl.lwjgl:lwjgl-platform:2.9.0:natives-windows'
+    natives 'org.lwjgl.lwjgl:lwjgl-platform:2.9.0:natives-linux'
+    natives 'org.lwjgl.lwjgl:lwjgl-platform:2.9.0:natives-osx'
+    natives 'net.java.jinput:jinput-platform:2.0.5:natives-windows'
+    natives 'net.java.jinput:jinput-platform:2.0.5:natives-linux'
+    natives 'net.java.jinput:jinput-platform:2.0.5:natives-osx'
+}
+
+task extractNatives(type: Copy) {
+    group = 'setup'
+    from configurations.natives.collect { zipTree(it) }
+    into "$buildDir/natives"
+    exclude 'META-INF/**'
+}
+
+task runClient(type: JavaExec) {
+    group = 'run'
+    description = 'Runs the Minecraft client with BTW'
+    dependsOn classes, extractNatives, ':extractBtwResources'
+
+    def mcJar = file("${rootDir}/.gradle/mc-cache/mcp751/jars/bin/minecraft.jar")
+    def btwRes = file("${rootDir}/build/btw-resources")
+    classpath = sourceSets.main.runtimeClasspath + files(mcJar, btwRes)
+    main = 'net.minecraft.client.Minecraft'
+
+    def nativesDir = file("$buildDir/natives")
+    systemProperty 'java.library.path', nativesDir.absolutePath
+    systemProperty 'org.lwjgl.librarypath', nativesDir.absolutePath
+    systemProperty 'net.java.games.input.librarypath', nativesDir.absolutePath
+
+    workingDir = file("${rootDir}/run")
+    doFirst { workingDir.mkdirs() }
+    jvmArgs '-Xmx1G', '-Xms512M'
+
+    def username = project.hasProperty('mcUsername') ? project.property('mcUsername') : 'Dev'
+    args '--username', username, '--session', '-'
+}

@@ -1,0 +1,38 @@
+package net.minecraft.src.btw.item;
+
+import btw.api.*;
+import net.minecraft.src.btw.core.*;
+import net.minecraft.src.btw.block.*;
+import net.minecraft.src.btw.item.*;
+import net.minecraft.src.btw.entity.*;
+import net.minecraft.src.btw.tileentity.*;
+import net.minecraft.src.btw.client.*;
+import net.minecraft.src.btw.crafting.*;
+import net.minecraft.src.btw.api.*;
+import net.minecraft.src.btw.util.*;
+import net.minecraft.src.btw.world.*;
+import net.minecraft.src.btw.behavior.*;
+import net.minecraft.src.btw.properties.*;
+import net.minecraft.src.btw.model.*;
+import net.minecraft.src.btw.command.*;
+
+// FCMOD
+
+
+public class FCItemMysteryMeatRaw extends FCItemFood
+{
+	public FCItemMysteryMeatRaw( int iItemID )
+	{
+		super( iItemID, 4, 0.25F, true, "fcItemMysteryMeatRaw", true );
+		
+		SetStandardFoodPoisoningEffect();
+	}
+
+	//----------- Client Side Functionality -----------//
+	
+	@Override
+    public void registerIcons( IconRegister register )
+    {
+        itemIcon = register.registerIcon("beefRaw");
+    }
+}

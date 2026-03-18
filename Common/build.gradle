@@ -1,0 +1,29 @@
+plugins {
+    id 'java-library'
+}
+
+// Common FC code. Depends on Api + Server stubs for cross-module FC references.
+
+sourceSets {
+    stubs {
+        java {
+            srcDirs = [
+                "${rootDir}/Server/src/main/java",
+                'src/main/java'
+            ]
+            exclude '**/*.txt'
+        }
+    }
+    main {
+        java.srcDirs = ['src/main/java']
+        compileClasspath += sourceSets.stubs.output
+    }
+}
+
+dependencies {
+    stubsImplementation project(':Api')
+    api project(':Api')
+}
+
+compileStubsJava.dependsOn ':Api:compileJava'
+compileJava.dependsOn compileStubsJava

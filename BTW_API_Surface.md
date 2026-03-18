@@ -1,0 +1,3934 @@
+# Better Than Wolves - Complete API Surface Catalog
+
+## 1. Vanilla Classes Extended
+```
+AxisAlignedBB
+BehaviorProjectileDispense
+BiomeGenBase
+BiomeGenDesert
+BiomeGenEnd
+BiomeGenForest
+BiomeGenHell
+BiomeGenJungle
+BiomeGenSnow
+BiomeGenTaiga
+Block
+BlockBeacon
+BlockBed
+BlockBrewingStand
+BlockButton
+BlockCactus
+BlockCake
+BlockCarrot
+BlockCauldron
+BlockChest
+BlockCloth
+BlockCocoa
+BlockComparator
+BlockContainer
+BlockCrops
+BlockDaylightDetector
+BlockDeadBush
+BlockDetectorRail
+BlockDispenser
+BlockDoor
+BlockDragonEgg
+BlockEnchantmentTable
+BlockEndPortal
+BlockEndPortalFrame
+BlockEnderChest
+BlockFenceGate
+BlockFire
+BlockFlower
+BlockFlowerPot
+BlockFlowing
+BlockFurnace
+BlockGlass
+BlockGlowStone
+BlockGrass
+BlockHalfSlab
+BlockHopper
+BlockIce
+BlockJukeBox
+BlockLeaves
+BlockLever
+BlockLilyPad
+BlockLog
+BlockMobSpawner
+BlockMushroom
+BlockMushroomCap
+BlockMycelium
+BlockNetherStalk
+BlockNote
+BlockObsidian
+BlockOre
+BlockPane
+BlockPistonBase
+BlockPistonExtension
+BlockPistonMoving
+BlockPortal
+BlockPotato
+BlockPressurePlate
+BlockPumpkin
+BlockQuartz
+BlockRail
+BlockRedstoneLight
+BlockRedstoneRepeater
+BlockRedstoneWire
+BlockReed
+BlockSandStone
+BlockSapling
+BlockSign
+BlockSilverfish
+BlockSkull
+BlockSnowBlock
+BlockSoulSand
+BlockStationary
+BlockStem
+BlockStep
+BlockStoneBrick
+BlockTNT
+BlockTallGrass
+BlockTrapDoor
+BlockTripWire
+BlockTripWireSource
+BlockVine
+BlockWall
+BlockWeb
+BlockWorkbench
+CommandBase
+Container
+ContainerPlayer
+ContainerWorkbench
+DamageSource
+Entity
+EntityAIAttackOnCollide
+EntityAIBase
+EntityAICreeperSwell
+EntityAINearestAttackableTarget
+EntityArrow
+EntityBat
+EntityBlaze
+EntityChicken
+EntityCow
+EntityCreature
+EntityCreeper
+EntityEnderman
+EntityFX
+EntityFallingSand
+EntityGhast
+EntityItem
+EntityMagmaCube
+EntityOcelot
+EntityPig
+EntityPigZombie
+EntitySheep
+EntitySkeleton
+EntitySlime
+EntitySnowman
+EntitySpider
+EntityThrowable
+EntityVillager
+EntityWaterMob
+EntityWeatherEffect
+EntityWitch
+EntityWither
+EntityWitherSkull
+EntityWolf
+EntityZombie
+FCAddOn
+FCBlockAxle
+FCBlockBasket
+FCBlockBucket
+FCBlockBucketFull
+FCBlockButton
+FCBlockChunkOre
+FCBlockChunkOreStorage
+FCBlockCookingVessel
+FCBlockCrops
+FCBlockCropsDailyGrowth
+FCBlockDetectorLogic
+FCBlockDoor
+FCBlockFalling
+FCBlockFallingFullBlock
+FCBlockFarmland
+FCBlockFarmlandBase
+FCBlockFarmlandLegacyBase
+FCBlockFence
+FCBlockFire
+FCBlockFullBlock
+FCBlockFurnace
+FCBlockFurnaceBrick
+FCBlockGearBox
+FCBlockGourd
+FCBlockGroundCover
+FCBlockLadderBase
+FCBlockLavaReceiver
+FCBlockLeaves
+FCBlockMilk
+FCBlockMortarReceiver
+FCBlockMortarReceiverSlab
+FCBlockMortarReceiverStairs
+FCBlockMoulding
+FCBlockMouldingAndDecorative
+FCBlockMushroom
+FCBlockMushroomCap
+FCBlockOre
+FCBlockOreStaged
+FCBlockPane
+FCBlockPlanterBase
+FCBlockPlants
+FCBlockPressurePlate
+FCBlockSidingAndCorner
+FCBlockSidingAndCornerAndDecorative
+FCBlockSign
+FCBlockSlab
+FCBlockSlabAttached
+FCBlockSlabFalling
+FCBlockSpike
+FCBlockStairs
+FCBlockStairsBase
+FCBlockStairsFalling
+FCBlockTorchBase
+FCBlockTorchBaseBurning
+FCBlockTorchBaseUnlit
+FCBlockVessel
+FCClientEntityWhiteSmokeFX
+FCClientGuiCraftingWorkbench
+FCClientTextureFire
+FCClosestEntitySelectionCriteria
+FCContainerWithInventory
+FCCraftingManagerBulk
+FCEntityAIWolfHowl
+FCEntityMechPower
+FCEntityMechPowerHorizontal
+FCEntitySpider
+FCEntityWither
+FCItemArmor
+FCItemArmorMod
+FCItemArrow
+FCItemAxe
+FCItemBlockMoulding
+FCItemBlockSlab
+FCItemBlockTorchBurning
+FCItemBlockTorchIdle
+FCItemBow
+FCItemBucket
+FCItemBucketDrinkable
+FCItemBucketFull
+FCItemChisel
+FCItemClub
+FCItemCraftingProgressive
+FCItemDoor
+FCItemFireStarter
+FCItemFishingRod
+FCItemFood
+FCItemHoe
+FCItemMortar
+FCItemPickaxe
+FCItemPlacesAsBlock
+FCItemRefinedPickAxe
+FCItemSeeds
+FCItemShovel
+FCItemSword
+FCItemThrowable
+FCItemTool
+FCModelBlock
+FCModelBlockBucket
+FCTileEntityBasket
+FCTileEntityBasketRenderer
+FCTileEntityCookingVessel
+FCUtilsPrimitiveGeometric
+GuiContainer
+InventoryBasic
+Item
+ItemArmor
+ItemBlock
+ItemBlockWithMetadata
+ItemBoat
+ItemBook
+ItemBow
+ItemCarrotOnAStick
+ItemDye
+ItemEditableBook
+ItemEmptyMap
+ItemEnchantedBook
+ItemFireball
+ItemFishingRod
+ItemFood
+ItemGlassBottle
+ItemLilyPad
+ItemMap
+ItemMinecart
+ItemMultiTextureTile
+ItemPotion
+ItemReed
+ItemShears
+ItemSign
+ItemSimpleFoiled
+ItemSnowball
+ItemSword
+MapGenNetherBridge
+Material
+ModelBase
+ModelBiped
+ModelChicken
+ModelPig
+ModelQuadruped
+ModelSquid
+Packet
+RandomPositionGenerator
+Render
+RenderLiving
+RenderSpider
+RenderWolf
+ShapedRecipes
+StepSound
+TextureStitched
+TileEntity
+TileEntityBeacon
+TileEntityChest
+TileEntityEnderChest
+TileEntityFurnace
+TileEntityMobSpawner
+TileEntitySpecialRenderer
+WeightedRandomItem
+WorldGenBigTree
+WorldGenerator
+```
+
+## 2. Vanilla Interfaces Implemented
+```
+FCIBlockMechanical
+FCIEntityPacketHandler
+FCITileEntityDataPacketHandler
+IAnimals
+IEntitySelector
+IInventory
+IProjectile
+IRecipe
+ITileEntityProvider
+```
+
+## 3. FC Class Hierarchy (class extends parent)
+```
+class AaaFCBlockTemplate extends Block
+class AaaFCItemTemplate extends Item
+class FCBehaviorBroadheadArrowDispense extends AbstractBehaviorProjectileDispense
+class FCBehaviorDispenseDynamite extends AbstractBehaviorProjectileDispense
+class FCBehaviorRottedArrowDispense extends AbstractBehaviorProjectileDispense
+class FCBehaviorSoulUrnDispense extends AbstractBehaviorProjectileDispense
+class FCBetterThanWolves extends FCAddOn
+class FCBiomeGenDesert extends BiomeGenDesert
+class FCBiomeGenEnd extends BiomeGenEnd
+class FCBiomeGenForest extends BiomeGenForest
+class FCBiomeGenHell extends BiomeGenHell
+class FCBiomeGenHills extends BiomeGenBase
+class FCBiomeGenJungle extends BiomeGenJungle
+class FCBiomeGenSnow extends BiomeGenSnow
+class FCBiomeGenTaiga extends BiomeGenTaiga
+class FCBlockAestheticNonOpaque extends Block
+class FCBlockAestheticOpaque extends Block
+class FCBlockAestheticOpaqueEarth extends Block
+class FCBlockAestheticVegetation extends Block
+class FCBlockAnchor extends Block
+class FCBlockAnvil extends Block
+class FCBlockArcaneVessel extends FCBlockVessel
+class FCBlockAshGroundCover extends FCBlockGroundCover
+class FCBlockAxle extends Block
+class FCBlockAxlePowerSource extends FCBlockAxle
+class FCBlockBBQ extends Block
+class FCBlockBasket extends BlockContainer
+class FCBlockBasketWicker extends FCBlockBasket
+class FCBlockBeacon extends BlockBeacon
+class FCBlockBed extends BlockBed
+class FCBlockBedrock extends FCBlockFullBlock
+class FCBlockBellows extends Block
+class FCBlockBlackStone extends BlockQuartz
+class FCBlockBlackStoneStairs extends FCBlockStairs
+class FCBlockBlockDispenser extends BlockContainer
+class FCBlockBloodWood extends Block
+class FCBlockBloodWoodLeaves extends FCBlockLeaves
+class FCBlockBoneSlab extends FCBlockSlab
+class FCBlockBookshelf extends Block
+class FCBlockBrewingStand extends BlockBrewingStand
+class FCBlockBrick extends Block
+class FCBlockBrickLoose extends FCBlockMortarReceiver
+class FCBlockBrickLooseSlab extends FCBlockMortarReceiverSlab
+class FCBlockBrickLooseStairs extends FCBlockMortarReceiverStairs
+class FCBlockBucket extends FCBlockFalling
+class FCBlockBucketCement extends FCBlockBucketFull
+class FCBlockBucketFull extends FCBlockBucket
+class FCBlockBucketMilk extends FCBlockBucketFull
+class FCBlockBucketMilkChocolate extends FCBlockBucketFull
+class FCBlockBucketWater extends FCBlockBucketFull
+class FCBlockBuddyBlock extends Block
+class FCBlockButton extends BlockButton
+class FCBlockButtonStone extends FCBlockButton
+class FCBlockButtonWood extends FCBlockButton
+class FCBlockCactus extends BlockCactus
+class FCBlockCake extends BlockCake
+class FCBlockCampfire extends BlockContainer
+class FCBlockCandle extends Block
+class FCBlockCarrot extends BlockCarrot
+class FCBlockCauldron extends FCBlockCookingVessel
+class FCBlockCement extends BlockContainer
+class FCBlockChest extends BlockChest
+class FCBlockChunkOre extends Block
+class FCBlockChunkOreGold extends FCBlockChunkOre
+class FCBlockChunkOreIron extends FCBlockChunkOre
+class FCBlockChunkOreStorage extends FCBlockFallingFullBlock
+class FCBlockChunkOreStorageGold extends FCBlockChunkOreStorage
+class FCBlockChunkOreStorageIron extends FCBlockChunkOreStorage
+class FCBlockClay extends Block
+class FCBlockCloth extends BlockCloth
+class FCBlockCobblestone extends Block
+class FCBlockCobblestoneLoose extends FCBlockLavaReceiver
+class FCBlockCobblestoneLooseSlab extends FCBlockMortarReceiverSlab
+class FCBlockCobblestoneLooseStairs extends FCBlockMortarReceiverStairs
+class FCBlockCobblestoneMossy extends Block
+class FCBlockCocoa extends BlockCocoa
+class FCBlockCompanionCube extends Block
+class FCBlockComparator extends BlockComparator
+class FCBlockCookedBrick extends Block
+class FCBlockCookingVessel extends FCBlockVessel
+class FCBlockCreeperOysters extends Block
+class FCBlockCreeperOystersSlab extends FCBlockSlab
+class FCBlockCrops extends FCBlockPlants
+class FCBlockCropsDailyGrowth extends FCBlockCrops
+class FCBlockCrucible extends FCBlockCookingVessel
+class FCBlockDaylightDetector extends AbstractBlockDaylightDetector
+class FCBlockDeadBush extends BlockDeadBush
+class FCBlockDetectorBlock extends Block
+class FCBlockDetectorLogic extends Block
+class FCBlockDetectorLogicGlowing extends FCBlockDetectorLogic
+class FCBlockDetectorRail extends AbstractBlockDetectorRail
+class FCBlockDirt extends FCBlockFullBlock
+class FCBlockDirtLoose extends FCBlockFallingFullBlock
+class FCBlockDirtLooseSlab extends FCBlockSlabFalling
+class FCBlockDirtSlab extends FCBlockSlabAttached
+class FCBlockDispenserVanilla extends BlockDispenser
+class FCBlockDoor extends BlockDoor
+class FCBlockDoorWood extends FCBlockDoor
+class FCBlockDragonEgg extends BlockDragonEgg
+class FCBlockEnchantmentTable extends AbstractBlockEnchantmentTable
+class FCBlockEndPortal extends BlockEndPortal
+class FCBlockEndPortalFrame extends AbstractBlockEndPortalFrame
+class FCBlockEndStone extends FCBlockFullBlock
+class FCBlockEnderChest extends BlockEnderChest
+class FCBlockFalling extends Block
+class FCBlockFallingFullBlock extends FCBlockFalling
+class FCBlockFarmland extends FCBlockFarmlandBase
+class FCBlockFarmlandBase extends Block
+class FCBlockFarmlandFertilized extends FCBlockFarmland
+class FCBlockFarmlandLegacyBase extends FCBlockFarmlandBase
+class FCBlockFarmlandLegacyFertilized extends FCBlockFarmlandLegacyBase
+class FCBlockFarmlandLegacyUnfertilized extends FCBlockFarmlandLegacyBase
+class FCBlockFence extends Block
+class FCBlockFenceGate extends BlockFenceGate
+class FCBlockFenceWood extends FCBlockFence
+class FCBlockFire extends BlockFire
+class FCBlockFireStoked extends FCBlockFire
+class FCBlockFlowerBlossom extends BlockFlower
+class FCBlockFlowerPot extends BlockFlowerPot
+class FCBlockFullBlock extends Block
+class FCBlockFurnace extends BlockFurnace
+class FCBlockFurnaceBrick extends FCBlockFurnace
+class FCBlockFurnaceBrickBurning extends FCBlockFurnaceBrick
+class FCBlockFurnaceBrickIdle extends FCBlockFurnaceBrick
+class FCBlockGearBox extends Block
+class FCBlockGlass extends BlockGlass
+class FCBlockGlowStone extends BlockGlowStone
+class FCBlockGourd extends FCBlockFalling
+class FCBlockGrass extends BlockGrass
+class FCBlockGrate extends FCBlockPane
+class FCBlockGravel extends FCBlockFallingFullBlock
+class FCBlockGroundCover extends Block
+class FCBlockHamper extends FCBlockBasket
+class FCBlockHandCrank extends Block
+class FCBlockHempCrop extends BlockCrops
+class FCBlockHopper extends BlockContainer
+class FCBlockIce extends BlockIce
+class FCBlockInfernalEnchanter extends BlockContainer
+class FCBlockIronBars extends FCBlockPane
+class FCBlockJackOLantern extends Block
+class FCBlockJukebox extends BlockJukeBox
+class FCBlockKiln extends Block
+class FCBlockLadder extends FCBlockLadderBase
+class FCBlockLadderBase extends Block
+class FCBlockLadderOnFire extends FCBlockLadderBase
+class FCBlockLavaFlowing extends BlockFlowing
+class FCBlockLavaPillow extends FCBlockFullBlock
+class FCBlockLavaReceiver extends FCBlockMortarReceiver
+class FCBlockLavaStationary extends BlockStationary
+class FCBlockLeaves extends BlockLeaves
+class FCBlockLegacyCorner extends Block
+class FCBlockLegacyLadder extends FCBlockLadderBase
+class FCBlockLegacyOmniSlab extends Block
+class FCBlockLens extends Block
+class FCBlockLever extends BlockLever
+class FCBlockLightBulb extends Block
+class FCBlockLightningRod extends FCBlockSpike
+class FCBlockLilyPad extends BlockLilyPad
+class FCBlockLog extends BlockLog
+class FCBlockLogDamaged extends Block
+class FCBlockLogSmouldering extends FCBlockFalling
+class FCBlockLogSpike extends Block
+class FCBlockMelon extends FCBlockGourd
+class FCBlockMilk extends FCBlockFalling
+class FCBlockMilkChocolate extends FCBlockMilk
+class FCBlockMillStone extends BlockContainer
+class FCBlockMiningCharge extends Block
+class FCBlockMobSpawner extends BlockMobSpawner
+class FCBlockMortarReceiver extends FCBlockFallingFullBlock
+class FCBlockMortarReceiverSlab extends FCBlockSlabFalling
+class FCBlockMortarReceiverStairs extends FCBlockStairsFalling
+class FCBlockMoulding extends Block
+class FCBlockMouldingAndDecorative extends FCBlockMoulding
+class FCBlockMushroom extends BlockMushroom
+class FCBlockMushroomBrown extends FCBlockMushroom
+class FCBlockMushroomCap extends BlockMushroomCap
+class FCBlockMushroomCapLegacy extends FCBlockMushroomCap
+class FCBlockMycelium extends BlockMycelium
+class FCBlockMyceliumSlab extends FCBlockSlabAttached
+class FCBlockNetherBrick extends Block
+class FCBlockNetherBrickLoose extends FCBlockMortarReceiver
+class FCBlockNetherBrickLooseSlab extends FCBlockMortarReceiverSlab
+class FCBlockNetherBrickLooseStairs extends FCBlockMortarReceiverStairs
+class FCBlockNetherBrickMouldingAndDecorative extends FCBlockMouldingAndDecorative
+class FCBlockNetherBrickSidingAndCornerAndDecorative extends FCBlockSidingAndCornerAndDecorative
+class FCBlockNetherGrowth extends Block
+class FCBlockNetherQuartzOre extends BlockOre
+class FCBlockNetherStalk extends BlockNetherStalk
+class FCBlockNetherrack extends FCBlockFullBlock
+class FCBlockNetherrackFalling extends FCBlockFalling
+class FCBlockNote extends BlockNote
+class FCBlockObsidian extends BlockObsidian
+class FCBlockOre extends BlockOre
+class FCBlockOreCoal extends FCBlockOreStaged
+class FCBlockOreDiamond extends FCBlockOreStaged
+class FCBlockOreEmerald extends FCBlockOreStaged
+class FCBlockOreGold extends FCBlockOreStaged
+class FCBlockOreIron extends FCBlockOreStaged
+class FCBlockOreLapis extends FCBlockOreStaged
+class FCBlockOreStaged extends FCBlockOre
+class FCBlockOreStorage extends FCBlockFullBlock
+class FCBlockPane extends BlockPane
+class FCBlockPistonBase extends BlockPistonBase
+class FCBlockPistonExtension extends AbstractBlockPistonExtension
+class FCBlockPistonMoving extends AbstractBlockPistonMoving
+class FCBlockPlanks extends Block
+class FCBlockPlanter extends FCBlockPlanterBase
+class FCBlockPlanterBase extends Block
+class FCBlockPlanterSoil extends FCBlockPlanterBase
+class FCBlockPlants extends Block
+class FCBlockPlatform extends Block
+class FCBlockPortal extends BlockPortal
+class FCBlockPotato extends BlockPotato
+class FCBlockPowderKeg extends BlockTNT
+class FCBlockPressurePlate extends AbstractBlockPressurePlate
+class FCBlockPressurePlatePlanks extends FCBlockPressurePlate
+class FCBlockPressurePlateStone extends FCBlockPressurePlate
+class FCBlockPulley extends BlockContainer
+class FCBlockPumpkin extends FCBlockGourd
+class FCBlockPumpkinCarved extends BlockPumpkin
+class FCBlockRailRegular extends BlockRail
+class FCBlockRedstoneClutch extends FCBlockGearBox
+class FCBlockRedstoneLight extends AbstractBlockRedstoneLight
+class FCBlockRedstoneOre extends FCBlockOreStaged
+class FCBlockRedstoneRepeater extends AbstractBlockRedstoneRepeater
+class FCBlockRedstoneWire extends AbstractBlockRedstoneWire
+class FCBlockReed extends BlockReed
+class FCBlockRope extends Block
+class FCBlockRottenFlesh extends Block
+class FCBlockRottenFleshSlab extends FCBlockSlab
+class FCBlockSand extends FCBlockFallingFullBlock
+class FCBlockSandStone extends BlockSandStone
+class FCBlockSandstoneMouldingAndDecorative extends FCBlockMouldingAndDecorative
+class FCBlockSandstoneSidingAndCornerAndDecorative extends FCBlockSidingAndCornerAndDecorative
+class FCBlockSapling extends BlockSapling
+class FCBlockSaw extends Block
+class FCBlockScrewPump extends Block
+class FCBlockShaft extends Block
+class FCBlockShovel extends Block
+class FCBlockSidingAndCorner extends Block
+class FCBlockSidingAndCornerAndDecorative extends FCBlockSidingAndCorner
+class FCBlockSign extends BlockSign
+class FCBlockSignWall extends FCBlockSign
+class FCBlockSilverfish extends BlockSilverfish
+class FCBlockSkull extends BlockSkull
+class FCBlockSlab extends Block
+class FCBlockSlabAttached extends FCBlockSlab
+class FCBlockSlabFalling extends FCBlockSlab
+class FCBlockSlabSandAndGravel extends FCBlockSlabFalling
+class FCBlockSlats extends FCBlockPane
+class FCBlockSnowCover extends FCBlockGroundCover
+class FCBlockSnowLegacy extends BlockSnowBlock
+class FCBlockSnowLoose extends FCBlockFalling
+class FCBlockSnowLooseSlab extends FCBlockSlabFalling
+class FCBlockSnowSolid extends Block
+class FCBlockSnowSolidSlab extends FCBlockSlab
+class FCBlockSoulSand extends BlockSoulSand
+class FCBlockSoulforgeDormant extends Block
+class FCBlockSoulforgedSteel extends Block
+class FCBlockSpike extends Block
+class FCBlockStairs extends FCBlockStairsBase
+class FCBlockStairsBase extends Block
+class FCBlockStairsBrick extends FCBlockStairs
+class FCBlockStairsCobblestone extends FCBlockStairs
+class FCBlockStairsFalling extends FCBlockStairs
+class FCBlockStairsNetherBrick extends FCBlockStairs
+class FCBlockStairsSandStone extends FCBlockStairs
+class FCBlockStairsStoneBrick extends FCBlockStairs
+class FCBlockStairsWhiteStone extends FCBlockStairs
+class FCBlockStairsWood extends FCBlockStairs
+class FCBlockStake extends Block
+class FCBlockStakeString extends Block
+class FCBlockStem extends BlockStem
+class FCBlockStep extends BlockStep
+class FCBlockStone extends FCBlockFullBlock
+class FCBlockStoneBrick extends BlockStoneBrick
+class FCBlockStoneBrickLoose extends FCBlockLavaReceiver
+class FCBlockStoneBrickLooseSlab extends FCBlockMortarReceiverSlab
+class FCBlockStoneBrickLooseStairs extends FCBlockMortarReceiverStairs
+class FCBlockStoneRough extends FCBlockFullBlock
+class FCBlockStub extends Block
+class FCBlockStumpCharred extends Block
+class FCBlockTallGrass extends BlockTallGrass
+class FCBlockToolPlaced extends BlockContainer
+class FCBlockTorchBase extends Block
+class FCBlockTorchBaseBurning extends FCBlockTorchBase
+class FCBlockTorchBaseUnlit extends FCBlockTorchBase
+class FCBlockTorchFiniteBurning extends FCBlockTorchBaseBurning
+class FCBlockTorchFiniteUnlit extends FCBlockTorchBaseUnlit
+class FCBlockTorchLegacy extends FCBlockTorchBaseBurning
+class FCBlockTorchNetherBurning extends FCBlockTorchBaseBurning
+class FCBlockTorchNetherUnlit extends FCBlockTorchBaseUnlit
+class FCBlockTrapDoor extends BlockTrapDoor
+class FCBlockTripWire extends BlockTripWire
+class FCBlockTripWireSource extends AbstractBlockTripWireSource
+class FCBlockTurntable extends BlockContainer
+class FCBlockUnfiredBrick extends BlockContainer
+class FCBlockUnfiredClay extends Block
+class FCBlockUnfiredPottery extends Block
+class FCBlockVanillaCauldron extends BlockCauldron
+class FCBlockVanillaHopper extends BlockHopper
+class FCBlockVase extends BlockContainer
+class FCBlockVessel extends BlockContainer
+class FCBlockVine extends BlockVine
+class FCBlockWall extends BlockWall
+class FCBlockWaterFlowing extends BlockFlowing
+class FCBlockWaterStationary extends BlockStationary
+class FCBlockWeb extends BlockWeb
+class FCBlockWeeds extends FCBlockPlants
+class FCBlockWheatCrop extends FCBlockCropsDailyGrowth
+class FCBlockWheatCropTop extends FCBlockCropsDailyGrowth
+class FCBlockWheatLegacy extends BlockCrops
+class FCBlockWicker extends Block
+class FCBlockWickerPane extends FCBlockPane
+class FCBlockWickerSlab extends FCBlockSlab
+class FCBlockWoodCinders extends FCBlockFalling
+class FCBlockWoodMouldingAndDecorative extends FCBlockMouldingAndDecorative
+class FCBlockWoodSidingAndCornerAndDecorative extends FCBlockSidingAndCornerAndDecorative
+class FCBlockWoodSlab extends BlockHalfSlab
+class FCBlockWoolSlab extends FCBlockSlab
+class FCBlockWorkStump extends Block
+class FCBlockWorkbench extends BlockWorkbench
+class FCClientEntityCindersFX extends EntityFX
+class FCClientEntitySmallFlameFX extends EntityFX
+class FCClientEntityWhiteCloudFX extends FCClientEntityWhiteSmokeFX
+class FCClientEntityWhiteSmokeFX extends EntityFX
+class FCClientGuiBlockDispenser extends GuiContainer
+class FCClientGuiCookingVessel extends GuiContainer
+class FCClientGuiCraftingAnvil extends FCClientGuiCraftingWorkbench
+class FCClientGuiCraftingSoulforge extends GuiContainer
+class FCClientGuiCraftingWorkbench extends GuiContainer
+class FCClientGuiHamper extends GuiContainer
+class FCClientGuiHopper extends GuiContainer
+class FCClientGuiInfernalEnchanter extends GuiContainer
+class FCClientGuiPulley extends GuiContainer
+class FCClientModelChicken extends ModelChicken
+class FCClientModelCowUdder extends ModelQuadruped
+class FCClientModelPig extends ModelPig
+class FCClientModelPlayer extends ModelBiped
+class FCClientModelPlayerArmor extends ModelBiped
+class FCClientModelSquid extends ModelSquid
+class FCClientModelSquidTentacleAttack extends ModelBase
+class FCClientModelWaterWheel extends ModelBase
+class FCClientModelWindMill extends ModelBase
+class FCClientModelWindMillVerticalFrame extends ModelBase
+class FCClientModelWindMillVerticalSails extends ModelBase
+class FCClientModelWindMillVerticalShafts extends ModelBase
+class FCClientModelWolfDire extends ModelBase
+class FCClientRenderBlockLiftedByPlatform extends Render
+class FCClientRenderBroadheadArrow extends Render
+class FCClientRenderCanvas extends Render
+class FCClientRenderDynamite extends Render
+class FCClientRenderEntitySoulSand extends Render
+class FCClientRenderEntitySpiderWeb extends Render
+class FCClientRenderEntityWindMillVertical extends Render
+class FCClientRenderEntityWolfDire extends RenderLiving
+class FCClientRenderInfiniteArrow extends Render
+class FCClientRenderLightningBolt extends Render
+class FCClientRenderMiningCharge extends Render
+class FCClientRenderMovingAnchor extends Render
+class FCClientRenderMovingPlatform extends Render
+class FCClientRenderRottenArrow extends Render
+class FCClientRenderSpider extends RenderSpider
+class FCClientRenderSquid extends RenderLiving
+class FCClientRenderUrn extends Render
+class FCClientRenderWaterWheel extends Render
+class FCClientRenderWindMill extends Render
+class FCClientRenderWolf extends RenderWolf
+class FCClientTextureFire extends TextureStitched
+class FCClientTextureFireStoked extends FCClientTextureFire
+class FCClientTextureVesselXP extends TextureStitched
+class FCClosestEntitySelectionCriteriaSquidSecondaryTarget extends FCClosestEntitySelectionCriteria
+class FCCommandServerLoc extends CommandBase
+class FCContainerBlockDispenser extends Container
+class FCContainerCookingVessel extends FCContainerWithInventory
+class FCContainerHamper extends FCContainerWithInventory
+class FCContainerHopper extends Container
+class FCContainerInfernalEnchanter extends Container
+class FCContainerPlayer extends ContainerPlayer
+class FCContainerPulley extends Container
+class FCContainerSoulforge extends Container
+class FCContainerWithInventory extends Container
+class FCContainerWorkbench extends AbstractContainerWorkbench
+class FCCraftingManagerCrucible extends FCCraftingManagerBulk
+class FCCraftingManagerCrucibleStoked extends FCCraftingManagerBulk
+class FCDamageSourceCustom extends DamageSource
+class FCEntityAIAnimalFlee extends EntityAIBase
+class FCEntityAICreeperSwell extends AbstractEntityAICreeperSwell
+class FCEntityAIGraze extends EntityAIBase
+class FCEntityAIMoveToGraze extends EntityAIBase
+class FCEntityAIMoveToLooseFood extends EntityAIBase
+class FCEntityAIMultiTempt extends EntityAIBase
+class FCEntityAIPanicOnHeadCrab extends EntityAIBase
+class FCEntityAISkeletonArrowAttack extends EntityAIBase
+class FCEntityAIVillagerMate extends EntityAIBase
+class FCEntityAIWanderSimple extends EntityAIBase
+class FCEntityAIWolfDireHowl extends EntityAIBase
+class FCEntityAIWolfHowl extends EntityAIBase
+class FCEntityAIWolfHowlSitting extends FCEntityAIWolfHowl
+class FCEntityAIWolfWildTargetIfHungry extends AbstractEntityAINearestAttackableTarget
+class FCEntityAIWolfWildTargetIfStarving extends AbstractEntityAINearestAttackableTarget
+class FCEntityAIWolfWildTargetIfStarvingOrHostile extends AbstractEntityAINearestAttackableTarget
+class FCEntityAIZombieBreakBarricades extends EntityAIBase
+class FCEntityAIZombieSecondaryAttack extends AbstractEntityAIAttackOnCollide
+class FCEntityBat extends EntityBat
+class FCEntityBlaze extends EntityBlaze
+class FCEntityBlockLiftedByPlatform extends Entity
+class FCEntityBroadheadArrow extends EntityArrow
+class FCEntityCanvas extends Entity
+class FCEntityCaveSpider extends FCEntitySpider
+class FCEntityChicken extends EntityChicken
+class FCEntityCow extends EntityCow
+class FCEntityCreeper extends EntityCreeper
+class FCEntityDynamite extends Entity
+class FCEntityEnderman extends EntityEnderman
+class FCEntityFallingBlock extends AbstractEntityFallingSand
+class FCEntityGhast extends EntityGhast
+class FCEntityInfiniteArrow extends EntityArrow
+class FCEntityItemBloodWoodSapling extends EntityItem
+class FCEntityItemFloating extends EntityItem
+class FCEntityJungleSpider extends FCEntitySpider
+class FCEntityLightningBolt extends AbstractEntityWeatherEffect
+class FCEntityMagmaCube extends EntityMagmaCube
+class FCEntityMechPower extends Entity
+class FCEntityMechPowerHorizontal extends FCEntityMechPower
+class FCEntityMiningCharge extends Entity
+class FCEntityMovingAnchor extends Entity
+class FCEntityMovingPlatform extends Entity
+class FCEntityOcelot extends EntityOcelot
+class FCEntityPig extends EntityPig
+class FCEntityPigZombie extends EntityPigZombie
+class FCEntityRottenArrow extends EntityArrow
+class FCEntitySheep extends EntitySheep
+class FCEntitySkeleton extends EntitySkeleton
+class FCEntitySlime extends EntitySlime
+class FCEntitySnowman extends EntitySnowman
+class FCEntitySoulSand extends Entity
+class FCEntitySpider extends EntitySpider
+class FCEntitySpiderWeb extends EntityThrowable
+class FCEntitySquid extends EntityWaterMob
+class FCEntityUrn extends EntityThrowable
+class FCEntityVillager extends EntityVillager
+class FCEntityWaterWheel extends FCEntityMechPowerHorizontal
+class FCEntityWindMill extends FCEntityMechPowerHorizontal
+class FCEntityWindMillVertical extends FCEntityMechPower
+class FCEntityWitch extends EntityWitch
+class FCEntityWither extends EntityWither
+class FCEntityWitherPersistent extends FCEntityWither
+class FCEntityWitherSkull extends AbstractEntityWitherSkull
+class FCEntityWolf extends EntityWolf
+class FCEntityWolfDire extends EntityCreature
+class FCEntityZombie extends EntityZombie
+class FCInventoryInfernalEnchanter extends InventoryBasic
+class FCItemAncientProphecy extends ItemEditableBook
+class FCItemArcaneScroll extends Item
+class FCItemArmor extends ItemArmor
+class FCItemArmorChain extends FCItemArmorMod
+class FCItemArmorDiamond extends FCItemArmor
+class FCItemArmorGimp extends FCItemArmorMod
+class FCItemArmorGold extends FCItemArmor
+class FCItemArmorIron extends FCItemArmor
+class FCItemArmorLeather extends FCItemArmor
+class FCItemArmorMod extends FCItemArmor
+class FCItemArmorPadded extends FCItemArmorMod
+class FCItemArmorRefined extends FCItemArmorMod
+class FCItemArmorSpecial extends FCItemArmorMod
+class FCItemArmorTanned extends FCItemArmorMod
+class FCItemArmorWool extends FCItemArmorMod
+class FCItemArrow extends Item
+class FCItemArrowBroadhead extends FCItemArrow
+class FCItemArrowRotten extends FCItemArrow
+class FCItemAxe extends FCItemTool
+class FCItemBark extends Item
+class FCItemBattleAxe extends FCItemAxe
+class FCItemBlockAestheticNonOpaque extends ItemBlock
+class FCItemBlockAestheticOpaque extends ItemBlock
+class FCItemBlockAestheticOpaqueEarth extends ItemBlock
+class FCItemBlockAestheticVegetation extends ItemBlock
+class FCItemBlockBloodWood extends ItemBlock
+class FCItemBlockCompanionCube extends ItemBlock
+class FCItemBlockDamageToMetadata extends ItemBlock
+class FCItemBlockDeadWeight extends ItemBlock
+class FCItemBlockDirtLooseSlab extends FCItemBlockSlab
+class FCItemBlockDirtSlab extends FCItemBlockSlab
+class FCItemBlockIce extends ItemBlock
+class FCItemBlockLeaves extends ItemBlock
+class FCItemBlockLegacyCorner extends ItemBlock
+class FCItemBlockLegacySiding extends ItemBlock
+class FCItemBlockLegacySubstitution extends ItemBlock
+class FCItemBlockLever extends ItemBlock
+class FCItemBlockLilyPad extends ItemLilyPad
+class FCItemBlockLog extends AbstractItemMultiTextureTile
+class FCItemBlockMillStone extends ItemBlock
+class FCItemBlockMiningCharge extends ItemBlock
+class FCItemBlockMoulding extends ItemBlock
+class FCItemBlockMouldingAndDecorative extends FCItemBlockMoulding
+class FCItemBlockPlanter extends ItemBlock
+class FCItemBlockPumpkinFresh extends ItemBlock
+class FCItemBlockSidingAndCorner extends ItemBlock
+class FCItemBlockSlab extends ItemBlock
+class FCItemBlockSlabSandAndGravel extends FCItemBlockSlab
+class FCItemBlockSnow extends AbstractItemBlockWithMetadata
+class FCItemBlockSnowLooseSlab extends FCItemBlockSlab
+class FCItemBlockSoulforgeDormant extends ItemBlock
+class FCItemBlockStairsWhiteStone extends ItemBlock
+class FCItemBlockTorchBurning extends ItemBlock
+class FCItemBlockTorchFiniteBurning extends FCItemBlockTorchBurning
+class FCItemBlockTorchFiniteIdle extends FCItemBlockTorchIdle
+class FCItemBlockTorchIdle extends ItemBlock
+class FCItemBlockTorchLegacy extends FCItemBlockTorchBurning
+class FCItemBlockUnfiredPottery extends ItemBlock
+class FCItemBlockVase extends ItemBlock
+class FCItemBlockWoodCornerStub extends ItemBlock
+class FCItemBlockWoodMouldingDecorativeStub extends ItemBlock
+class FCItemBlockWoodMouldingStub extends ItemBlock
+class FCItemBlockWoodSidingDecorativeStub extends ItemBlock
+class FCItemBlockWoodSidingStub extends ItemBlock
+class FCItemBlockWoolSlab extends FCItemBlockSlab
+class FCItemBloodMossSpores extends Item
+class FCItemBoat extends ItemBoat
+class FCItemBone extends Item
+class FCItemBook extends ItemBook
+class FCItemBow extends ItemBow
+class FCItemBreedingHarness extends Item
+class FCItemBrick extends FCItemPlacesAsBlock
+class FCItemBrickUnfired extends FCItemPlacesAsBlock
+class FCItemBucket extends FCItemPlacesAsBlock
+class FCItemBucketCement extends FCItemBucketFull
+class FCItemBucketDrinkable extends FCItemBucket
+class FCItemBucketEmpty extends FCItemBucket
+class FCItemBucketFull extends FCItemBucket
+class FCItemBucketLava extends Item
+class FCItemBucketMilk extends FCItemBucketDrinkable
+class FCItemBucketMilkChocolate extends FCItemBucketDrinkable
+class FCItemBucketWater extends FCItemBucketFull
+class FCItemCandle extends FCItemPlacesAsBlock
+class FCItemCanvas extends Item
+class FCItemCarrotOnAStick extends AbstractItemCarrotOnAStick
+class FCItemCarvingBone extends FCItemCraftingProgressive
+class FCItemChisel extends FCItemTool
+class FCItemChiselIron extends FCItemChisel
+class FCItemChiselStone extends FCItemChisel
+class FCItemChiselWood extends FCItemChisel
+class FCItemChunkOreGold extends FCItemPlacesAsBlock
+class FCItemChunkOreIron extends FCItemPlacesAsBlock
+class FCItemClay extends FCItemMortar
+class FCItemClub extends Item
+class FCItemClubWood extends FCItemClub
+class FCItemCocoaBeans extends FCItemFood
+class FCItemCompositeBow extends FCItemBow
+class FCItemCraftingProgressive extends Item
+class FCItemCreeperOysters extends FCItemFood
+class FCItemDoor extends Item
+class FCItemDoorWood extends FCItemDoor
+class FCItemDung extends Item
+class FCItemDye extends ItemDye
+class FCItemDynamite extends Item
+class FCItemEgg extends FCItemThrowable
+class FCItemEmptyMap extends ItemEmptyMap
+class FCItemEnchantedBook extends AbstractItemEnchantedBook
+class FCItemFireCharge extends ItemFireball
+class FCItemFireStarter extends Item
+class FCItemFireStarterPrimitive extends FCItemFireStarter
+class FCItemFishingRod extends ItemFishingRod
+class FCItemFishingRodBaited extends FCItemFishingRod
+class FCItemFlint extends Item
+class FCItemFlintAndSteel extends FCItemFireStarter
+class FCItemFood extends ItemFood
+class FCItemFoodCured extends FCItemFood
+class FCItemFoodHighRes extends FCItemFood
+class FCItemFoulFood extends FCItemFood
+class FCItemGlassBottle extends ItemGlassBottle
+class FCItemGrateLegacy extends FCItemPlacesAsBlock
+class FCItemHardBoiledEgg extends ItemFood
+class FCItemHoe extends FCItemTool
+class FCItemKnitting extends FCItemCraftingProgressive
+class FCItemKnittingNeedles extends Item
+class FCItemMap extends ItemMap
+class FCItemMattock extends FCItemRefinedPickAxe
+class FCItemMinecart extends ItemMinecart
+class FCItemMortar extends Item
+class FCItemMould extends Item
+class FCItemMushroom extends FCItemFood
+class FCItemMushroomSoup extends ItemFood
+class FCItemMysteriousGland extends Item
+class FCItemMysteryMeatCooked extends ItemFood
+class FCItemMysteryMeatRaw extends FCItemFood
+class FCItemNetherBrick extends Item
+class FCItemNetherBrickUnfired extends FCItemPlacesAsBlock
+class FCItemNetherQuartz extends Item
+class FCItemNetherSludge extends FCItemMortar
+class FCItemNetherStar extends ItemSimpleFoiled
+class FCItemPickaxe extends FCItemTool
+class FCItemPileDirt extends Item
+class FCItemPileGravel extends Item
+class FCItemPileSand extends Item
+class FCItemPileSoulSand extends Item
+class FCItemPlacesAsBlock extends Item
+class FCItemPotion extends ItemPotion
+class FCItemRedstone extends FCItemPlacesAsBlock
+class FCItemRedstoneRepeater extends FCItemPlacesAsBlock
+class FCItemRefinedAxe extends FCItemAxe
+class FCItemRefinedHoe extends FCItemHoe
+class FCItemRefinedPickAxe extends FCItemPickaxe
+class FCItemRefinedShovel extends FCItemShovel
+class FCItemRefinedSword extends FCItemSword
+class FCItemRope extends Item
+class FCItemRottenFlesh extends FCItemFood
+class FCItemSeedFood extends ItemFood
+class FCItemSeeds extends Item
+class FCItemShaft extends ItemReed
+class FCItemShears extends ItemShears
+class FCItemShovel extends FCItemTool
+class FCItemShovelStone extends FCItemShovel
+class FCItemSign extends ItemSign
+class FCItemSlatsLegacy extends FCItemPlacesAsBlock
+class FCItemSlimeball extends FCItemMortar
+class FCItemSnowball extends ItemSnowball
+class FCItemSoap extends Item
+class FCItemSoulFlux extends Item
+class FCItemSoulUrn extends FCItemThrowable
+class FCItemSoup extends FCItemFood
+class FCItemStone extends Item
+class FCItemStraw extends Item
+class FCItemStub extends Item
+class FCItemStumpRemover extends Item
+class FCItemSword extends ItemSword
+class FCItemThrowable extends Item
+class FCItemTool extends Item
+class FCItemTuningFork extends Item
+class FCItemWaterWheel extends Item
+class FCItemWheat extends Item
+class FCItemWheatLegacy extends Item
+class FCItemWheatSeeds extends FCItemSeeds
+class FCItemWickerPaneLegacy extends FCItemPlacesAsBlock
+class FCItemWickerPiece extends Item
+class FCItemWickerWeaving extends FCItemCraftingProgressive
+class FCItemWindMill extends Item
+class FCItemWindMillVertical extends Item
+class FCItemWolfChopCooked extends ItemFood
+class FCItemWolfChopRaw extends FCItemFood
+class FCItemWool extends Item
+class FCItemWoolKnit extends Item
+class FCMapGenNetherBridge extends AbstractMapGenNetherBridge
+class FCMaterialCement extends Material
+class FCMaterialNetherGrowth extends Material
+class FCMaterialSoulforgedSteel extends Material
+class FCModelBlock extends FCUtilsPrimitiveGeometric
+class FCModelBlockAnvil extends FCModelBlock
+class FCModelBlockBucket extends FCModelBlock
+class FCModelBlockBucketFull extends FCModelBlockBucket
+class FCModelBlockCampfire extends FCModelBlock
+class FCModelBlockChunkOre extends FCModelBlock
+class FCModelBlockFence extends FCModelBlock
+class FCModelBlockFurnaceBrick extends FCModelBlock
+class FCModelBlockHamper extends FCModelBlock
+class FCModelBlockLogSpike extends FCModelBlock
+class FCModelBlockMillStone extends FCModelBlock
+class FCModelBlockShovel extends FCModelBlock
+class FCModelBlockSoulforge extends FCModelBlock
+class FCModelBlockSpike extends FCModelBlock
+class FCRecipesArmorWool extends ShapedRecipes
+class FCRecipesWoolBlock extends ShapedRecipes
+class FCStepSoundSquish extends StepSound
+class FCTileEntityAnvil extends TileEntity
+class FCTileEntityArcaneVessel extends TileEntity
+class FCTileEntityBasket extends TileEntity
+class FCTileEntityBasketRenderer extends AbstractTileEntitySpecialRenderer
+class FCTileEntityBasketWicker extends FCTileEntityBasket
+class FCTileEntityBasketWickerRenderer extends FCTileEntityBasketRenderer
+class FCTileEntityBeacon extends TileEntityBeacon
+class FCTileEntityBlockDispenser extends TileEntity
+class FCTileEntityCampfire extends TileEntity
+class FCTileEntityCampfireRenderer extends AbstractTileEntitySpecialRenderer
+class FCTileEntityCauldron extends FCTileEntityCookingVessel
+class FCTileEntityCement extends TileEntity
+class FCTileEntityChest extends TileEntityChest
+class FCTileEntityCookingVessel extends TileEntity
+class FCTileEntityCrucible extends FCTileEntityCookingVessel
+class FCTileEntityEnderChest extends AbstractTileEntityEnderChest
+class FCTileEntityFurnaceBrick extends AbstractTileEntityFurnace
+class FCTileEntityFurnaceBrickRenderer extends AbstractTileEntitySpecialRenderer
+class FCTileEntityHamper extends FCTileEntityBasket
+class FCTileEntityHopper extends TileEntity
+class FCTileEntityInfernalEnchanter extends TileEntity
+class FCTileEntityMillStone extends TileEntity
+class FCTileEntityMobSpawner extends AbstractTileEntityMobSpawner
+class FCTileEntityPulley extends TileEntity
+class FCTileEntityToolPlaced extends TileEntity
+class FCTileEntityToolPlacedRenderer extends AbstractTileEntitySpecialRenderer
+class FCTileEntityTorchFinite extends TileEntity
+class FCTileEntityTurntable extends TileEntity
+class FCTileEntityUnfiredBrick extends TileEntity
+class FCTileEntityVase extends TileEntity
+class FCUtilsGenBigTree extends WorldGenBigTree
+class FCUtilsGenHugeTree extends WorldGenerator
+class FCUtilsPrimitiveAABBWithBenefits extends AxisAlignedBB
+class FCUtilsPrimitiveQuad extends FCUtilsPrimitiveGeometric
+class FCUtilsRandomItemStack extends AbstractWeightedRandomItem
+class FCUtilsRandomPositionGenerator extends AbstractRandomPositionGenerator
+class FCWorldGeneratorBonusBasket extends WorldGenerator
+```
+
+## 4. Vanilla Classes Patched
+### Src/patch.txt (shared)
+```
+AxisAlignedBB.java
+BehaviorDispenseArmor.java
+BehaviorDispenseMinecart.java
+BiomeGenBase.java
+BiomeGenHell.java
+BiomeGenMushroomIsland.java
+BiomeGenSwamp.java
+Block.java
+BlockCrops.java
+BlockDoor.java
+BlockFire.java
+BlockFlower.java
+BlockFlowing.java
+BlockFluid.java
+BlockFurnace.java
+BlockHalfSlab.java
+BlockLog.java
+BlockPistonBase.java
+BlockRailBase.java
+BlockRedstoneLogic.java
+BlockRedstoneTorch.java
+BlockStem.java
+Chunk.java
+ChunkCache.java
+ChunkProviderGenerate.java
+ChunkProviderHell.java
+ChunkProviderServer.java
+CommandDifficulty.java
+CommandGive.java
+CommandTime.java
+ComponentMineshaftCorridor.java
+ComponentNetherBridgeEntrance.java
+ComponentScatteredFeatureDesertPyramid.java
+ComponentScatteredFeatureJunglePyramid.java
+ComponentScatteredFeatureSwampHut.java
+ComponentStrongholdLibrary.java
+ComponentStrongholdRoomCrossing.java
+ComponentVillage.java
+ComponentVillageChurch.java
+ComponentVillageField.java
+ComponentVillageField2.java
+ComponentVillageHall.java
+ComponentVillageHouse1.java
+ComponentVillageHouse2.java
+ComponentVillageHouse3.java
+ComponentVillageHouse4_Garden.java
+ComponentVillageStartPiece.java
+ComponentVillageTorch.java
+ComponentVillageWoodHut.java
+Container.java
+ContainerBrewingStand.java
+ContainerEnchantment.java
+ContainerMerchant.java
+ContainerWorkbench.java
+CraftingManager.java
+CreativeTabs.java
+DispenserBehaviorBoat.java
+DispenserBehaviorDye.java
+DispenserBehaviorEmptyBucket.java
+DispenserBehaviorFilledBucket.java
+DispenserBehaviorFire.java
+DispenserBehaviorTNT.java
+EffectRenderer.java
+Enchantment.java
+EnchantmentHelper.java
+Entity.java
+EntityAIAttackOnCollide.java
+EntityAICreeperSwell.java
+EntityAIDoorInteract.java
+EntityAIEatGrass.java
+EntityAIFollowOwner.java
+EntityAIFollowParent.java
+EntityAIHurtByTarget.java
+EntityAIMate.java
+EntityAIOpenDoor.java
+EntityAIOwnerHurtByTarget.java
+EntityAIOwnerHurtTarget.java
+EntityAISit.java
+EntityAITasks.java
+EntityAITempt.java
+EntityAIWander.java
+EntityAgeable.java
+EntityAnimal.java
+EntityArrow.java
+EntityBat.java
+EntityBlaze.java
+EntityBoat.java
+EntityCaveSpider.java
+EntityChicken.java
+EntityCow.java
+EntityCreature.java
+EntityCreeper.java
+EntityDragon.java
+EntityEgg.java
+EntityEnderman.java
+EntityFallingSand.java
+EntityFireball.java
+EntityFishHook.java
+EntityGhast.java
+EntityHanging.java
+EntityItem.java
+EntityLightningBolt.java
+EntityList.java
+EntityLiving.java
+EntityMagmaCube.java
+EntityMinecart.java
+EntityMinecartChest.java
+EntityMob.java
+EntityMooshroom.java
+EntityOcelot.java
+EntityOtherPlayerMP.java
+EntityPig.java
+EntityPigZombie.java
+EntityPlayer.java
+EntityPlayerMP.java
+EntityPlayerSP.java
+EntityRenderer.java
+EntitySheep.java
+EntitySilverfish.java
+EntitySkeleton.java
+EntitySlime.java
+EntitySnowman.java
+EntitySpider.java
+EntitySquid.java
+EntityTameable.java
+EntityThrowable.java
+EntityTracker.java
+EntityTrackerEntry.java
+EntityVillager.java
+EntityWaterMob.java
+EntityWitch.java
+EntityWither.java
+EntityWitherSkull.java
+EntityWolf.java
+EntityXPOrb.java
+EntityZombie.java
+EnumAction.java
+EnumArmorMaterial.java
+EnumCreatureType.java
+EnumToolMaterial.java
+Explosion.java
+FoodStats.java
+FurnaceRecipes.java
+GameSettings.java
+GuiContainer.java
+GuiIngame.java
+GuiInventory.java
+GuiMerchant.java
+GuiSlotStatsItem.java
+HttpUtilRunnable.java
+IMerchant.java
+IRecipe.java
+ISaveHandler.java
+IconRegister.java
+IntegratedServer.java
+InventoryMerchant.java
+InventoryPlayer.java
+Item.java
+ItemArmor.java
+ItemAxe.java
+ItemBlock.java
+ItemBucket.java
+ItemFood.java
+ItemInWorldManager.java
+ItemMap.java
+ItemPickaxe.java
+ItemReed.java
+ItemRenderer.java
+ItemSeeds.java
+ItemShears.java
+ItemSkull.java
+ItemStack.java
+ItemSword.java
+ItemTool.java
+LongHashMap.java
+MapData.java
+MapGenNetherBridge.java
+MapGenScatteredFeature.java
+Material.java
+MerchantRecipe.java
+MerchantRecipeList.java
+MobSpawnerBaseLogic.java
+ModelCow.java
+ModelRenderer.java
+ModelSquid.java
+ModelWolf.java
+NetClientHandler.java
+NetHandler.java
+NetServerHandler.java
+NpcMerchant.java
+Packet15Place.java
+Packet204ClientInfo.java
+Packet24MobSpawn.java
+Packet26EntityExpOrb.java
+Packet41EntityEffect.java
+PathFinder.java
+PathNavigate.java
+PlayerControllerMP.java
+Potion.java
+RandomPositionGenerator.java
+RecipeFireworks.java
+RecipesArmorDyes.java
+RecipesMapCloning.java
+RenderBiped.java
+RenderBlocks.java
+RenderCow.java
+RenderFallingSand.java
+RenderGlobal.java
+RenderItem.java
+RenderItemFrame.java
+RenderLiving.java
+RenderManager.java
+RenderMooshroom.java
+RenderPlayer.java
+RenderSnowMan.java
+RenderSpider.java
+RenderTNTPrimed.java
+RenderVillager.java
+RenderWitch.java
+RenderWolf.java
+RenderXPOrb.java
+RunnableTitleScreen.java
+SaveHandler.java
+SaveHandlerMP.java
+ServerCommandManager.java
+ServerConfigurationManager.java
+ShapedRecipes.java
+ShapelessRecipes.java
+SlotCrafting.java
+SlotFurnace.java
+SlotMerchantResult.java
+SoundManager.java
+SoundPool.java
+SpawnerAnimals.java
+StatList.java
+StringTranslate.java
+StructureComponent.java
+Texture.java
+TextureClock.java
+TextureCompass.java
+TextureMap.java
+TextureStitched.java
+TileEntity.java
+TileEntityBeacon.java
+TileEntityBeaconRenderer.java
+TileEntityFurnace.java
+TileEntityPiston.java
+TileEntityRenderer.java
+TileEntityRendererPiston.java
+TileEntitySkull.java
+TileEntitySkullRenderer.java
+Vec3.java
+Village.java
+VillageCollection.java
+World.java
+WorldChunkManager.java
+WorldClient.java
+WorldGenBigTree.java
+WorldGenDesertWells.java
+WorldGenDungeons.java
+WorldGenFlowers.java
+WorldGenForest.java
+WorldGenHugeTrees.java
+WorldGenMinable.java
+WorldGenPumpkin.java
+WorldGenReed.java
+WorldGenSwamp.java
+WorldGenTaiga1.java
+WorldGenTaiga2.java
+WorldGenTrees.java
+WorldGeneratorBonusChest.java
+WorldInfo.java
+WorldManager.java
+WorldRenderer.java
+WorldServer.java
+```
+### SrcClient/patch.txt
+```
+Minecraft.java
+```
+### SrcServer/patch.txt
+```
+AxisAlignedBB.java
+BehaviorDispenseArmor.java
+BehaviorDispenseMinecart.java
+BiomeGenBase.java
+BiomeGenHell.java
+BiomeGenMushroomIsland.java
+BiomeGenSwamp.java
+Block.java
+BlockCrops.java
+BlockDoor.java
+BlockFire.java
+BlockFlower.java
+BlockFlowing.java
+BlockFluid.java
+BlockFurnace.java
+BlockHalfSlab.java
+BlockLog.java
+BlockPistonBase.java
+BlockRailBase.java
+BlockRedstoneLogic.java
+BlockRedstoneTorch.java
+BlockStem.java
+Chunk.java
+ChunkProviderGenerate.java
+ChunkProviderHell.java
+ChunkProviderServer.java
+CommandDifficulty.java
+CommandGive.java
+CommandTime.java
+ComponentMineshaftCorridor.java
+ComponentNetherBridgeEntrance.java
+ComponentScatteredFeatureDesertPyramid.java
+ComponentScatteredFeatureJunglePyramid.java
+ComponentScatteredFeatureSwampHut.java
+ComponentStrongholdLibrary.java
+ComponentStrongholdRoomCrossing.java
+ComponentVillage.java
+ComponentVillageChurch.java
+ComponentVillageField.java
+ComponentVillageField2.java
+ComponentVillageHall.java
+ComponentVillageHouse1.java
+ComponentVillageHouse2.java
+ComponentVillageHouse3.java
+ComponentVillageHouse4_Garden.java
+ComponentVillageStartPiece.java
+ComponentVillageTorch.java
+ComponentVillageWoodHut.java
+Container.java
+ContainerBrewingStand.java
+ContainerEnchantment.java
+ContainerMerchant.java
+ContainerWorkbench.java
+CraftingManager.java
+DispenserBehaviorBoat.java
+DispenserBehaviorDye.java
+DispenserBehaviorEmptyBucket.java
+DispenserBehaviorFilledBucket.java
+DispenserBehaviorFire.java
+DispenserBehaviorTNT.java
+Enchantment.java
+EnchantmentHelper.java
+Entity.java
+EntityAIAttackOnCollide.java
+EntityAICreeperSwell.java
+EntityAIDoorInteract.java
+EntityAIEatGrass.java
+EntityAIFollowOwner.java
+EntityAIFollowParent.java
+EntityAIHurtByTarget.java
+EntityAIMate.java
+EntityAIOpenDoor.java
+EntityAIOwnerHurtByTarget.java
+EntityAIOwnerHurtTarget.java
+EntityAISit.java
+EntityAITasks.java
+EntityAITempt.java
+EntityAIWander.java
+EntityAgeable.java
+EntityAnimal.java
+EntityArrow.java
+EntityBat.java
+EntityBlaze.java
+EntityBoat.java
+EntityCaveSpider.java
+EntityChicken.java
+EntityCow.java
+EntityCreature.java
+EntityCreeper.java
+EntityDragon.java
+EntityEgg.java
+EntityEnderman.java
+EntityFireball.java
+EntityFishHook.java
+EntityGhast.java
+EntityHanging.java
+EntityItem.java
+EntityLightningBolt.java
+EntityList.java
+EntityLiving.java
+EntityMagmaCube.java
+EntityMinecart.java
+EntityMinecartChest.java
+EntityMob.java
+EntityMooshroom.java
+EntityOcelot.java
+EntityPig.java
+EntityPigZombie.java
+EntityPlayer.java
+EntityPlayerMP.java
+EntitySheep.java
+EntitySilverfish.java
+EntitySkeleton.java
+EntitySlime.java
+EntitySnowman.java
+EntitySpider.java
+EntityTameable.java
+EntityThrowable.java
+EntityTracker.java
+EntityTrackerEntry.java
+EntityVillager.java
+EntityWaterMob.java
+EntityWitch.java
+EntityWither.java
+EntityWitherSkull.java
+EntityWolf.java
+EntityXPOrb.java
+EntityZombie.java
+EnumAction.java
+EnumArmorMaterial.java
+EnumCreatureType.java
+EnumToolMaterial.java
+Explosion.java
+FoodStats.java
+FurnaceRecipes.java
+IMerchant.java
+IRecipe.java
+ISaveHandler.java
+InventoryMerchant.java
+InventoryPlayer.java
+Item.java
+ItemArmor.java
+ItemAxe.java
+ItemBlock.java
+ItemBucket.java
+ItemFood.java
+ItemInWorldManager.java
+ItemMap.java
+ItemReed.java
+ItemSeeds.java
+ItemShears.java
+ItemSkull.java
+ItemStack.java
+ItemSword.java
+ItemTool.java
+LongHashMap.java
+MapData.java
+MapGenNetherBridge.java
+MapGenScatteredFeature.java
+Material.java
+MerchantRecipe.java
+MerchantRecipeList.java
+MobSpawnerBaseLogic.java
+NetHandler.java
+NetServerHandler.java
+Packet15Place.java
+Packet204ClientInfo.java
+Packet24MobSpawn.java
+Packet26EntityExpOrb.java
+Packet41EntityEffect.java
+PathFinder.java
+PathNavigate.java
+Potion.java
+RandomPositionGenerator.java
+RecipeFireworks.java
+RecipesArmorDyes.java
+RecipesMapCloning.java
+SaveHandler.java
+ServerCommandManager.java
+ServerConfigurationManager.java
+ShapedRecipes.java
+ShapelessRecipes.java
+SlotCrafting.java
+SlotFurnace.java
+SpawnerAnimals.java
+StatList.java
+StringTranslate.java
+StructureComponent.java
+TileEntity.java
+TileEntityBeacon.java
+TileEntityFurnace.java
+TileEntityPiston.java
+TileEntitySkull.java
+Vec3.java
+Village.java
+VillageCollection.java
+World.java
+WorldChunkManager.java
+WorldGenBigTree.java
+WorldGenDesertWells.java
+WorldGenDungeons.java
+WorldGenFlowers.java
+WorldGenForest.java
+WorldGenHugeTrees.java
+WorldGenMinable.java
+WorldGenPumpkin.java
+WorldGenReed.java
+WorldGenSwamp.java
+WorldGenTaiga1.java
+WorldGenTaiga2.java
+WorldGenTrees.java
+WorldGeneratorBonusChest.java
+WorldInfo.java
+WorldManager.java
+WorldServer.java
+```
+
+## 5. @Override Method Signatures
+```
+// client
+//public boolean itemInteractionForEntity( ItemStack itemStack, EntityLiving targetEntity )
+//public boolean itemInteractionForEntity(ItemStack itemstack, EntityLiving entity )
+//public void addCraftingToCrafters( ICrafting craftingInterface )
+//public void addCraftingToCrafters( ICrafting craftingInterface ) // client
+EntityArrow GetFiredArrowEntity( World world, double dXPos, double dYPos, double dZPos )
+abstract public void registerIcons( IconRegister register );
+public AxisAlignedBB GetAsPistonMovingBoundingBox( World world, int i, int j, int k )
+public AxisAlignedBB GetBlockBoundsFromPoolBasedOnState( 
+public AxisAlignedBB GetBlockBoundsFromPoolForItemRender( int iItemDamage )
+public AxisAlignedBB GetVisualBoundingBox()
+public AxisAlignedBB getAxisAlignedBB( World world, int i, int j, int k, int iBlockID, float fPistonPushProgress, int iOrientation )
+public AxisAlignedBB getBoundingBox()
+public AxisAlignedBB getCollisionBoundingBoxFromPool( World world, int i, int j, int k )
+public AxisAlignedBB getCollisionBoundingBoxFromPool(World par1World, int par2, int par3, int par4)
+public AxisAlignedBB getCollisionBoundingBoxFromPool(World world, int i, int j, int k)
+public AxisAlignedBB getCollisionBox(Entity entity)
+public AxisAlignedBB getSelectedBoundingBoxFromPool( World world, 
+public AxisAlignedBB getSelectedBoundingBoxFromPool( World world, MovingObjectPosition rayTraceHit )
+public AxisAlignedBB getSelectedBoundingBoxFromPool( World world, int i, int j, int k )
+public AxisAlignedBB getSelectedBoundingBoxFromPool( World world, int i, int j, int k)
+public AxisAlignedBB getSelectedBoundingBoxFromPool(World world, int i, int j, int k)
+public Block GetDoorBlock()
+public Entity GetHeadCrabSharedAttackTarget()
+public Entity findPlayerToAttack()
+public EntityAgeable createChild( EntityAgeable parent )
+public EntityArrow CreateArrowEntityForItem( World world, EntityPlayer player, int iItemID, float fPullStrength )
+public EntitySlime createInstance()
+public EntityThrowable GetEntityFiredByByBlockDispenser( World world, 
+public EnumAction getItemUseAction( ItemStack stack )
+public EnumAction getItemUseAction(ItemStack itemstack)
+public EnumAction getItemUseAction(ItemStack par1ItemStack)
+public EnumCreatureAttribute getCreatureAttribute()
+public FCCraftingManagerBulk GetCraftingManager( int iFireType )
+public FCEntityChicken spawnBabyAnimal( EntityAgeable parent )
+public FCEntityCow spawnBabyAnimal( EntityAgeable parent )
+public FCEntityOcelot spawnBabyAnimal( EntityAgeable otherParent )
+public FCEntityPig spawnBabyAnimal( EntityAgeable parent )
+public FCEntityVillager func_90012_b( EntityAgeable otherParent )
+public FCEntityWolf spawnBabyAnimal( EntityAgeable parent )
+public FCModelBlock GetLidModel( int iMetadata )
+public FCModelBlock MakeTemporaryCopy()
+public FCUtilsBlockPos GetGrazeBlockForPos()
+public FCUtilsPrimitiveAABBWithBenefits MakeTemporaryCopy()
+public FCUtilsPrimitiveQuad MakeTemporaryCopy()
+public Icon GetContentsIcon()
+public Icon GetHopperFilterIcon()
+public Icon GetIconByIndex( int iIndex )
+public Icon GetLavaCracksOverlay()
+public Icon func_94438_c(int par1)
+public Icon getBlockTexture( IBlockAccess blockAccess, int i, int j, int k, int iSide )
+public Icon getIcon( int iSide, int iMetaData )
+public Icon getIcon( int iSide, int iMetadata )
+public Icon getIcon(int par1, int par2)
+public Icon getIconFromDamage( int i )
+public Icon getIconFromDamage( int iDamage )
+public Icon getIconFromDamage( int iDamage ) 
+public Icon getIconFromDamage( int iItemDamage )
+public Icon getIconFromDamageForRenderPass( int iDamage, int iRenderPass )
+public Item GetCorrespondingItem()
+public Item ItemToDropOnExplode()
+public ItemStack GetStackRetrievedByBlockDispenser( World world, int i, int j, int k )
+public ItemStack OnRightClickOnIgniter( ItemStack stack, World world, EntityPlayer player )
+public ItemStack createStackedBlock( int iMetadata )
+public ItemStack decrStackSize( int iSlot, int iAmount )
+public ItemStack getCraftingResult( InventoryCrafting inventory )
+public ItemStack getRecipeOutput()
+public ItemStack getStackInSlot( int iSlot )
+public ItemStack getStackInSlot(int i)
+public ItemStack getStackInSlotOnClosing( int iSlot )
+public ItemStack getStackInSlotOnClosing(int par1)
+public ItemStack onEaten( ItemStack itemStack, World world, EntityPlayer player )
+public ItemStack onEaten( ItemStack stack, World world, EntityPlayer player )
+public ItemStack onItemRightClick( ItemStack itemStack, World world, EntityPlayer entityPlayer )
+public ItemStack onItemRightClick( ItemStack itemStack, World world, EntityPlayer player )
+public ItemStack onItemRightClick( ItemStack stack, World world, EntityPlayer player )
+public ItemStack onItemRightClick( ItemStack stack, World world, EntityPlayer player)
+public ItemStack onItemRightClick(ItemStack itemstack, World world, EntityPlayer entityplayer)
+public ItemStack slotClick( int i, int j, int k, EntityPlayer entityplayer )
+public ItemStack slotClick(int i, int j, int k, EntityPlayer entityplayer)
+public ItemStack transferStackInSlot( EntityPlayer player, int iSlotClicked )
+public ItemStack transferStackInSlot( EntityPlayer player, int iSlotIndex )
+public List getSpawnList()
+public MerchantRecipeList getRecipes( EntityPlayer player )
+public MovingObjectPosition collisionRayTrace( World world, 
+public MovingObjectPosition collisionRayTrace( World world, int i, int j, int k, 
+public MovingObjectPosition collisionRayTrace( World world, int i, int j, int k, Vec3 startRay, Vec3 endRay )
+public Packet GetSpawnPacketForThisEntity()
+public Packet getDescriptionPacket()
+public StepSound GetStepSound( World world, int i, int j, int k )
+public String GetLanguageFilePrefix()
+public String GetWornTexturePrefix()
+public String getBreakSound()
+public String getCommandName()
+public String getCommandUsage(ICommandSender par1ICommandSender)
+public String getDeathMessage( EntityLiving entity )
+public String getDeathSound()
+public String getEntityName()
+public String getFullSlabName( int iMetadata )
+public String getHurtSound()
+public String getInvName()
+public String getItemDisplayName( ItemStack stack )
+public String getItemIconName()
+public String getLivingSound()
+public String getStepSound()
+public String getTexture()
+public String getUnlocalizedName( ItemStack itemStack )
+public String getUnlocalizedName( ItemStack itemstack )
+public String getUnlocalizedName( ItemStack stack )
+public TileEntity createNewTileEntity( World world )
+public TileEntity createNewTileEntity(World par1World)
+public Vec3 GetLidRotationPoint()
+public abstract int getBlockID(); // child classes must provide a block ID to place
+public boolean AddArrowToPlayerInv( EntityPlayer player )
+public boolean AreChiselsEffectiveOn( World world, int i, int j, int k )
+public boolean AttempToSpreadGrassToBlock( World world, int i, int j, int k )
+public boolean AttemptPlaceContentsAtLocation( World world, int i, int j, int k )
+public boolean AttemptToApplyFertilizerTo( World world, int i, int j, int k )
+public boolean AttemptToCombineWithFallingEntity( World world, int i, int j, int k, EntityFallingSand entity )
+public boolean AttemptToCookStoked()
+public boolean AttemptToEatLooseItem( ItemStack stack )
+public boolean AttemptToLightBlock( ItemStack stack, World world, int i, int j, int k, int iFacing )
+public boolean AttemptToSpillIntoBlock( World world, int i, int j, int k )
+public boolean AttractsLightning()
+public boolean CanBeCrushedByFallingEntity( World world, int i, int j, int k, 
+public boolean CanBeCrushedByFallingEntity( World world, int i, int j, int k, EntityFallingSand entity )
+public boolean CanBeGrazedOn( IBlockAccess access, int i, int j, int k, EntityAnimal animal )
+public boolean CanBeGrazedOn( IBlockAccess blockAccess, int i, int j, int k, 
+public boolean CanBePistonShoveled( World world, int i, int j, int k )
+public boolean CanBePlacedUpsideDownAtLocation( World world, int i, int j, int k )
+public boolean CanBlockBePushedByPiston( World world, int i, int j, int k, int iToFacing )
+public boolean CanBlockStayDuringGenerate( World world, int i, int j, int k )
+public boolean CanCactusGrowOnBlock( World world, int i, int j, int k )
+public boolean CanContainPistonPackingToFacing( World world, int i, int j, int k, int iFacing )
+public boolean CanConvertBlock( ItemStack stack, World world, int i, int j, int k )
+public boolean CanDomesticatedCropsGrowOnBlock( World world, int i, int j, int k )
+public boolean CanGrazeMycelium()
+public boolean CanGrazeOnRoughVegetation()
+public boolean CanGroundCoverRestOnBlock( World world, int i, int j, int k )
+public boolean CanGrowOnBlock( World world, int i, int j, int k )
+public boolean CanHopperCollect()
+public boolean CanInputAxlePowerToFacing( World world, int i, int j, int k, int iFacing )
+public boolean CanInputMechanicalPower()
+public boolean CanItemBeFiredAsArrow( int iItemID )
+public boolean CanItemBeUsedByPlayer( World world, int i, int j, int k, int iFacing, EntityPlayer player, ItemStack stack )
+public boolean CanItemPassIfFilter( ItemStack filteredItem )
+public boolean CanLightningStrikeInBiome()
+public boolean CanMobsSpawnOn( World world, int i, int j, int k )
+public boolean CanNetherWartGrowOnBlock( World world, int i, int j, int k )
+public boolean CanOutputMechanicalPower()
+public boolean CanPathThroughBlock( IBlockAccess blockAccess, int i, int j, int k, Entity entity, PathFinder pathFinder )
+public boolean CanReedsGrowOnBlock( World world, int i, int j, int k )
+public boolean CanRotateAroundBlockOnTurntableToFacing( World world, int i, int j, int k, int iFacing  )
+public boolean CanRotateOnTurntable( IBlockAccess blockAccess, int i, int j, int k )
+public boolean CanRotateOnTurntable( IBlockAccess iBlockAccess, int i, int j, int k )
+public boolean CanSaplingsGrowOnBlock( World world, int i, int j, int k )
+public boolean CanSpawnOnBlock( int iBlockID )
+public boolean CanSpitWebReplaceBlock( World world, int i, int j, int k )
+public boolean CanSupportFallingBlocks( IBlockAccess blockAccess, int i, int j, int k )
+public boolean CanSwim()
+public boolean CanToolStickInBlock( ItemStack stack, Block block, World world, int i, int j, int k )
+public boolean CanToolsStickInBlock( IBlockAccess blockAccess, int i, int j, int k )
+public boolean CanTransformItemIfFilter( ItemStack filteredItem )
+public boolean CanTransmitRotationHorizontallyOnTurntable( IBlockAccess blockAccess, int i, int j, int k )
+public boolean CanTransmitRotationVerticallyOnTurntable( IBlockAccess blockAccess, int i, int j, int k )
+public boolean CanWeedsGrowInBlock( IBlockAccess blockAccess, int i, int j, int k )
+public boolean CanWildVegetationGrowOnBlock( World world, int i, int j, int k )
+public boolean CheckChanceOfStart( ItemStack stack, Random rand )
+public boolean ClientCheckIfPowered( IBlockAccess blockAccess, int i, int j, int k )
+public boolean ClientCustomPacketReceived( Minecraft mcInstance, Packet250CustomPayload packet )
+public boolean ClientPlayCustomAuxFX( Minecraft mcInstance, World world, EntityPlayer player, int iFXID, int i, int j, int k, int iFXSpecificData )
+public boolean ConvertBlock( ItemStack stack, World world, int i, int j, int k, int iFromSide )
+public boolean DoEyesGlow()
+public boolean DoesBenchHaveLeg( IBlockAccess blockAccess, int i, int j, int k )
+public boolean DoesBlockBreakSaw( World world, int i, int j, int k )
+public boolean DoesBlockDropAsItemOnSaw( World world, int i, int j, int k )
+public boolean DoesBlockHopperEject( World world, int i, int j, int k )
+public boolean DoesBlockHopperInsert( World world, int i, int j, int k )
+public boolean DoesConsumeContainerItemWhenCrafted( Item containerItem )
+public boolean DoesEntityApplyToSquidPossessionCap()
+public boolean DoesExtinguishFireAbove( World world, int i, int j, int k )
+public boolean DoesInfiniteBurnToFacing( IBlockAccess blockAccess, int i, int j, int k, 
+public boolean DoesInfiniteBurnToFacing( IBlockAccess blockAccess, int i, int j, int k, int iFacing )
+public boolean DoesItemRenderAsBlock( int iItemDamage )
+public boolean DoesLightAffectAggessiveness()
+public boolean DoesTableHaveLeg( IBlockAccess blockAccess, int i, int j, int k )
+public boolean DropComponentItemsOnBadBreak( World world, int i, int j, int k, 
+public boolean DropComponentItemsOnBadBreak( World world, int i, int j, int k, int iMetadata, float fChance )
+public boolean DropComponentItemsOnBadBreak( World world, int i, int j, int k, int iMetadata, float fChanceOfDrop )
+public boolean DropsSpiderEyes()
+public boolean GetCanBeFedDirectlyIntoBrickOven( int iItemDamage )
+public boolean GetCanBeFedDirectlyIntoCampfire( int iItemDamage )
+public boolean GetCanBeHeadCrabbed( boolean bSquidInWater )
+public boolean GetCanBePlacedAsBlock()
+public boolean GetCanBeSetOnFireDirectly( IBlockAccess blockAccess, int i, int j, int k )
+public boolean GetCanBeSetOnFireDirectlyByItem( IBlockAccess blockAccess, int i, int j, int k )
+public boolean GetCanBlightSpreadToBlock( World world, int i, int j, int k, int iBlightLevel )
+public boolean GetCanBlockBeIncinerated( World world, int i, int j, int k )
+public boolean GetCanBlockBeReplacedByFire( World world, int i, int j, int k )
+public boolean GetCanBlockLightItemOnFire( IBlockAccess blockAccess, int i, int j, int k )
+public boolean GetCanCreatureBePossessedFromDistance( boolean bPersistentSpirit )
+public boolean GetCanCreatureTypeBePossessed()
+public boolean GetCanGrassGrowUnderBlock( World world, int i, int j, int k, boolean bGrassOnHalfSlab )
+public boolean GetCanGrassSpreadToBlock( World world, int i, int j, int k )
+public boolean GetCanItemBeSetOnFireOnUse( int iItemDamage )
+public boolean GetCanItemStartFireOnUse( int iItemDamage )
+public boolean GetCanMyceliumSpreadToBlock( World world, int i, int j, int k )
+public boolean GetConvertsLegacySoil( IBlockAccess blockAccess, int i, int j, int k )
+public boolean GetDisruptsEarthOnGraze()
+public boolean GetDoesFireDamageToEntities( World world, int i, int j, int k )
+public boolean GetDoesFireDamageToEntities( World world, int i, int j, int k, Entity entity )
+public boolean GetDoesStumpRemoverWorkOnBlock( IBlockAccess blockAccess, int i, int j, int k )
+public boolean GetIsBlockWarm( IBlockAccess blockAccess, int i, int j, int k )
+public boolean GetIsFertilizedForPlantGrowth( World world, int i, int j, int k )
+public boolean GetIsProblemToRemove( IBlockAccess blockAccess, int i, int j, int k )
+public boolean GetIsUpsideDown( IBlockAccess blockAccess, int i, int j, int k )
+public boolean GetIsUpsideDown( int iMetadata )
+public boolean GetPreventsFluidFlow( World world, int i, int j, int k, Block fluidBlock )
+public boolean GetTrackMotion()
+public boolean HasCenterHardPointToFacing( IBlockAccess blockAccess, 
+public boolean HasCenterHardPointToFacing( IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency )
+public boolean HasContactPointToFullFace( IBlockAccess blockAccess, int i, int j, int k, int iFacing )
+public boolean HasContactPointToSlabSideFace( IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIsSlabUpsideDown )
+public boolean HasContactPointToStairNarrowVerticalFace( IBlockAccess blockAccess, int i, int j, int k, int iFacing, int iStairFacing )
+public boolean HasCustomColors()
+public boolean HasLargeCenterHardPointToFacing( IBlockAccess blockAccess, 
+public boolean HasLargeCenterHardPointToFacing( IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency )
+public boolean HasMortar( IBlockAccess blockAccess, int i, int j, int k )
+public boolean HasNeighborWithMortarInContact( World world, int i, int j, int k )
+public boolean HasSecondRenderLayerWhenWorn()
+public boolean HasSecondaryOutput()
+public boolean HasSmallCenterHardPointToFacing( IBlockAccess blockAccess, int i, int j, int k, 
+public boolean HasSmallCenterHardPointToFacing( IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency )
+public boolean HasStickySnowNeighborInContact( World world, int i, int j, int k )
+public boolean HasStrata()
+public boolean IgnoreDamageWhenComparingDuringUse()
+public boolean IsAffectedByMovementModifiers()
+public boolean IsAirBlock()
+public boolean IsBlockAttachedToFacing( IBlockAccess blockAccess, int i, int j, int k, int iFacing )
+public boolean IsBlockClimbable( World world, int i, int j, int k )
+public boolean IsBlockDestroyedByBlockDispenser( int iMetadata )
+public boolean IsBlockHydratedForPlantGrowthOn( World world, int i, int j, int k )
+public boolean IsBlockRestingOnThatBelow( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsBreakableBarricade( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsBreakableBarricadeOpen( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsConsideredNeighbouringWaterForReedGrowthOn( World world, int i, int j, int k )
+public boolean IsConsumedInCrafting()
+public boolean IsDamagedInCrafting()
+public boolean IsEdibleItem( ItemStack stack )
+public boolean IsEfficientVsBlock( ItemStack stack, World world, Block block, int i, int j, int k )
+public boolean IsEnchantmentApplicable( Enchantment enchantment )
+public boolean IsFallingBlock()
+public boolean IsFertilized( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsFullyGrown( int iMetadata )
+public boolean IsGroundCover( )
+public boolean IsHungryEnoughToForceMoveToGraze()
+public boolean IsHydrated( int iMetadata )
+public boolean IsImmuneToHeadCrabDamage()
+public boolean IsIncineratedInCrucible()
+public boolean IsInputtingMechanicalPower( World world, int i, int j, int k )
+public boolean IsMouldingOfSameType( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsMultiUsePerClick()
+public boolean IsNaturalStone( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsNormalCube( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsOutputtingMechanicalPower( World world, int i, int j, int k )
+public boolean IsPistonPackable( ItemStack stack )
+public boolean IsProcedurallyAnimated()
+public boolean IsReadyToEatBreedingItem()
+public boolean IsReadyToEatLooseFood()
+public boolean IsReadyToEatLooseItem( ItemStack stack )
+public boolean IsReplaceableVegetation( World world, int i, int j, int k )
+public boolean IsSecondaryTargetForSquid()
+public boolean IsSnowCoveringTopSurface( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsStairBlock()
+public boolean IsStickyToSnow( IBlockAccess blockAccess, int i, int j, int k )
+public boolean IsSubjectToHunger()
+public boolean IsTooHungryToGrow()
+public boolean IsTooHungryToHeal()
+public boolean IsToolTypeEfficientVsBlockType( Block block )
+public boolean IsValidZombieSecondaryTarget( EntityZombie zombie )
+public boolean IsWeightedByHeadCrab()
+public boolean OnBlockSawed( World world, int i, int j, int k )
+public boolean OnBlockSawed( World world, int i, int j, int k, int iSawPosI, int iSawPosJ, int iSawPosK )
+public boolean OnFinishedFalling( EntityFallingSand entity, float fFallDistance )
+public boolean OnItemUsedByBlockDispenser( ItemStack stack, World world, 
+public boolean OnMortarApplied( World world, int i, int j, int k )
+public boolean OnPossesedRidingEntityDeath()
+public boolean OnRotatedAroundBlockOnTurntableToFacing( World world, int i, int j, int k, int iFacing  )
+public boolean RenderAsBlock( RenderBlocks renderBlocks, Block block, int i, int j, int k )
+public boolean RenderAsBlockFullBrightWithTexture( RenderBlocks renderBlocks, Block block, int i, int j, int k, Icon icon )
+public boolean RenderAsBlockWithColorMultiplier( RenderBlocks renderBlocks, Block block, int i, int j, int k, float fRed, float fGreen, float fBlue )
+public boolean RenderAsBlockWithTexture( RenderBlocks renderBlocks, Block block, int i, int j, int k, Icon icon )
+public boolean RenderBlock( RenderBlocks renderBlocks, int i, int j, int k )
+public boolean RenderBlock( RenderBlocks renderer, int i, int j, int k )
+public boolean RenderBlockWithTexture( RenderBlocks renderer, int i, int j, int k, Icon texture )
+public boolean RotateAroundJAxis( World world, int i, int j, int k, boolean bReverse )
+public boolean SetOnFireDirectly( World world, int i, int j, int k )
+public boolean ShouldContinueAttacking( float fDistanceToTarget )
+public boolean ShouldDeleteTileEntityOnBlockChange( int iNewBlockID )
+public boolean ShouldNotifyBlockOnGraze()
+public boolean ShouldOffsetPositionIfPathingOutOf( IBlockAccess blockAccess, 
+public boolean ShouldRenderNeighborFullFaceSide( IBlockAccess blockAccess, int i, int j, int k, int iNeighborSide )
+public boolean ShouldRenderNeighborHalfSlabSide( IBlockAccess blockAccess, int i, int j, int k, int iNeighborSlabSide, boolean bNeighborUpsideDown )
+public boolean ShouldRenderWhileFalling( World world, EntityFallingSand entity )
+public boolean ShouldServerTreatAsOversized()
+public boolean ShouldSetPositionOnLoad()
+public boolean ShouldSideBeRenderedOnFallingBlock( int iSide, int iMetadata )
+public boolean ShouldStartClosingServerSide()
+public boolean ShouldStayInPlaceToGraze()
+public boolean SpreadGrassToBlock( World world, int i, int j, int k )
+public boolean SpreadMyceliumToBlock( World world, int i, int j, int k )
+public boolean ToggleFacing( World world, int i, int j, int k, boolean bReverse )
+public boolean TriggersBuddy()
+public boolean ValidateAreaAroundDevice()
+public boolean ValidateConnectedAxles()
+public boolean attackEntityAsMob( Entity attackedEntity )
+public boolean attackEntityAsMob( Entity target )
+public boolean attackEntityAsMob( Entity targetEntity )
+public boolean attackEntityFrom( DamageSource damageSource, int i )
+public boolean attackEntityFrom( DamageSource damageSource, int iDamageAmount )
+public boolean attackEntityFrom( DamageSource damageSource, int par2)
+public boolean attackEntityFrom( DamageSource source, int iDamage )
+public boolean attackEntityFrom( DamageSource source, int iDamageAmount )
+public boolean attackEntityFrom(DamageSource damagesource, int i)
+public boolean canBeCollidedWith()
+public boolean canBePushed()
+public boolean canBlockCatchFire( IBlockAccess blockAccess, int i, int j, int k )
+public boolean canBlockStay( World world, int i, int j, int k )
+public boolean canBreatheUnderwater()
+public boolean canCollideCheck( int i, boolean flag )
+public boolean canCollideCheck( int iMetadata, boolean flag )
+public boolean canCollideCheck(int i, boolean flag)
+public boolean canCombineWithBlock( World world, int i, int j, int k, int iItemDamage )
+public boolean canDamagePlayer()
+public boolean canDespawn()
+public boolean canDropFromExplosion( Explosion explosion )
+public boolean canDropFromExplosion(Explosion par1Explosion)
+public boolean canEntityBeSeen( Entity entity )
+public boolean canExtend( World world, int i, int j, int k, int iToFacing )
+public boolean canHarvestBlock( ItemStack stack, World world, Block block, int i, int j, int k )
+public boolean canInteractWith( EntityPlayer entityplayer )
+public boolean canInteractWith(EntityPlayer entityplayer)
+public boolean canInteractWith(EntityPlayer par1EntityPlayer)
+public boolean canPlaceBlockAt( World world, int i, int j, int k )
+public boolean canPlaceBlockOnSide( World world, int i, int j, int k, 
+public boolean canPlaceBlockOnSide( World world, int i, int j, int k, int iSide )
+public boolean canPlaceItemBlockOnSide( World world, int i, int j, int k, int iFacing, EntityPlayer player, ItemStack itemStack )
+public boolean canPlaceItemBlockOnSide( World world, int i, int j, int k, int iFacing, EntityPlayer player, ItemStack stack )
+public boolean canProvidePower()
+public boolean canSilkHarvest( int iMetadata )
+public boolean canSilkHarvest()
+public boolean canTriggerWalking()
+public boolean continueExecuting()
+public boolean convertToFullBlock( World world, int i, int j, int k )
+public boolean enchantItem( EntityPlayer player, int iButtonIndex )
+public boolean func_94478_d(World par1World, int par2, int par3, int par4, int par5)
+public boolean func_94490_c(int par1)
+public boolean getBlocksMovement( IBlockAccess blockAccess, int i, int j, int k )
+public boolean getBlocksMovement(IBlockAccess par1IBlockAccess, int par2, int par3, int par4)
+public boolean getCanSpawnHere()
+public boolean hasColor( ItemStack stack )
+public boolean hasComparatorInputOverride()
+public boolean hasEffect( ItemStack itemStack )
+public boolean hitEntity( ItemStack stack, EntityLiving defendingEntity, EntityLiving attackingEntity )
+public boolean interact( EntityPlayer player )
+public boolean isAIEnabled()
+public boolean isBreedingItem( ItemStack itemStack )
+public boolean isBreedingItem( ItemStack stack )
+public boolean isCollidable()
+public boolean isFull3D()
+public boolean isInRangeToRenderVec3D( Vec3 vec )
+public boolean isInvNameLocalized()
+public boolean isOpaqueCube()
+public boolean isPotionApplicable(PotionEffect par1PotionEffect)
+public boolean isStackValidForSlot( int iSlot, ItemStack stack )
+public boolean isUseableByPlayer( EntityPlayer entityPlayer )
+public boolean isUseableByPlayer( EntityPlayer entityplayer )
+public boolean isUseableByPlayer( EntityPlayer entityplayer )    
+public boolean isUseableByPlayer(EntityPlayer entityplayer)
+public boolean isValidLightLevel()
+public boolean itemInteractionForEntity( ItemStack itemStack, EntityLiving targetEntity )
+public boolean itemInteractionForEntity(ItemStack itemstack, EntityLiving entity )
+public boolean makesSoundOnLand()
+public boolean matches( IRecipe recipe )
+public boolean onBlockActivated( World world, int i, int j, int k, EntityPlayer player, 
+public boolean onBlockActivated( World world, int i, int j, int k, EntityPlayer player, int iFacing, float fClickX, float fClickY, float fClickZ )
+public boolean onBlockActivated( World world, int i, int j, int k, EntityPlayer player, int iFacing, float fXClick, float fYClick, float fZClick )
+public boolean onBlockActivated( World world, int i, int j, int k, EntityPlayer player, int iSide, float fClickX, float fClickY, float fClickZ )
+public boolean onBlockActivated(World par1World, int par2, int par3, int par4, EntityPlayer par5EntityPlayer, int par6, float par7, float par8, float par9)
+public boolean onBlockDestroyed( ItemStack stack, World world, int iBlockID, int i, int j, int k, EntityLiving destroyingEntityLiving )
+public boolean onBlockDestroyed( ItemStack stack, World world, int iBlockID, int i, int j, int k, EntityLiving usingEntity )
+public boolean onBlockEventReceived(World par1World, int par2, int par3, int par4, int par5, int par6)
+public boolean onItemUse( ItemStack itemStack, EntityPlayer player, World world, int i, int j, int k, int iFacing, float fClickX, float fClickY, float fClickZ )
+public boolean onItemUse( ItemStack itemStack, EntityPlayer player, World world, int i, int j, int k, int iFacing, float fClickX, float fClickY, float fClickZ )    
+public boolean onItemUse( ItemStack stack, EntityPlayer player, World world, 
+public boolean onItemUse( ItemStack stack, EntityPlayer player, World world, int i, int j, int k, int iFacing, 
+public boolean onItemUse( ItemStack stack, EntityPlayer player, World world, int i, int j, int k, int iFacing, float fClickX, float fClickY, float fClickZ )
+public boolean receiveClientEvent( int iEventType, int iEventParam )
+public boolean renderAsNormalBlock()
+public boolean requiresMultipleRenderPasses()
+public boolean shouldExecute()
+public boolean shouldSideBeRendered( IBlockAccess blockAccess, 
+public boolean shouldSideBeRendered( IBlockAccess blockAccess, int i, int j, int k, int iSide )
+public boolean shouldSideBeRendered( IBlockAccess blockAccess, int iNeighborI, 
+public boolean shouldSideBeRendered( IBlockAccess blockAccess, int iNeighborI, int iNeighborJ, int iNeighborK, int iSide )
+public boolean shouldSideBeRendered(IBlockAccess par1IBlockAccess, int par2, int par3, int par4, int par5)
+public boolean tryExtend( World world, int i, int j, int k, int iToFacing )
+public boolean tryToCreatePortal( World world, int i, int j, int k )
+public boolean validTreeLocation()
+public double MinDistFromPlayerForDespawn()
+public double getMountedYOffset()
+public float ComputeRotation()
+public float GetBaseGrowthChance( World world, int i, int j, int k )
+public float GetBlockBoundingBoxHeight()
+public float GetBlockBoundingBoxWidth()
+public float GetBuoyancy( int iItemDamage )
+public float GetDamageMultiplier()
+public float GetDefaultSlipperinessOnGround()
+public float GetDepth()
+public float GetExhaustionOnUsedToHarvestBlock( int iBlockID, World world, int i, int j, int k, int iBlockMetadata )
+public float GetGrazeHeadRotationMagnitudeDivisor()
+public float GetGrazeHeadRotationRateMultiplier()
+public float GetHeight()
+public float GetHungerSpeedModifier()
+public float GetMovementModifier( World world, int i, int j, int k )
+public float GetPlantGrowthOnMultiplier( World world, int i, int j, int k, Block plantBlock )
+public float GetPullStrengthToArrowVelocityMultiplier()
+public float GetSlipperinessRelativeToBlock( int iBlockID )
+public float GetVisualHorizontalOffsetAsBlock()
+public float GetVisualRollOffsetAsBlock()
+public float GetVisualVerticalOffsetAsBlock()
+public float GetWidth()
+public float GroundCoverRestingOnVisualOffset( IBlockAccess blockAccess, int i, int j, int k )
+public float KnockbackMagnitude()
+public float MobSpawnOnVerticalOffset( World world, int i, int j, int k )
+public float func_70890_k( float fPartialTick )
+public float func_70894_j( float fPartialTick )
+public float func_82146_a( Explosion explosion, World par2World, int par3, int par4, int par5, Block par6Block)
+public float getBlockBrightness( IBlockAccess blockAccess, int i, int j, int k )
+public float getBlockBrightness( IBlockAccess iblockaccess, int i, int j, int k )
+public float getBlockBrightness(IBlockAccess iblockaccess, int i, int j, int k)
+public float getBlockHardness( World world, int i, int j, int k )
+public float getBlockPathWeight( int i, int j, int k )
+public float getBlockPathWeight(int par1, int par2, int par3)
+public float getExplosionResistance( Entity entity )
+public float getExplosionResistance( Entity entity, World world, int i, int j, int k )
+public float getEyeHeight()
+public float getRotationSpeed()
+public float getShadowSize()
+public float getSoundPitch()
+public float getSoundVolume()
+public float getSpeedModifier()
+public float getStrVsBlock( ItemStack itemStack, World world, Block block, int i, int j, int k ) 
+public float getStrVsBlock( ItemStack stack, World world, Block block, int i, int j, int k )
+public float getStrVsBlock( ItemStack stack, World world, Block block, int i, int j, int k ) 
+public float getStrVsBlock( ItemStack stack, World world, Block block, int i, int j, int k)
+public float getStrVsBlock( ItemStack toolItemStack, World world, Block block, int i, int j, int k ) 
+public float getTailRotation()
+public float handleRotationFloat( EntityLiving entity, float par2 )
+public float handleRotationFloat(EntityLiving par1EntityLiving, float par2)
+public float spiderScaleAmount()
+public int AdjustMetadataForPistonMove( int iMetadata )
+public int AdjustPathWeightOnNotBlocked( int iPreviousWeight )
+public int AuxFXIDOnExplode()
+public int DamageDroppedOnConversion( int iMetadata )
+public int GetAssemblyID()
+public int GetBlockIDToPlace( int iItemDamage, int iFacing, float fClickX, float fClickY, float fClickZ )
+public int GetCampfireBurnTime( int iItemDamage )
+public int GetChanceOfFireSpreadingDirectlyTo( IBlockAccess blockAccess, int i, int j, int k )
+public int GetCombinedBlockID( int iMetadata )
+public int GetCombinedMetadata( int iMetadata )
+public int GetContainerID()
+public int GetCookTimeForCurrentItem()
+public int GetCookTimeMultiplierInKiln( IBlockAccess blockAccess, int i, int j, int k )
+public int GetCropItemID()
+public int GetDefaultColor()
+public int GetEfficientToolLevel( IBlockAccess blockAccess, int i, int j, int k )
+public int GetFacing( IBlockAccess blockAccess, int i, int j, int k )
+public int GetFacing( int iMetadata )
+public int GetFilterableProperties( ItemStack stack )
+public int GetFoodValueMultiplier()
+public int GetFurnaceBurnTime( int iItemDamage )
+public int GetGrazeDuration()
+public int GetHarvestToolLevel( IBlockAccess blockAccess, int i, int j, int k )
+public int GetHerbivoreItemFoodValue( int iItemDamage )
+public int GetHorizontalHydrationRange( World world, int i, int j, int k )
+public int GetHungerRestored()
+public int GetItemCountCraftedOnTurntable( IBlockAccess blockAccess, int i, int j, int k )
+public int GetItemCountDroppedOnSaw( World world, int i, int j, int k )
+public int GetItemDamageDroppedOnSaw( World world, int i, int j, int k )
+public int GetItemFoodValue( ItemStack stack )
+public int GetItemIDCraftedOnTurntable( IBlockAccess blockAccess, int i, int j, int k )
+public int GetItemIDDroppedOnSaw( World world, int i, int j, int k )
+public int GetItemIndexDroppedWhenCookedByKiln( IBlockAccess blockAccess, int i, int j, int k )
+public int GetLitBlockID()
+public int GetMaxDamage()
+public int GetMechanicalPowerLevelProvidedToAxleAtFacing( World world, int i, int j, int k, int iFacing )
+public int GetMeleeAttackStrength( Entity target )
+public int GetMetadataConversionForStrataLevel( int iLevel, int iMetadata )
+public int GetNewBlockIDCraftedOnTurntable( IBlockAccess blockAccess, int i, int j, int k )
+public int GetNewMetadataCraftedOnTurntable( IBlockAccess blockAccess, int i, int j, int k )
+public int GetNewMetadataRotatedAroundBlockOnTurntableToFacing( World world, int i, int j, int k, int iInitialFacing, int iRotatedFacing )
+public int GetPistonShovelEjectDirection( World world, int i, int j, int k, int iToFacing )
+public int GetPowerLevel( IBlockAccess iBlockAccess, int i, int j, int k )
+public int GetPowerLevelFromMetadata( int iMetadata )
+public int GetProgressiveCraftingMaxDamage()
+public int GetRequiredItemCountToPistonPack( ItemStack stack )
+public int GetRequiredToolLevelForOre( IBlockAccess blockAccess, int i, int j, int k )
+public int GetResultingBlockIDOnPistonPack( ItemStack stack )
+public int GetResultingBlockMetadataOnPistonPack( ItemStack stack )
+public int GetRotationsToCraftOnTurntable( IBlockAccess blockAccess, int i, int j, int k )
+public int GetSeedItemID()
+public int GetTargetFacingPlacedByBlockDispenser( int iDispenserFacing )
+public int GetTicksPerFullUpdate()
+public int GetTrackerUpdateFrequency()
+public int GetTrackerViewDistance()
+public int GetWeedsGrowthLevel( IBlockAccess blockAccess, int i, int j, int k )
+public int GetWeightOnPathBlocked( IBlockAccess blockAccess, int i, int j, int k )
+public int GetWeightWhenWorn()
+public int IDDroppedSilkTouch()
+public int IdDroppedOnConversion( int iMetadata )
+public int IsSourceToFluidBlockAtFacing( World world, int i, int j, int k, int iFacing  )
+public int ItemCountToDropOnExplode()
+public int OnPreBlockPlacedByPiston( World world, int i, int j, int k, int iMetadata, int iDirectionMoved )
+public int PreBlockPlacedBy( World world, int i, int j, int k, int iMetadata, 
+public int PreBlockPlacedBy( World world, int i, int j, int k, int iMetadata, EntityLiving entityBy ) 
+public int QuantityDroppedOnConversion( Random rand )
+public int RotateMetadataAroundJAxis( int iMetadata, boolean bReverse )
+public int RotateOnTurntable( World world, int i, int j, int k, boolean bReverse, int iCraftingCounter )
+public int SetFacing( int iMetadata, int iFacing )
+public int SetFullyHydrated( int iMetadata )
+public int SetIsUpsideDown( int iMetadata, boolean bUpsideDown )
+public int SetPowerLevelInMetadata( int iMetadata, int iPowerLevel )
+public int ValidateMetadataForLocation( World world, int i, int j, int k, int iMetadata )
+public int checkBlockLine(int par1ArrayOfInteger[], int par2ArrayOfInteger[])
+public int colorMultiplier( IBlockAccess blockAccess, int i, int j, int k )
+public int colorMultiplier( IBlockAccess blockAccess, int i, int j, int k)
+public int colorMultiplier(IBlockAccess iblockaccess, int i, int j, int k)
+public int damageDropped( int i )
+public int damageDropped( int iMetaData )
+public int damageDropped( int iMetadata )
+public int func_94480_d(IBlockAccess par1IBlockAccess, int par2, int par3, int par4, int par5)
+public int func_94481_j_(int par1)
+public int func_96121_ay()
+public int getBlockColor()
+public int getBlockID()
+public int getBrightnessForRender( float fPartialTicks )
+public int getCarried()
+public int getColor( ItemStack stack )
+public int getColorFromItemStack( ItemStack itemStack, int iLayer )
+public int getColorFromItemStack( ItemStack stack, int iRenderPass )
+public int getComparatorInputOverride(World par1World, int par2, int par3, int par4, int par5)
+public int getConversionTimeBoost()
+public int getCropItem()
+public int getDamageValue( World world, int i, int j, int k )
+public int getDamageValue(World par1World, int par2, int par3, int par4)
+public int getDamageVsEntity( Entity entity )
+public int getDamageVsEntity(Entity par1Entity)
+public int getDropItemId()
+public int getInputStrength(World par1World, int par2, int par3, int par4, int par5)
+public int getInventoryStackLimit()
+public int getItemBurnTime( ItemStack stack )
+public int getItemEnchantability()
+public int getMaxHealth()
+public int getMaxItemUseDuration( ItemStack stack )
+public int getMaxItemUseDuration(ItemStack itemstack)
+public int getMaxItemUseDuration(ItemStack par1ItemStack)
+public int getMetadata( int i )
+public int getMetadata( int iDamage )
+public int getMetadata( int iItemDamage )
+public int getMixedBrightnessForBlock( IBlockAccess blockAccess, int i, int j, int k )
+public int getMixedBrightnessForBlock(IBlockAccess iblockaccess, int i, int j, int k)
+public int getMixedBrightnessForBlock(IBlockAccess par1IBlockAccess, int par2, int par3, int par4)
+public int getMobilityFlag()
+public int getRecipeSize()
+public int getRenderBlockPass()
+public int getRenderColor( int iMetadata )
+public int getRenderColor(int i)
+public int getRenderType()
+public int getSeedItem()
+public int getSizeInventory()
+public int getState( IBlockAccess blockAccess, int i, int j, int k )
+public int getTalkInterval()
+public int idDropped( int i, Random random, int iFortuneModifier )
+public int idDropped( int iMetaData, Random rand, int iFortuneModifier )
+public int idDropped( int iMetaData, Random random, int iFortuneModifier )
+public int idDropped( int iMetadata, Random rand, int iFortuneMod )
+public int idDropped( int iMetadata, Random rand, int iFortuneModifier )
+public int idDropped( int iMetadata, Random random, int iFortuneModifier )
+public int idDropped(int par1, Random par2Random, int par3)
+public int idPicked( World world, int i, int j, int k )
+public int idPicked(World par1World, int par2, int par3, int par4)
+public int isProvidingStrongPower( IBlockAccess blockAccess, int i, int j, int k, int iFacing )
+public int isProvidingStrongPower( IBlockAccess blockAccess, int i, int j, int k, int iSide )
+public int isProvidingWeakPower( IBlockAccess iBlockAccess, int i, int j, int k, int l)
+public int isProvidingWeakPower( IBlockAccess iblockaccess, int i, int j, int k, int l )
+public int isProvidingWeakPower(IBlockAccess blockAccess, int i, int j, int k, int iSide )
+public int isProvidingWeakPower(IBlockAccess par1IBlockAccess, int par2, int par3, int par4, int par5)
+public int onBlockPlaced( World world, int i, int j, int k, int iFacing, 
+public int onBlockPlaced( World world, int i, int j, int k, int iFacing, float fClickX, float fClickY, float fClickZ, int iMetadata )
+public int onBlockPlaced(World par1World, int par2, int par3, int par4, int par5, float par6, float par7, float par8, int par9)
+public int quantityDropped( Random rand )
+public int quantityDropped( Random random )
+public int quantityDropped(Random par1Random)
+public int quantityDropped(Random random)
+public int quantityDroppedWithBonus( int iFortuneModifier, Random rand )
+public int shouldRenderPass( EntityLiving entity, int iRenderPass, float par3 )
+public int shouldRenderPass( EntityLiving entity, int iRenderPass, float par3)
+public int tickRate( World par1World )
+public int tickRate( World world )
+public int tickRate(World par1World)
+public void AddIntersectingBoxesToCollisionList( World world, int i, int j, int k, AxisAlignedBB boxToIntersect, List collisionList )
+public void AddToRayTrace( FCUtilsRayTraceVsComplexBlock rayTrace )
+public void AttachToFacing( World world, int i, int j, int k, int iFacing )
+public void AttemptToGrow( World world, int i, int j, int k, Random rand )
+public void CheckForLooseFood()
+public void CheckForScrollDrop()
+public void CheckForSoilReversion( World world, int i, int j, int k )
+public void CheckForSpiderSkeletonMounting()
+public void ClientBlockAdded( World world, int i, int j, int k )
+public void ClientBreakBlock( World world, int i, int j, int k, int iBlockID, int iMetadata )
+public void ClientNotificationOfMetadataChange( World world, int i, int j, int k, int iOldMetadata, int iNewMetadata )
+public void ConvertToNewSoil( World world, int i, int j, int k )
+public void DestroyWithDrop()
+public void DropSeeds( World world, int i, int j, int k, int iMetadata, 
+public void DryIncrementally( World world, int i, int j, int k )
+public void EjectContents()
+public void GenerateAshOnBurn( World world, int i, int j, int k )
+public void GiveBirthAtTargetLocation( EntityAnimal targetMate, double dChildX, double dChildY, double dChildZ )
+public void HandlePossession()
+public void IncrementGrowthLevel( World world, int i, int j, int k )
+public void InitModel()
+public void InitModels()
+public void Initialize()
+public void InitializeStackOnGiveCommand( Random rand, ItemStack stack )
+public void InitiatePossession()
+public void ModSpecificOnLivingUpdate()
+public void NotifyOfFullStagePlantGrowthOn( World world, int i, int j, int k, Block plantBlock )
+public void NotifyOfPlantAboveRemoved( World world, int i, int j, int k, Block plantBlock )
+public void NotifyOfWolfHowl( Entity sourceEntity )
+public void OnAIOpenDoor( World world, int i, int j, int k, boolean bOpen )
+public void OnAnchorBlockLost( World world, int i, int j, int k )
+public void OnArrowCollide( World world, int i, int j, int k, EntityArrow arrow )
+public void OnArrowImpact( World world, int i, int j, int k, EntityArrow arrow )
+public void OnBecomeFamished()
+public void OnBlockDestroyedLandingFromFall( World world, int i, int j, int k, int iMetadata )
+public void OnBlockDestroyedWithImproperTool( World world, EntityPlayer player, int i, int j, int k, int iMetadata )
+public void OnBrokenByPistonPush( World world, int i, int j, int k, int iMetadata )
+public void OnBrokenInCrafting( EntityPlayer player )
+public void OnClientRotationOctantChange()
+public void OnCookedByKiln( World world, int i, int j, int k )
+public void OnCrushedByFallingEntity( World world, int i, int j, int k, 
+public void OnCrushedByFallingEntity( World world, int i, int j, int k, EntityFallingSand entity )
+public void OnDamagedInCrafting( EntityPlayer player )
+public void OnDestroyedByFire( World world, int i, int j, int k, int iFireAge, boolean bForcedFireSpread )
+public void OnEatBreedingItem()
+public void OnFallingUpdate( FCEntityFallingBlock entity ) 
+public void OnFluidFlowIntoBlock( World world, int i, int j, int k, BlockFluid newBlock )
+public void OnFullPossession()
+public void OnFullUpdateServer()
+public void OnGrazeBlock( int i, int j, int k )
+public void OnGrazed( World world, int i, int j, int k, EntityAnimal animal )
+public void OnHeadCrabbedBySquid( FCEntitySquid squid )
+public void OnKickedByCow( FCEntityCow cow )
+public void OnNearbyAnimalAttacked( EntityAnimal attackedAnimal, EntityLiving attackSource )
+public void OnNearbyPlayerBlockAddOrRemove( EntityPlayer player )
+public void OnNearbyPlayerStartles( EntityPlayer player )
+public void OnNeighborDirtDugWithImproperTool( World world, int i, int j, int k, 
+public void OnNeighborDisrupted( World world, int i, int j, int k, int iToFacing )
+public void OnPlayerWalksOnBlock( World world, int i, int j, int k, EntityPlayer player )
+public void OnRemovedByBlockDispenser( World world, int i, int j, int k )
+public void OnRotatedOnTurntable( World world, int i, int j, int k )
+public void OnStarvingCountExpired()
+public void OnStruckByLightning( FCEntityLightningBolt bolt )
+public void OnStruckByLightning( FCEntityLightningBolt entityBolt )
+public void OnStruckByLightning( World world, int i, int j, int k )
+public void OnUsedInCrafting( EntityPlayer player, ItemStack outputStack )
+public void OnUsedInCrafting( int iItemDamage, EntityPlayer player, ItemStack outputStack )
+public void OnVegetationAboveGrazed( World world, int i, int j, int k, EntityAnimal animal )
+public void Overpower( World world, int i, int j, int k )
+public void PerformUseEffects( EntityPlayer player )
+public void PlayCraftingFX( ItemStack stack, World world, EntityPlayer player )
+public void PlayGrazeFX( int i, int j, int k, int iBlockID )
+public void PlayPlaceSound( World world, int i, int j, int k, Block block )
+public void PlayPlacementSound( ItemStack stack, Block blockStuckIn, World world, int i, int j, int k )
+public void PlayerBowSound( World world, EntityPlayer player, float fPullStrength )
+public void PreInitCreature()
+public void ProcessEntity( FCClosestEntityInfo closestEntityInfo, Entity entity ) 
+public void RandomUpdateTick( World world, int i, int j, int k, Random rand )
+public void RemoveSelf( World world, int i, int j, int k )
+public void RemoveWeeds( World world, int i, int j, int k )
+public void RenderAsFallingBlock( RenderBlocks renderBlocks, Block block, int i, int j, int k, int iMetadata )
+public void RenderAsItemBlock( RenderBlocks renderBlocks, Block block, int iItemDamage )
+public void RenderBlockAsItem( RenderBlocks renderBlocks, int iItemDamage, float fBrightness )
+public void RenderBlockAsItem( RenderBlocks renderer, int iItemDamage, float fBrightness )
+public void RenderBlockMovedByPiston( RenderBlocks renderBlocks, int i, int j, int k )
+public void RenderBlockSecondPass( RenderBlocks renderBlocks, int i, int j, int k, 
+public void RenderBlockSecondPass( RenderBlocks renderBlocks, int i, int j, int k, boolean bFirstPassResult )
+public void RenderBlockSecondPass( RenderBlocks renderer, int i, int j, int k, 
+public void RenderBlockSecondPass( RenderBlocks renderer, int i, int j, int k, boolean bFirstPassResult )
+public void RenderFallingBlock( RenderBlocks renderBlocks, int i, int j, int k, int iMetadata )
+public void ResetHungerCountdown()
+public void RotateAroundJToFacing( int iFacing )
+public void SetFacing( World world, int i, int j, int k, int iFacing )
+public void SetFertilized( World world, int i, int j, int k )
+public void SetIsUpsideDown( World world, int i, int j, int k, boolean bUpsideDown )
+public void SetPowerLevel( World world, int i, int j, int k, int iPowerLevel )
+public void SetPowerLevelWithoutNotify( World world, int i, int j, int k, int iPowerLevel )
+public void SpawnThrownEntity( ItemStack stack, World world, 
+public void SpawnerInitCreature()
+public void TiltToFacingAlongJ( int iFacing )
+public void TransferPowerStateToConnectedAxles()
+public void Translate( double dDeltaX, double dDeltaY, double dDeltaZ )
+public void UpdateFlagForGrownToday( World world, int i, int j, int k )
+public void UpdateHungerState()
+public void UpdateUsingItem( ItemStack stack, World world, EntityPlayer player )
+public void ValidateContentsForState()
+public void ValidateFireUnderState( World world, int i, int j, int k )
+public void ValidatePowerLevel( World world, int i, int j, int k )
+public void addCollisionBoxesToList( World world, int i, int j, int k, 
+public void addCollisionBoxesToList( World world, int i, int j, int k, AxisAlignedBB boundingBox, List list, Entity entity )
+public void addCraftingToCrafters( ICrafting craftingInterface )
+public void addCraftingToCrafters( ICrafting craftingInterface ) // client
+public void addInformation( ItemStack itemStack, EntityPlayer player, List infoList, boolean bAdvamcedToolTips )
+public void addInformation( ItemStack stack, EntityPlayer player, List infoList, boolean bAdvancedTips )
+public void addRandomArmor()
+public void applyEntityCollision(Entity entity)
+public void attackEntity( Entity attackedEntity, float fDistanceToTarget )
+public void attackEntity( Entity targetEntity, float fDistanceToTarget )
+public void attackEntityWithRangedAttack( EntityLiving target, float fDamageModifier )
+public void breakBlock( World world, int i, int j, int k, int iBlockID, int iMetadata )
+public void breakBlock(World par1World, int par2, int par3, int par4, int par5, int par6)
+public void breakBlock(World world, int i, int j, int k, int iBlockID, int iMetadata )
+public void checkForAdjacentChests()
+public void closeChest()
+public void convertToVillager()
+public void decorate( World world, Random rand, int iChunkX, int iChunkZ )
+public void detectAndSendChanges()
+public void doRender( Entity entity, double d, double d1, double d2, 
+public void doRender( Entity entity, double par2, double par4, double par6, float par8, float par9)
+public void doRender( Entity entity, double x, double y, double z, 
+public void doRender( Entity par1Entity, double par2, double par4, double par6, 
+public void doRender(Entity entity, double d, double d1, double d2, 
+public void doRender(Entity par1Entity, double par2, double par4, double par6, float par8, float par9)
+public void doRenderLiving(EntityLiving par1EntityLiving, double par2, double par4, double par6, float par8, float par9)
+public void drawGuiContainerBackgroundLayer( float f, int i, int j )
+public void drawGuiContainerBackgroundLayer( float par1, int iMouseX, int iMouseY )
+public void drawGuiContainerBackgroundLayer( float par1, int par2, int par3 )
+public void drawGuiContainerBackgroundLayer(float f, int i, int j)
+public void drawGuiContainerBackgroundLayer(float par1, int par2, int par3)
+public void drawGuiContainerForegroundLayer( int i, int j )
+public void drawGuiContainerForegroundLayer(int par1, int par2)
+public void dropBlockAsItemWithChance( World world, int i, int j, int k, int iMetaData, float fChance, int iFortuneModifier )
+public void dropBlockAsItemWithChance( World world, int i, int j, int k, int iMetadata, 
+public void dropBlockAsItemWithChance( World world, int i, int j, int k, int iMetadata, float fChance, int iFortuneModifier )
+public void dropBlockAsItemWithChance(World world, int i, int j, int k, int l, float f, int i1)
+public void dropBlockAsItem_do( World world, int i, int j, int k, ItemStack itemStack )
+public void dropFewItems( boolean bKilledByPlayer, int iFortuneModifier )
+public void dropFewItems( boolean bKilledByPlayer, int iLootingLevel )
+public void dropFewItems( boolean bKilledByPlayer, int iLootingModifier )
+public void dropFewItems( boolean bPlayerKilled, int iFortuneLevel )
+public void dropHead()
+public void dropRareDrop( int iBonusDrop )
+public void entityInit()
+public void entityInit() 
+public void fall( float fFallDistance )
+public void fall(float par1)
+public void func_82162_bC()
+public void func_82813_b(ItemStack par1ItemStack, int par2)
+public void func_94353_c_(int par1)
+public void func_94479_f(World par1World, int par2, int par3, int par4, int par5)
+public void genTreeLayer(int par1, int par2, int par3, float par4, byte par5, int par6)
+public void getSubBlocks( int iBlockID, CreativeTabs creativeTabs, List list )
+public void getSubItems( int iItemID, CreativeTabs creativeTabs, List list )
+public void growTree( World world, int i, int j, int k, Random random )
+public void handleHealthUpdate( byte bUpdateType )
+public void harvestBlock( World world, EntityPlayer entityPlayer, int i, int j, int k, int iMetaData )
+public void harvestBlock( World world, EntityPlayer player, int i, int j, int k, int iMetadata )
+public void init(Texture par1Texture, List par2List, int par3, int par4, int par5, int par6, boolean par7)
+public void initCreature()
+public void initCreature() 
+public void jump()
+public void knockBack( Entity entity, int iDamageDone, double dMotionX, double dMotionY )
+public void makeWither( World world, int i, int j, int k, TileEntitySkull tileEntity )
+public void mouseClicked( int iXClick, int iYClick, int par3)
+public void moveEntity( double deltaX, double deltaY, double deltaZ )
+public void moveEntityWithHeading( float par1, float par2 )
+public void onBlockAdded( World world, int i, int j, int k )
+public void onBlockAdded( World world, int i, int j, int k ) 
+public void onBlockAdded( World world, int i, int j, int k)
+public void onBlockAdded(World par1World, int par2, int par3, int par4)
+public void onBlockAdded(World world, int i, int j, int k)
+public void onBlockClicked( World world, int i, int j, int k, EntityPlayer player )
+public void onBlockClicked( World world, int i, int j, int k, EntityPlayer player ) 
+public void onBlockDestroyedByExplosion( World world, int i, int j, int k, Explosion explosion )
+public void onBlockDestroyedByExplosion(World par1World, int par2, int par3, int par4, Explosion par5Explosion)
+public void onBlockDestroyedByPlayer( World world, int i, int j, int k, int iMetaData )
+public void onBlockDestroyedByPlayer( World world, int i, int j, int k, int iMetadata )
+public void onBlockHarvested( World world, int i, int j, int k, int iMetadata, EntityPlayer player )
+public void onBlockPlacedBy( World world, int i, int j, int k, 
+public void onBlockPlacedBy( World world, int i, int j, int k, EntityLiving entity, ItemStack stack )
+public void onBlockPlacedBy( World world, int i, int j, int k, EntityLiving entityLiving, ItemStack stack )
+public void onBlockPlacedBy( World world, int i, int j, int k, EntityLiving entityliving, ItemStack stack )
+public void onBlockPlacedBy( World world, int i, int j, int k, EntityLiving placingEntity, ItemStack itemStack )
+public void onBlockPlacedBy( World world, int i, int j, int k, EntityLiving placingEntity, ItemStack stack )
+public void onBlockPlacedBy(World par1World, int par2, int par3, int par4, EntityLiving par5EntityLiving, ItemStack par6ItemStack)
+public void onCollideWithPlayer( EntityPlayer player )
+public void onCraftGuiClosed( EntityPlayer entityplayer )
+public void onCraftGuiClosed( EntityPlayer player )
+public void onCraftGuiClosed(EntityPlayer entityplayer)
+public void onCraftMatrixChanged( IInventory inventory )
+public void onCraftMatrixChanged(IInventory iinventory)
+public void onCreated( ItemStack stack, World world, EntityPlayer player ) 
+public void onDeath( DamageSource source )
+public void onEntityCollidedWithBlock( World world, int i, int j, int k, Entity entity )
+public void onEntityCollidedWithBlock( World world, int i, int j, int k, Entity entity)
+public void onEntityCollidedWithBlock(World par1World, int par2, int par3, int par4, Entity par5Entity)
+public void onEntityWalking( World world, int i, int j, int k, Entity entity )
+public void onFallenUpon( World world, int i, int j, int k, Entity entity, float fFallDist )
+public void onFinishFalling( World world, int i, int j, int k, int iMetadata )
+public void onGuiClosed()
+public void onImpact( MovingObjectPosition impactPosition )
+public void onImpact( MovingObjectPosition pos )
+public void onImpact(MovingObjectPosition impactPos)
+public void onInventoryChanged()
+public void onKillEntity( EntityLiving entityKilled )
+public void onLivingUpdate()
+public void onNeighborBlockChange( World world, int i, int j, int k, int iBlockID )
+public void onNeighborBlockChange( World world, int i, int j, int k, int iChangedBlockID )
+public void onNeighborBlockChange( World world, int i, int j, int k, int iNeigborBlockID )
+public void onNeighborBlockChange( World world, int i, int j, int k, int iNeighborBlockID )
+public void onNeighborBlockChange( World world, int i, int j, int k, int iNeighborBlockID ) 
+public void onNeighborBlockChange( World world, int i, int j, int k, int iNeighborID )
+public void onNeighborBlockChange( World world, int i, int j, int k, int l )
+public void onNeighborBlockChange(World par1World, int par2, int par3, int par4, int par5)
+public void onNeighborBlockChange(World world, int i, int j, int k, int iNeighborBlockID )
+public void onNeighborBlockChange(World world, int i, int j, int k, int l)
+public void onPlayerStoppedUsing( ItemStack itemStack, World world, EntityPlayer player, int iTicksInUseRemaining )
+public void onPostBlockPlaced( World world, int i, int j, int k, int iMetadata ) 
+public void onPoweredBlockChange( World world, int i, int j, int k, boolean bOn )
+public void onPoweredBlockChange(World par1World, int par2, int par3, int par4, boolean par5)
+public void onStartFalling( EntityFallingSand entity )
+public void onStartFalling( EntityFallingSand entity ) 
+public void onUpdate( ItemStack stack, World world, EntityPlayer entity, int iInventorySlot, boolean bIsHandHeldItem )
+public void onUpdate()
+public void openChest()
+public void performHurtAnimation()
+public void playLivingSound()
+public void playStepSound( int iBlockI, int iBlockJ, int iBlockK, int iBlockID )
+public void playStepSound(int par1, int par2, int par3, int par4)
+public void preRenderCallback(EntityLiving par1EntityLiving, float par2)
+public void processCommand(ICommandSender par1ICommandSender, String par2ArrayOfStr[])    
+public void randomDisplayTick( World world, int i, int j, int k, Random rand )
+public void randomDisplayTick( World world, int i, int j, int k, Random rand)
+public void randomDisplayTick( World world, int i, int j, int k, Random random )
+public void randomDisplayTick(World world, int i, int j, int k, Random random)
+public void readEntityFromNBT( NBTTagCompound nbttagcompound )
+public void readEntityFromNBT( NBTTagCompound tag )
+public void readEntityFromNBT(NBTTagCompound nbttagcompound)
+public void readEntityFromNBT(NBTTagCompound par1NBTTagCompound)
+public void readEntityFromNBT(NBTTagCompound par1NBTTagCompound) 
+public void readFromNBT( NBTTagCompound nbttagcompound )
+public void readFromNBT( NBTTagCompound tag )
+public void readFromNBT( NBTTagCompound tag)
+public void readFromNBT(NBTTagCompound nbttagcompound)
+public void readNBTFromPacket( NBTTagCompound nbttagcompound )
+public void readNBTFromPacket( NBTTagCompound tag )
+public void registerIcons( IconRegister iconRegister )
+public void registerIcons( IconRegister register )
+public void registerIcons( IconRegister register ) 
+public void registerIcons(IconRegister par1IconRegister)
+public void removeColor( ItemStack stack )
+public void render( Entity entity, float f, float f1, float f2, float f3, float f4, float f5 )
+public void render( Entity entity, float par2, float par3, float par4, float par5, float par6, float fScale )
+public void render( Entity entity, float par2, float par3, float par4, float par5, float par6, float par7 )
+public void renderParticle( Tessellator tesselator, float fPartialTicks, 
+public void resetTask()
+public void rotateCorpse(EntityLiving entity, float par2, float par3, float par4)
+public void setAggressive( boolean bIsConsumingPotion )
+public void setAngry( boolean bAngry )
+public void setAttackTarget( EntityLiving target )
+public void setBlockBoundsBasedOnState( IBlockAccess blockAccess, int i, int j, int k )
+public void setBlockBoundsBasedOnState(IBlockAccess par1IBlockAccess, int par2, int par3, int par4)
+public void setBlockBoundsForItemRender()
+public void setBlockBoundsForItemRender() 
+public void setCarried( int iBlockID )
+public void setCombatTask()
+public void setDead()
+public void setFire( int i )
+public void setFleeceColor( int iColor )
+public void setInventorySlotContents( int iSlot, ItemStack itemstack )
+public void setInventorySlotContents( int iSlot, ItemStack itemstack)
+public void setInventorySlotContents( int iSlot, ItemStack stack )
+public void setIsAnvil( boolean bIsAnvil )
+public void setLivingAnimations( EntityLiving entity, float par2, float par3, 
+public void setPositionAndRotation2(double par1, double par3, double par5, float par7, float par8, int par9)
+public void setRevengeTarget( EntityLiving attackingEntity )
+public void setRevengeTarget( EntityLiving target )
+public void setRotationAngles( float par1, float par2, float par3, 
+public void setRotationAngles(float par1, float par2, float par3, float par4, float par5, float par6, Entity par7Entity)
+public void setSlimeSize( int iSize )
+public void setTarget(Entity targetEntity )
+public void setThrowableHeading( double dVectorX, double dVectorY, double dVectorZ, float fSpeed, float fRandomFactorMultiplier )
+public void setVillager( boolean bIsVillager )
+public void startExecuting()
+public void updateAITick()
+public void updateAnimation()
+public void updateEntity()
+public void updateEntityActionState()
+public void updateFurnaceBlockState( boolean bBurning, World world, int i, int j, int k, boolean bHasContents )
+public void updateLightLevel(World par1World, int par2, int par3, int par4)
+public void updateMapData( World world, Entity entity, MapData mapData )
+public void updatePistonState( World world, int i, int j, int k )
+public void updateProgressBar( int iVariableIndex, int iValue )
+public void updateScreen()
+public void updateTask()
+public void updateTick( World world, int i, int j, int k, Random rand )
+public void updateTick( World world, int i, int j, int k, Random rand ) 
+public void updateTick( World world, int i, int j, int k, Random random )
+public void updateTick(World par1World, int par2, int par3, int par4, Random par5Random)
+public void updateTick(World world, int i, int j, int k, Random random)
+public void useRecipe( MerchantRecipe recipe )
+public void velocityToAddToEntity( World world, int i, int j, int k, Entity entity, Vec3 velocityVec )
+public void writeEntityToNBT( NBTTagCompound nbttagcompound )
+public void writeEntityToNBT( NBTTagCompound tag )
+public void writeEntityToNBT(NBTTagCompound nbttagcompound)
+public void writeEntityToNBT(NBTTagCompound par1NBTTagCompound)
+public void writeEntityToNBT(NBTTagCompound par1NBTTagCompound) 
+public void writeToNBT( NBTTagCompound nbttagcompound )
+public void writeToNBT( NBTTagCompound tag )
+public void writeToNBT( NBTTagCompound tag)
+public void writeToNBT(NBTTagCompound nbttagcompound)
+```
+
+## 6. BTW API Interfaces
+### FCIBlockFluidSource
+```java
+package net.minecraft.src.btw.api;
+
+import net.minecraft.src.*;
+import net.minecraft.src.btw.core.*;
+import net.minecraft.src.btw.block.decoration.*;
+import net.minecraft.src.btw.block.terrain.*;
+import net.minecraft.src.btw.block.container.*;
+import net.minecraft.src.btw.block.mechanical.*;
+import net.minecraft.src.btw.block.redstone.*;
+import net.minecraft.src.btw.block.nature.*;
+import net.minecraft.src.btw.block.fire.*;
+import net.minecraft.src.btw.block.fluid.*;
+import net.minecraft.src.btw.block.misc.*;
+import net.minecraft.src.btw.item.itemblock.*;
+import net.minecraft.src.btw.item.food.*;
+import net.minecraft.src.btw.item.tool.*;
+import net.minecraft.src.btw.item.armor.*;
+import net.minecraft.src.btw.item.weapon.*;
+import net.minecraft.src.btw.item.misc.*;
+import net.minecraft.src.btw.entity.ai.*;
+import net.minecraft.src.btw.entity.mob.*;
+import net.minecraft.src.btw.entity.spawn.*;
+import net.minecraft.src.btw.crafting.recipe.*;
+import net.minecraft.src.btw.crafting.container.*;
+import net.minecraft.src.btw.tileentity.*;
+import net.minecraft.src.btw.api.*;
+import net.minecraft.src.btw.util.*;
+import net.minecraft.src.btw.world.*;
+import net.minecraft.src.btw.behavior.*;
+import net.minecraft.src.btw.properties.*;
+import net.minecraft.src.btw.model.*;
+import net.minecraft.src.btw.command.*;
+
+// FCMOD
+
+public interface FCIBlockFluidSource
+{
+	/*
+	 * Returns the height level of the source (0 to 8) if a valid source for the fluid block, -1 otherwise
+	 */
+	public int IsSourceToFluidBlockAtFacing( World world, int i, int j, int k, int iFacing  );
+}```
+
+### FCIBlockMechanical
+```java
+package net.minecraft.src.btw.api;
+
+import net.minecraft.src.*;
+import net.minecraft.src.btw.core.*;
+import net.minecraft.src.btw.block.decoration.*;
+import net.minecraft.src.btw.block.terrain.*;
+import net.minecraft.src.btw.block.container.*;
+import net.minecraft.src.btw.block.mechanical.*;
+import net.minecraft.src.btw.block.redstone.*;
+import net.minecraft.src.btw.block.nature.*;
+import net.minecraft.src.btw.block.fire.*;
+import net.minecraft.src.btw.block.fluid.*;
+import net.minecraft.src.btw.block.misc.*;
+import net.minecraft.src.btw.item.itemblock.*;
+import net.minecraft.src.btw.item.food.*;
+import net.minecraft.src.btw.item.tool.*;
+import net.minecraft.src.btw.item.armor.*;
+import net.minecraft.src.btw.item.weapon.*;
+import net.minecraft.src.btw.item.misc.*;
+import net.minecraft.src.btw.entity.ai.*;
+import net.minecraft.src.btw.entity.mob.*;
+import net.minecraft.src.btw.entity.spawn.*;
+import net.minecraft.src.btw.crafting.recipe.*;
+import net.minecraft.src.btw.crafting.container.*;
+import net.minecraft.src.btw.tileentity.*;
+import net.minecraft.src.btw.api.*;
+import net.minecraft.src.btw.util.*;
+import net.minecraft.src.btw.world.*;
+import net.minecraft.src.btw.behavior.*;
+import net.minecraft.src.btw.properties.*;
+import net.minecraft.src.btw.model.*;
+import net.minecraft.src.btw.command.*;
+
+// FCMOD
+
+public interface FCIBlockMechanical
+{
+	public boolean CanOutputMechanicalPower();
+	
+	public boolean CanInputMechanicalPower();
+	
+	public boolean IsInputtingMechanicalPower( World world, int i, int j, int k );
+	
+	public boolean IsOutputtingMechanicalPower( World world, int i, int j, int k );
+	
+	public boolean CanInputAxlePowerToFacing( World world, int i, int j, int k, int iFacing );
+	
+	public void Overpower( World world, int i, int j, int k );
+}```
+
+### FCIEntityIgnoreServerValidation
+```java
+package net.minecraft.src.btw.api;
+
+import net.minecraft.src.*;
+import net.minecraft.src.btw.core.*;
+import net.minecraft.src.btw.block.decoration.*;
+import net.minecraft.src.btw.block.terrain.*;
+import net.minecraft.src.btw.block.container.*;
+import net.minecraft.src.btw.block.mechanical.*;
+import net.minecraft.src.btw.block.redstone.*;
+import net.minecraft.src.btw.block.nature.*;
+import net.minecraft.src.btw.block.fire.*;
+import net.minecraft.src.btw.block.fluid.*;
+import net.minecraft.src.btw.block.misc.*;
+import net.minecraft.src.btw.item.itemblock.*;
+import net.minecraft.src.btw.item.food.*;
+import net.minecraft.src.btw.item.tool.*;
+import net.minecraft.src.btw.item.armor.*;
+import net.minecraft.src.btw.item.weapon.*;
+import net.minecraft.src.btw.item.misc.*;
+import net.minecraft.src.btw.entity.ai.*;
+import net.minecraft.src.btw.entity.mob.*;
+import net.minecraft.src.btw.entity.spawn.*;
+import net.minecraft.src.btw.crafting.recipe.*;
+import net.minecraft.src.btw.crafting.container.*;
+import net.minecraft.src.btw.tileentity.*;
+import net.minecraft.src.btw.api.*;
+import net.minecraft.src.btw.util.*;
+import net.minecraft.src.btw.world.*;
+import net.minecraft.src.btw.behavior.*;
+import net.minecraft.src.btw.properties.*;
+import net.minecraft.src.btw.model.*;
+import net.minecraft.src.btw.command.*;
+
+// FCMOD
+
+public interface FCIEntityIgnoreServerValidation
+{
+}```
+
+### FCIEntityPacketHandler
+```java
+package net.minecraft.src.btw.api;
+
+import net.minecraft.src.*;
+import net.minecraft.src.btw.core.*;
+import net.minecraft.src.btw.block.decoration.*;
+import net.minecraft.src.btw.block.terrain.*;
+import net.minecraft.src.btw.block.container.*;
+import net.minecraft.src.btw.block.mechanical.*;
+import net.minecraft.src.btw.block.redstone.*;
+import net.minecraft.src.btw.block.nature.*;
+import net.minecraft.src.btw.block.fire.*;
+import net.minecraft.src.btw.block.fluid.*;
+import net.minecraft.src.btw.block.misc.*;
+import net.minecraft.src.btw.item.itemblock.*;
+import net.minecraft.src.btw.item.food.*;
+import net.minecraft.src.btw.item.tool.*;
+import net.minecraft.src.btw.item.armor.*;
+import net.minecraft.src.btw.item.weapon.*;
+import net.minecraft.src.btw.item.misc.*;
+import net.minecraft.src.btw.entity.ai.*;
+import net.minecraft.src.btw.entity.mob.*;
+import net.minecraft.src.btw.entity.spawn.*;
+import net.minecraft.src.btw.crafting.recipe.*;
+import net.minecraft.src.btw.crafting.container.*;
+import net.minecraft.src.btw.tileentity.*;
+import net.minecraft.src.btw.api.*;
+import net.minecraft.src.btw.util.*;
+import net.minecraft.src.btw.world.*;
+import net.minecraft.src.btw.behavior.*;
+import net.minecraft.src.btw.properties.*;
+import net.minecraft.src.btw.model.*;
+import net.minecraft.src.btw.command.*;
+
+// FCMOD
+
+public interface FCIEntityPacketHandler
+{
+	/*
+	 *  NOTE: Don't forget to add the entity into NetClientHandler!!! 
+	 */
+	
+	/* 
+	 * hook into EntityTrackerEntry getPacketForThisEntity() to get the packet sent from the server when this entity spawns
+	 */ 
+    public Packet GetSpawnPacketForThisEntity();
+    
+    public int GetTrackerViewDistance();
+    
+    public int GetTrackerUpdateFrequency();
+
+    public boolean GetTrackMotion();
+
+    /*
+     * Partially disables server-side visibility tests for interacting with an entity
+     */
+    public boolean ShouldServerTreatAsOversized();
+}```
+
+### FCITileEntityDataPacketHandler
+```java
+package net.minecraft.src.btw.api;
+
+import net.minecraft.src.*;
+import net.minecraft.src.btw.core.*;
+import net.minecraft.src.btw.block.decoration.*;
+import net.minecraft.src.btw.block.terrain.*;
+import net.minecraft.src.btw.block.container.*;
+import net.minecraft.src.btw.block.mechanical.*;
+import net.minecraft.src.btw.block.redstone.*;
+import net.minecraft.src.btw.block.nature.*;
+import net.minecraft.src.btw.block.fire.*;
+import net.minecraft.src.btw.block.fluid.*;
+import net.minecraft.src.btw.block.misc.*;
+import net.minecraft.src.btw.item.itemblock.*;
+import net.minecraft.src.btw.item.food.*;
+import net.minecraft.src.btw.item.tool.*;
+import net.minecraft.src.btw.item.armor.*;
+import net.minecraft.src.btw.item.weapon.*;
+import net.minecraft.src.btw.item.misc.*;
+import net.minecraft.src.btw.entity.ai.*;
+import net.minecraft.src.btw.entity.mob.*;
+import net.minecraft.src.btw.entity.spawn.*;
+import net.minecraft.src.btw.crafting.recipe.*;
+import net.minecraft.src.btw.crafting.container.*;
+import net.minecraft.src.btw.tileentity.*;
+import net.minecraft.src.btw.api.*;
+import net.minecraft.src.btw.util.*;
+import net.minecraft.src.btw.world.*;
+import net.minecraft.src.btw.behavior.*;
+import net.minecraft.src.btw.properties.*;
+import net.minecraft.src.btw.model.*;
+import net.minecraft.src.btw.command.*;
+
+// FCMOD
+
+public interface FCITileEntityDataPacketHandler
+{
+    public void readNBTFromPacket( NBTTagCompound nbttagcompound );
+}```
+
+## 7. FCAddOn.java
+```java
+```
+
+## 8. FCAddOnHandler.java
+```java
+```
+
+## 9. External Imports
+```
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
+import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.logging.FileHandler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL11; // client only
+import org.lwjgl.opengl.GL11; //client only
+import org.lwjgl.opengl.GL12;
+```
+
+## 10. Vanilla Static Member Access
+```
+Block.AdjustMetadataForPistonMove
+Block.AttempToSpreadGrassToBlock
+Block.AttempToSpreadMyceliumToBlock
+Block.AttemptToApplyFertilizerTo
+Block.Block
+Block.BreakAxle
+Block.CanBeCrushedByFallingEntity
+Block.CanBlockBePushedByPiston
+Block.CanRotateAroundBlockOnTurntableToFacing
+Block.CanRotateOnTurntable
+Block.CanTransmitRotationHorizontallyOnTurntable
+Block.CanTransmitRotationVerticallyOnTurntable
+Block.ConvertToSmouldering
+Block.CreateHomePortalCentredOn
+Block.CreateLensBeamFromBlock
+Block.CycleFacing
+Block.DoesBenchHaveLeg
+Block.DoesBlockBreakSaw
+Block.DoesBlockDropAsItemOnSaw
+Block.DoesBlockHopperEject
+Block.DoesBlockHopperInsert
+Block.DoesInfiniteBurnToFacing
+Block.DoesTableHaveLeg
+Block.DropItemsOnDestroyedByExplosion
+Block.FullyValidateBlock
+Block.GetAxisAlignment
+Block.GetCanBeSetOnFireDirectly
+Block.GetCanBeSetOnFireDirectlyByItem
+Block.GetCanBlightSpreadToBlock
+Block.GetCanBlockBeIncinerated
+Block.GetCanBlockLightItemOnFire
+Block.GetCookLevel
+Block.GetCurrentGrindingType
+Block.GetExtendsAlongFacing
+Block.GetExtendsAlongOtherFacing
+Block.GetFacing
+Block.GetFulBlockBoundingBoxFromPool
+Block.GetFurnaceBurnTime
+Block.GetIsMechanicalOn
+Block.GetIsUpsideDown
+Block.GetItemIDDroppedOnSaw
+Block.GetMechanicalPowerLevelProvidedToAxleAtFacing
+Block.GetMechanicallyPoweredFlag
+Block.GetNewMetadataRotatedAroundBlockOnTurntableToFacing
+Block.GetOppositeFacing
+Block.GetPistonShovelEjectDirection
+Block.GetPowerLevel
+Block.GetStackRetrievedByBlockDispenser
+Block.GetSubtype
+Block.GetTiltFacing
+Block.Grow
+Block.GrowLeaves
+Block.HasContactPointToFullFace
+Block.HasContactPointToSlabSideFace
+Block.HasContactPointToStairNarrowVerticalFace
+Block.HasContactPointToStairShapedFace
+Block.HasMortar
+Block.HasValidLensSource
+Block.InstallationIntegrityTest
+Block.IsAirBlock
+Block.IsAxleOrientedTowardsFacing
+Block.IsBlockDestroyedByBlockDispenser
+Block.IsDetectorLogicFlagOn
+Block.IsEntityCollidingFlagOn
+Block.IsGearBoxOn
+Block.IsGroundCover
+Block.IsLit
+Block.IsLitFlagOn
+Block.IsMaster
+Block.IsSourceToFluidBlockAtFacing
+Block.IsStickyToSnow
+Block.IsValidSpotForHomePortalCreation
+Block.MakeTemporaryCopy
+Block.OnBlockSawed
+Block.OnBrokenByPistonPush
+Block.OnCrushedByFallingEntity
+Block.OnFinishedCooking
+Block.OnMortarApplied
+Block.OnPlayerWalksOnBlock
+Block.OnRemovedByBlockDispenser
+Block.OnRotatedAroundBlockOnTurntableToFacing
+Block.PreBlockPlacedBy
+Block.PropagateBeamsThroughBlock
+Block.RemoveLensBeamFromBlock
+Block.RenderAsItemBlock
+Block.RotateFacingAroundJ
+Block.RotateOnTurntable
+Block.SetCookLevel
+Block.SetCurrentGrindingType
+Block.SetExtendsAlongFacing
+Block.SetIsDetectorLogicFlag
+Block.SetIsIntersectionPointFlag
+Block.SetOnFireDirectly
+Block.SetTiltFacing
+Block.ShouldBeProjectingToFacing
+Block.ShouldRenderNeighborHalfSlabSide
+Block.TriggersBuddy
+Block.TurnBeamOffFromBlock
+Block.TurnBeamOnFromBlock
+Block.anvil
+Block.beacon
+Block.bedrock
+Block.blockClay
+Block.blockDiamond
+Block.blockEmerald
+Block.blockGold
+Block.blockHardness
+Block.blockID
+Block.blockIron
+Block.blockLapis
+Block.blockMaterial
+Block.blockNetherQuartz
+Block.blockResistance
+Block.blockSnow
+Block.blocksList
+Block.bookShelf
+Block.breakBlock
+Block.brick
+Block.cactus
+Block.canCollideCheck
+Block.canPlaceBlockAt
+Block.carrot
+Block.chest
+Block.chestTrapped
+Block.class
+Block.cloth
+Block.cobblestone
+Block.cobblestoneMossy
+Block.cocoaPlant
+Block.collisionRayTrace
+Block.crops
+Block.daylightSensor
+Block.dirt
+Block.dispenser
+Block.doorWood
+Block.dropBlockAsItem
+Block.dropBlockAsItem_do
+Block.dropper
+Block.enchantmentTable
+Block.endPortal
+Block.endPortalFrame
+Block.fence
+Block.fenceGate
+Block.fenceIron
+Block.fire
+Block.furnaceBurning
+Block.furnaceIdle
+Block.getBlockBrightness
+Block.getBlockTextureFromSide
+Block.getCollisionBoundingBoxFromPool
+Block.getExplosionResistance
+Block.getIcon
+Block.getMixedBrightnessForBlock
+Block.getMobilityFlag
+Block.getRenderBlockPass
+Block.getSelectedBoundingBoxFromPool
+Block.glass
+Block.glowStone
+Block.grass
+Block.gravel
+Block.hopperBlock
+Block.ice
+Block.isCollidable
+Block.java
+Block.jukebox
+Block.ladder
+Block.lavaMoving
+Block.lavaStill
+Block.leaves
+Block.lever
+Block.lightOpacity
+Block.lightValue
+Block.melon
+Block.melonStem
+Block.mushroomBrown
+Block.mushroomRed
+Block.music
+Block.mycelium
+Block.netherBrick
+Block.netherFence
+Block.netherStalk
+Block.netherrack
+Block.obsidian
+Block.onBlockActivated
+Block.onBlockAdded
+Block.onBlockClicked
+Block.onBlockDestroyedByExplosion
+Block.onBlockDestroyedByPlayer
+Block.onBlockPlaced
+Block.onBlockPlacedBy
+Block.onEntityWalking
+Block.onNeighborBlockChange
+Block.onPostBlockPlaced
+Block.opaqueCubeLookup
+Block.oreCoal
+Block.oreDiamond
+Block.oreEmerald
+Block.oreGold
+Block.oreIron
+Block.oreLapis
+Block.oreNetherQuartz
+Block.oreRedstone
+Block.oreRedstoneGlowing
+Block.pistonBase
+Block.pistonExtension
+Block.pistonMoving
+Block.pistonStickyBase
+Block.planks
+Block.plantRed
+Block.plantYellow
+Block.portal
+Block.potato
+Block.pressurePlateGold
+Block.pressurePlateIron
+Block.pressurePlatePlanks
+Block.pressurePlateStone
+Block.pumpkin
+Block.pumpkinLantern
+Block.pumpkinStem
+Block.rail
+Block.railActivator
+Block.railDetector
+Block.railPowered
+Block.randomDisplayTick
+Block.redstoneLampActive
+Block.redstoneLampIdle
+Block.redstoneRepeaterIdle
+Block.redstoneWire
+Block.sand
+Block.sandStone
+Block.sapling
+Block.signPost
+Block.signWall
+Block.silverfish
+Block.skull
+Block.slowSand
+Block.snow
+Block.soundClothFootstep
+Block.soundGlassFootstep
+Block.soundGrassFootstep
+Block.soundMetalFootstep
+Block.soundSandFootstep
+Block.soundStoneFootstep
+Block.soundWoodFootstep
+Block.stairsBrick
+Block.stairsCobblestone
+Block.stairsNetherBrick
+Block.stairsNetherQuartz
+Block.stairsSandStone
+Block.stairsStoneBrick
+Block.stairsWoodBirch
+Block.stairsWoodJungle
+Block.stairsWoodOak
+Block.stairsWoodSpruce
+Block.stepSound
+Block.stone
+Block.stoneBrick
+Block.stoneButton
+Block.stoneDoubleSlab
+Block.stoneSingleSlab
+Block.tallGrass
+Block.thinGlass
+Block.tickRate
+Block.tilledField
+Block.tnt
+Block.torchRedstoneActive
+Block.torchWood
+Block.trapdoor
+Block.tripWire
+Block.tripWireSource
+Block.updateFurnaceBlockState
+Block.updateTick
+Block.useNeighborBrightness
+Block.velocityToAddToEntity
+Block.vine
+Block.waterMoving
+Block.waterStill
+Block.waterlily
+Block.web
+Block.whiteStone
+Block.wood
+Block.woodDoubleSlab
+Block.woodSingleSlab
+Block.woodenButton
+Block.workbench
+CraftingManager.getInstance
+CreativeTabs.tabBlock
+CreativeTabs.tabBrewing
+CreativeTabs.tabCombat
+CreativeTabs.tabDecorations
+CreativeTabs.tabFood
+CreativeTabs.tabMaterials
+CreativeTabs.tabMisc
+CreativeTabs.tabRedstone
+CreativeTabs.tabTools
+CreativeTabs.tabTransport
+DamageSource.cactus
+DamageSource.causeMobDamage
+DamageSource.causePlayerDamage
+DamageSource.causeThrownDamage
+DamageSource.drown
+DamageSource.fall
+DamageSource.fallingBlock
+DamageSource.generic
+DamageSource.inWall
+DamageSource.magic
+DamageSource.onFire
+DamageSource.setExplosionSource
+Enchantment.aquaAffinity
+Enchantment.baneOfArthropods
+Enchantment.blastProtection
+Enchantment.enchantmentsList
+Enchantment.featherFalling
+Enchantment.field_92090_c
+Enchantment.fireAspect
+Enchantment.fireProtection
+Enchantment.flame
+Enchantment.fortune
+Enchantment.getMaxLevel
+Enchantment.getMinLevel
+Enchantment.infinity
+Enchantment.knockback
+Enchantment.looting
+Enchantment.power
+Enchantment.projectileProtection
+Enchantment.protection
+Enchantment.punch
+Enchantment.respiration
+Enchantment.sharpness
+Enchantment.silkTouch
+Enchantment.smite
+Enchantment.unbreaking
+Entity.AddBurnTime
+Entity.AddCookStack
+Entity.AttemptToAddFuel
+Entity.AttemptToAddSingleItemFromStack
+Entity.AttemptToLight
+Entity.EjectContents
+Entity.GetBlockID
+Entity.GetBlockMetadata
+Entity.GetCanBeHeadCrabbed
+Entity.GetContainedRegularExperience
+Entity.GetContainedTotalExperience
+Entity.GetCookStack
+Entity.GetDryTime
+Entity.GetHeadCrabSharedAttackTarget
+Entity.GetIsCooking
+Entity.GetIsFoodBurning
+Entity.GetLocalEnderChestInventory
+Entity.GetSpitStack
+Entity.GetSpreadDist
+Entity.GetStorageStack
+Entity.GetTicksForChildToGrow
+Entity.GetToolStack
+Entity.GetVisualExperienceLevel
+Entity.GetVisualFuelLevel
+Entity.GivePlayerCookStack
+Entity.HasHeadCrabbedSquid
+Entity.HasValidFuel
+Entity.IsAffectedByMovementModifiers
+Entity.IsCooking
+Entity.IsImmuneToHeadCrabDamage
+Entity.MoveTowards
+Entity.NotifyOfWolfHowl
+Entity.OnFirstLit
+Entity.OnFlungBySquidTentacle
+Entity.OnKickedByCow
+Entity.OnStruckByLightning
+Entity.ReplaceVanillaMapping
+Entity.SetContainedRegularExperience
+Entity.SetCookStack
+Entity.SetDryTime
+Entity.SetPowerState
+Entity.SetSpitStack
+Entity.SetSpreadDist
+Entity.SetStorageStack
+Entity.SetToolStack
+Entity.StartClosingServerSide
+Entity.addMapping
+Entity.addPotionEffect
+Entity.attackEntityFrom
+Entity.boundingBox
+Entity.canBePushed
+Entity.catchFish
+Entity.class
+Entity.closeChest
+Entity.delayBeforeCanPickup
+Entity.entityId
+Entity.func_92059_d
+Entity.getCookProgressScaled
+Entity.getDescriptionPacket
+Entity.getDistanceSq
+Entity.getEntityItem
+Entity.getEyeHeight
+Entity.getLevels
+Entity.getMinecartType
+Entity.getNavigator
+Entity.getPistonOrientation
+Entity.getProgress
+Entity.getRNG
+Entity.getSizeInventory
+Entity.getStoredBlockID
+Entity.heal
+Entity.iNextSlotIndexToDispense
+Entity.isAirBorne
+Entity.isCollidedHorizontally
+Entity.isDead
+Entity.isEntityAlive
+Entity.isExtending
+Entity.isInvalid
+Entity.isUseableByPlayer
+Entity.java
+Entity.m_bClosing
+Entity.m_bPlayerNear
+Entity.m_fLidOpenRatio
+Entity.m_iBurnTimeCountdown
+Entity.m_iContainedXPCount
+Entity.m_iMaxContainedExperience
+Entity.m_iMechanicalPowerIndicator
+Entity.m_iScaledCookCounter
+Entity.m_sStorageSlotsOccupied
+Entity.motionX
+Entity.motionY
+Entity.motionZ
+Entity.mountEntity
+Entity.onGround
+Entity.onInventoryChanged
+Entity.openChest
+Entity.particleScale
+Entity.posX
+Entity.posY
+Entity.posZ
+Entity.riddenByEntity
+Entity.ridingEntity
+Entity.rotationPitch
+Entity.rotationYaw
+Entity.setBeenAttacked
+Entity.setDead
+Entity.setFire
+Entity.setGrowingAge
+Entity.setInventorySlotContents
+Entity.setLocationAndAngles
+Entity.setPosition
+Entity.setRBGColorF
+Entity.validate
+Entity.worldObj
+Entity.xCoord
+Entity.yCoord
+Entity.zCoord
+EntityList.AddMapping
+EntityList.ReplaceExistingMapping
+EntityList.iterator
+EnumAction.block
+EnumAction.drink
+EnumAction.miscUse
+EnumArmorMaterial.CHAIN
+EnumArmorMaterial.CLOTH
+EnumArmorMaterial.DIAMOND
+EnumArmorMaterial.GOLD
+EnumArmorMaterial.IRON
+EnumCreatureType.monster
+EnumToolMaterial.IRON
+EnumToolMaterial.SOULFORGED_STEEL
+EnumToolMaterial.STONE
+EnumToolMaterial.WOOD
+EnumToolMaterial.getDamageVsEntity
+EnumToolMaterial.getEfficiencyOnProperMaterial
+EnumToolMaterial.getMaxUses
+FurnaceRecipes.smelting
+Item.AddBox
+Item.CanItemPassIfFilter
+Item.CanTransformItemIfFilter
+Item.DropSingleItemAsIfBlockHarvested
+Item.DropStackAsIfBlockHarvested
+Item.EjectSingleItemWithRandomOffset
+Item.EjectSingleItemWithRandomVelocity
+Item.EjectStackFromBlockTowardsFacing
+Item.EjectStackWithRandomOffset
+Item.EjectStackWithRandomVelocity
+Item.GetHopperFilterIcon
+Item.GetVisualHorizontalOffsetAsBlock
+Item.GetVisualRollOffsetAsBlock
+Item.GetVisualVerticalOffsetAsBlock
+Item.GivePlayerStackOrEject
+Item.GivePlayerStackOrEjectFavorEmptyHand
+Item.GivePlayerStackOrEjectFromTowardsFacing
+Item.InstallationIntegrityTestEntityItem
+Item.IsWolfFood
+Item.RenderAsItemBlock
+Item.appleRed
+Item.arrow
+Item.axeDiamond
+Item.axeGold
+Item.axeIron
+Item.axeStone
+Item.axeWood
+Item.bakedPotato
+Item.bed
+Item.beefCooked
+Item.beefRaw
+Item.blazePowder
+Item.blazeRod
+Item.boat
+Item.bone
+Item.book
+Item.bootsChain
+Item.bootsDiamond
+Item.bootsGold
+Item.bootsIron
+Item.bootsLeather
+Item.boundingBox
+Item.bow
+Item.bowlEmpty
+Item.bowlSoup
+Item.bread
+Item.brewingStand
+Item.brick
+Item.bucketEmpty
+Item.bucketLava
+Item.bucketMilk
+Item.bucketWater
+Item.cake
+Item.carrot
+Item.cauldron
+Item.chickenCooked
+Item.chickenRaw
+Item.class
+Item.clay
+Item.coal
+Item.comparator
+Item.compass
+Item.cookie
+Item.damageItem
+Item.delayBeforeCanPickup
+Item.diamond
+Item.doorIron
+Item.doorWood
+Item.dyePowder
+Item.egg
+Item.emerald
+Item.emptyMap
+Item.enchantedBook
+Item.enderPearl
+Item.eyeOfEnder
+Item.feather
+Item.fermentedSpiderEye
+Item.fireballCharge
+Item.fishCooked
+Item.fishRaw
+Item.fishingRod
+Item.flint
+Item.flintAndSteel
+Item.flowerPot
+Item.func_82813_b
+Item.getEntityItem
+Item.getItem
+Item.getItemDamage
+Item.getMaxStackSize
+Item.ghastTear
+Item.glassBottle
+Item.goldNugget
+Item.gunpowder
+Item.helmetChain
+Item.helmetDiamond
+Item.helmetGold
+Item.helmetIron
+Item.helmetLeather
+Item.hoeDiamond
+Item.hoeGold
+Item.hoeIron
+Item.hoeStone
+Item.hoeWood
+Item.hoverStart
+Item.ingotGold
+Item.ingotIron
+Item.isDead
+Item.isEntityAlive
+Item.itemFrame
+Item.itemID
+Item.itemsList
+Item.java
+Item.leather
+Item.legsChain
+Item.legsDiamond
+Item.legsGold
+Item.legsIron
+Item.legsLeather
+Item.lightStoneDust
+Item.m_bForceFancyItemRender
+Item.m_bSuppressConflictWarnings
+Item.m_iFilterable_Fine
+Item.m_iFilterable_Narrow
+Item.m_iFilterable_NoProperties
+Item.m_iFilterable_Small
+Item.m_iFilterable_SolidBlock
+Item.m_iFilterable_Thin
+Item.magmaCream
+Item.map
+Item.melon
+Item.melonSeeds
+Item.minecartCrate
+Item.minecartEmpty
+Item.minecartHopper
+Item.minecartPowered
+Item.minecartTnt
+Item.motionX
+Item.motionY
+Item.motionZ
+Item.netherQuartz
+Item.netherStalkSeeds
+Item.netherStar
+Item.painting
+Item.paper
+Item.pickaxeDiamond
+Item.pickaxeGold
+Item.pickaxeIron
+Item.pickaxeStone
+Item.pickaxeWood
+Item.plateChain
+Item.plateDiamond
+Item.plateGold
+Item.plateIron
+Item.plateLeather
+Item.pocketSundial
+Item.porkCooked
+Item.porkRaw
+Item.posX
+Item.posY
+Item.posZ
+Item.potato
+Item.potion
+Item.pumpkinPie
+Item.pumpkinSeeds
+Item.redstone
+Item.redstoneRepeater
+Item.reed
+Item.rottenFlesh
+Item.saddle
+Item.seeds
+Item.setDead
+Item.shears
+Item.shovelDiamond
+Item.shovelGold
+Item.shovelIron
+Item.shovelStone
+Item.shovelWood
+Item.sign
+Item.silk
+Item.skull
+Item.slimeBall
+Item.snowball
+Item.spiderEye
+Item.stackSize
+Item.stick
+Item.sugar
+Item.swordDiamond
+Item.swordGold
+Item.swordIron
+Item.swordStone
+Item.swordWood
+Item.toolMaterial
+Item.wheat
+Item.writableBook
+Item.writtenBook
+Material.GetAxesEfficientOn
+Material.GetAxesTreatAsVegetation
+Material.GetInfernalMaxEnchantmentCost
+Material.GetInfernalMaxNumEnchants
+Material.GetMobsCanSpawnOn
+Material.air
+Material.anvil
+Material.blocksMovement
+Material.circuits
+Material.clay
+Material.cloth
+Material.coral
+Material.craftedSnow
+Material.fire
+Material.getDamageVsEntity
+Material.getEnchantability
+Material.getHarvestLevel
+Material.glass
+Material.grass
+Material.ground
+Material.ice
+Material.iron
+Material.isLiquid
+Material.isOpaque
+Material.isReplaceable
+Material.isSolid
+Material.isToolNotRequired
+Material.lava
+Material.leaves
+Material.plants
+Material.pumpkin
+Material.rock
+Material.sand
+Material.snow
+Material.tnt
+Material.vine
+Material.water
+Material.web
+Material.wood
+Potion.confusion
+Potion.digSpeed
+Potion.fireResistance
+Potion.hunger
+Potion.isSplash
+Potion.nightVision
+Potion.poison
+Potion.regeneration
+Potion.wither
+World.ClearAnyGroundCoverOnBlock
+World.DoesBlockHaveCenterHardpointToFacing
+World.DoesBlockHaveLargeCenterHardpointToFacing
+World.DoesBlockHaveSmallCenterHardpointToFacing
+World.DoesBlockHaveSolidTopSurface
+World.GameProgressHasEndDimensionBeenAccessedServerOnly
+World.GameProgressHasNetherBeenAccessedServerOnly
+World.GameProgressHasWitherBeenSummonedServerOnly
+World.GameProgressSetEndDimensionHasBeenAccessedServerOnly
+World.GameProgressSetNetherBeenAccessedServerOnly
+World.GameProgressSetWitherHasBeenSummonedServerOnly
+World.GetOverworldTimeServerOnly
+World.GetSpawnLocationList
+World.HasNeighborWithMortarInFullFaceContactToFacing
+World.HasNeighborWithMortarInSlabSideContactToFacing
+World.HasNeighborWithMortarInStairNarrowVerticalContactToFacing
+World.HasNeighborWithMortarInStairShapedContactToFacing
+World.HasStickySnowNeighborInFullFaceContactToFacing
+World.HasStickySnowNeighborInSlabSideContactToFacing
+World.InstallationIntegrityTest
+World.IsBlockRestingOnThatBelow
+World.IsGroundCoverOnBlock
+World.IsReplaceableBlock
+World.IsStairBlock
+World.RayTraceBlocksAlwaysHitWaterAndLava
+World.RayTraceBlocksAlwaysHitWaterAndLavaAndFire
+World.SendPacketToAllPlayersTrackingEntity
+World.SendPacketToPlayer
+World.SetBlockMetadataWithNotify
+World.func_82739_e
+World.getBlockId
+World.getBlockMetadata
+World.getMoonPhase
+World.getWorldVec3Pool
+World.isAirBlock
+World.isRemote
+World.loadedEntityList
+World.markBlockRangeForRenderUpdate
+World.notifyBlockChange
+World.playAuxSFXAtEntity
+World.playSoundAtEntity
+World.rand
+World.setBlock
+World.setBlockAndMetadataWithNotify
+World.setEntityState
+World.spawnEntityInWorld
+World.worldInfo
+```
+
+## 11. Access Modifiers Widened in Vanilla
+```
+Block.blockHardness (protected -> public)
+Block.blockResistance (protected -> public)
+Block.blockIcon (protected -> public)
+Block.setHardness/setResistance/setStepSound/setLightValue (protected -> public)
+Block.dropBlockAsItem_do, CanFallIntoBlockAtPos, OnFallingUpdate, ScheduleCheckForFall, RenderCrossHatch (protected -> public)
+Item(int) constructor (protected -> public)
+Item.setPotionEffect, itemIcon (protected -> public)
+Entity.rand, inWater, dealFireDamage, setBeenAttacked, setSize (protected -> public)
+EntityLiving.health, isLivingDead, moveSpeed, jump() (protected -> public)
+EntityCreature.entityToAttack (protected -> public)
+EntityPlayer.foodStats (protected -> public)
+EntityAnimal.m_iGrazeProgressCounter (protected -> public)
+World.worldInfo (protected -> public)
+TileEntity.worldObj (protected -> public)
+Material.setRequiresTool/setBurning/setNoPushMobility/setTranslucent (protected -> public)
+AxisAlignedBB constructor, Vec3.setComponents, DamageSource.setDamageBypassesArmor (protected -> public)
+Potion constructor, Potion.setIconIndex (protected -> public)
+BlockLeavesBase.graphicsLevel, BiomeDecorator.reedGen, StructureStart.boundingBox, EntityFX.particleScale (protected -> public)
+RenderBlocks.RenderStandardFullBlockMovedByPiston (protected -> public)
+BlockLeaves.adjacentTreeBlocks, WorldGenBigTree.basePos/heightLimit/worldObj/otherCoordPairs (package-private -> public)
+WorldGenBigTree methods: genTreeLayer/placeBlockLine/checkBlockLine/generateLeafNodeBases/validTreeLocation (pkg -> public)
+EntityAIAttackOnCollide.attacker, EntityAICreeperSwell.creeperAttackTarget, EntityVillager.villageObj (pkg -> public)
+ModelSquid.squidBody/squidTentacles (package-private -> public)
+CraftingManager.addRecipe/AddShapelessRecipe/AddShapedRecipeWithCustomClass (package-private -> public)
+Packet.addIdClassMapping, ChunkProviderServer.GetCurrentProvider (package-private -> public)
+DispenserBehaviorFilledBucket/Potion/EmptyBucket classes (package-private -> public)
+```
+
+## 12. Registered Block Fields
+```
+public static Block fcAestheticNonOpaque
+public static Block fcAestheticOpaque
+public static Block fcAestheticVegetation
+public static Block fcAnchor
+public static Block fcAnvil
+public static Block fcBellows
+public static Block fcBlockAestheticOpaqueEarth
+public static Block fcBlockArcaneVessel
+public static Block fcBlockAshGroundCover
+public static Block fcBlockAxle
+public static Block fcBlockAxlePowerSource
+public static Block fcBlockBloodLeaves
+public static Block fcBlockBloodMoss
+public static Block fcBlockBoneSlab
+public static Block fcBlockBrickLoose
+public static Block fcBlockBrickLooseSlab
+public static Block fcBlockBrickLooseStairs
+public static Block fcBlockBrickMouldingAndDecorative
+public static Block fcBlockBrickSidingAndCorner
+public static Block fcBlockCandle
+public static Block fcBlockChest
+public static Block fcBlockCobblestoneLoose
+public static Block fcBlockCobblestoneLooseSlab
+public static Block fcBlockCobblestoneLooseStairs
+public static Block fcBlockCookedBrick
+public static Block fcBlockDetector
+public static Block fcBlockDetectorGlowingLogic
+public static Block fcBlockDetectorLogic
+public static Block fcBlockDetectorRailSoulforgedSteel
+public static Block fcBlockDirtLoose
+public static Block fcBlockDirtLooseSlab
+public static Block fcBlockDoorWood
+public static Block fcBlockFarmlandLegacyFertilized
+public static Block fcBlockFireStoked
+public static Block fcBlockFurnaceBrickBurning
+public static Block fcBlockFurnaceBrickIdle
+public static Block fcBlockHempCrop
+public static Block fcBlockLegacySmoothstoneAndOakCorner
+public static Block fcBlockLegacySmoothstoneAndOakSiding
+public static Block fcBlockMiningCharge
+public static Block fcBlockMouldingAndDecorativeBlackStone
+public static Block fcBlockMyceliumSlab
+public static Block fcBlockNetherBrickLoose
+public static Block fcBlockNetherBrickLooseSlab
+public static Block fcBlockNetherBrickLooseStairs
+public static Block fcBlockNetherBrickMouldingAndDecorative
+public static Block fcBlockNetherBrickSidingAndCorner
+public static Block fcBlockPressurePlateSoulforgedSteel
+public static Block fcBlockPumpkinFresh
+public static Block fcBlockRottenFlesh
+public static Block fcBlockRottenFleshSlab
+public static Block fcBlockSandstoneMouldingAndDecorative
+public static Block fcBlockSandstoneSidingAndCorner
+public static Block fcBlockScrewPump
+public static Block fcBlockShaft
+public static Block fcBlockSidingAndCornerBlackStone
+public static Block fcBlockSlabSandAndGravel
+public static Block fcBlockSmoothStoneMouldingAndDecorative
+public static Block fcBlockSmoothStoneSidingAndCorner
+public static Block fcBlockSmoothstoneStairs
+public static Block fcBlockSoulforgeDormant
+public static Block fcBlockStake
+public static Block fcBlockStakeString
+public static Block fcBlockStoneBrickLoose
+public static Block fcBlockStoneBrickLooseSlab
+public static Block fcBlockStoneBrickLooseStairs
+public static Block fcBlockStoneBrickMouldingAndDecorative
+public static Block fcBlockStoneBrickSidingAndCorner
+public static Block fcBlockStoneRough
+public static Block fcBlockStoneRoughDeepStrata
+public static Block fcBlockStoneRoughMidStrata
+public static Block fcBlockTorchFiniteBurning
+public static Block fcBlockTorchFiniteUnlit
+public static Block fcBlockTorchNetherUnlit
+public static Block fcBlockUnfiredClay
+public static Block fcBlockWeb
+public static Block fcBlockWhiteStoneMouldingAndDecorative
+public static Block fcBlockWhiteStoneSidingAndCorner
+public static Block fcBlockWhiteStoneStairs
+public static Block fcBlockWoodBirchMouldingAndDecorative
+public static Block fcBlockWoodBirchSidingAndCorner
+public static Block fcBlockWoodBloodMouldingAndDecorative
+public static Block fcBlockWoodBloodSidingAndCorner
+public static Block fcBlockWoodBloodStairs
+public static Block fcBlockWoodJungleMouldingAndDecorative
+public static Block fcBlockWoodJungleSidingAndCorner
+public static Block fcBlockWoodOakMouldingAndDecorative
+public static Block fcBlockWoodOakSidingAndCorner
+public static Block fcBlockWoodSpruceMouldingAndDecorative
+public static Block fcBlockWoodSpruceSidingAndCorner
+public static Block fcBlockWoolSlabTop
+public static Block fcBlockWorkStump
+public static Block fcBlockWorkbench
+public static Block fcBloodWood
+public static Block fcBuddyBlock
+public static Block fcCauldron
+public static Block fcCement
+public static Block fcCompanionCube
+public static Block fcCrucible
+public static Block fcDetectorRailWood
+public static Block fcHandCrank
+public static Block fcHopper
+public static Block fcInfernalEnchanter
+public static Block fcLens
+public static Block fcLightBulbOff
+public static Block fcLightBulbOn
+public static Block fcMillStone
+public static Block fcPlanter
+public static Block fcPlatform
+public static Block fcPulley
+public static Block fcRopeBlock
+public static Block fcSaw
+public static Block fcSoulforgedSteelBlock
+public static Block fcTurntable
+public static Block fcUnfiredPottery
+public static Block fcVase
+public static Block fcWoolSlab
+public static FCBlockBBQ fcBBQ
+public static FCBlockBasketWicker fcBlockBasketWicker
+public static FCBlockBlockDispenser fcBlockDispenser
+public static FCBlockBucket fcBlockBucketEmpty
+public static FCBlockBucketCement fcBlockBucketCement
+public static FCBlockBucketMilk fcBlockBucketMilk
+public static FCBlockBucketMilkChocolate fcBlockBucketMilkChocolate
+public static FCBlockBucketWater fcBlockBucketWater
+public static FCBlockCampfire fcBlockCampfireLarge
+public static FCBlockCampfire fcBlockCampfireMedium
+public static FCBlockCampfire fcBlockCampfireSmall
+public static FCBlockCampfire fcBlockCampfireUnlit
+public static FCBlockChunkOreGold fcBlockChunkOreGold
+public static FCBlockChunkOreIron fcBlockChunkOreIron
+public static FCBlockChunkOreStorageGold fcBlockChunkOreStorageGold
+public static FCBlockChunkOreStorageIron fcBlockChunkOreStorageIron
+public static FCBlockCreeperOysters fcBlockCreeperOysters
+public static FCBlockCreeperOystersSlab fcBlockCreeperOystersSlab
+public static FCBlockDirtSlab fcBlockDirtSlab
+public static FCBlockFarmland fcBlockFarmland
+public static FCBlockFarmlandFertilized fcBlockFarmlandFertilized
+public static FCBlockGearBox fcBlockGearBox
+public static FCBlockGrate fcBlockGrate
+public static FCBlockHamper fcBlockHamper
+public static FCBlockKiln fcKiln
+public static FCBlockLadder fcBlockLadder
+public static FCBlockLadderOnFire fcBlockLadderOnFire
+public static FCBlockLavaPillow fcBlockLavaPillow
+public static FCBlockLightningRod fcBlockLightningRod
+public static FCBlockLogDamaged fcBlockLogDamaged
+public static FCBlockLogSmouldering fcBlockLogSmouldering
+public static FCBlockLogSpike fcBlockLogSpike
+public static FCBlockMilk fcBlockMilk
+public static FCBlockMilkChocolate fcBlockMilkChocolate
+public static FCBlockMushroomCap fcBlockMushroomCapBrown
+public static FCBlockMushroomCap fcBlockMushroomCapRed
+public static FCBlockNetherrackFalling fcBlockNetherrackFalling
+public static FCBlockPlanterSoil fcBlockPlanterSoil
+public static FCBlockRedstoneClutch fcBlockRedstoneClutch
+public static FCBlockShovel fcBlockShovel
+public static FCBlockSlats fcBlockSlats
+public static FCBlockSnowLoose fcBlockSnowLoose
+public static FCBlockSnowLooseSlab fcBlockSnowLooseSlab
+public static FCBlockSnowSolid fcBlockSnowSolid
+public static FCBlockSnowSolidSlab fcBlockSnowSolidSlab
+public static FCBlockSpike fcBlockSpikeIron
+public static FCBlockStumpCharred fcBlockStumpCharred
+public static FCBlockToolPlaced fcBlockToolPlaced
+public static FCBlockTorchNetherBurning fcBlockTorchNetherBurning
+public static FCBlockUnfiredBrick fcBlockUnfiredBrick
+public static FCBlockWeeds fcBlockWeeds
+public static FCBlockWheatCrop fcBlockWheatCrop
+public static FCBlockWheatCropTop fcBlockWheatCropTop
+public static FCBlockWicker fcBlockWicker
+public static FCBlockWickerPane fcBlockWickerPane
+public static FCBlockWickerSlab fcBlockWickerSlab
+public static FCBlockWoodCinders fcBlockWoodCinders
+```
+
+## 13. Registered Item Fields
+```
+public static Item fcItemAncientProphecy
+public static Item fcItemArcaneScroll
+public static Item fcItemArmorGimpBoots
+public static Item fcItemArmorGimpChest
+public static Item fcItemArmorGimpHelm
+public static Item fcItemArmorGimpLeggings
+public static Item fcItemArmorPaddedBoots
+public static Item fcItemArmorPaddedChest
+public static Item fcItemArmorPaddedHelm
+public static Item fcItemArmorPaddedLeggings
+public static Item fcItemArmorPlate
+public static Item fcItemArmorTannedBoots
+public static Item fcItemArmorTannedChest
+public static Item fcItemArmorTannedHelm
+public static Item fcItemArmorTannedLeggings
+public static Item fcItemArmorWoolBoots
+public static Item fcItemArmorWoolChest
+public static Item fcItemArmorWoolHelm
+public static Item fcItemArmorWoolLeggings
+public static Item fcItemBark
+public static Item fcItemBatWing
+public static Item fcItemBattleAxe
+public static Item fcItemBeastLiverCooked
+public static Item fcItemBeastLiverRaw
+public static Item fcItemBelt
+public static Item fcItemBlastingOil
+public static Item fcItemBloodMossSpores
+public static Item fcItemBoiledPotato
+public static Item fcItemBreadDough
+public static Item fcItemBreedingHarness
+public static Item fcItemBrickUnfired
+public static Item fcItemBrimstone
+public static Item fcItemBroadheadArrow
+public static Item fcItemBroadheadArrowhead
+public static Item fcItemBucketCement
+public static Item fcItemBucketMilkChocolate
+public static Item fcItemCandle
+public static Item fcItemCanvas
+public static Item fcItemCarvingBone
+public static Item fcItemChickenFeed
+public static Item fcItemChickenSoup
+public static Item fcItemChiselIron
+public static Item fcItemChiselStone
+public static Item fcItemChiselWood
+public static Item fcItemChocolate
+public static Item fcItemChunkGoldOre
+public static Item fcItemChunkIronOre
+public static Item fcItemClubBone
+public static Item fcItemClubWood
+public static Item fcItemCoalDust
+public static Item fcItemCocoaBeans
+public static Item fcItemCompositeBow
+public static Item fcItemConcentratedHellfire
+public static Item fcItemCookedCarrot
+public static Item fcItemCookedKebab
+public static Item fcItemCookedMushroomOmelet
+public static Item fcItemCookedMysteryMeat
+public static Item fcItemCookedScrambledEggs
+public static Item fcItemCreeperOysters
+public static Item fcItemDogFood
+public static Item fcItemDonut
+public static Item fcItemDung
+public static Item fcItemDynamite
+public static Item fcItemElement
+public static Item fcItemEnderSlag
+public static Item fcItemEnderSpectacles
+public static Item fcItemFilament
+public static Item fcItemFireStarterBow
+public static Item fcItemFireStarterSticks
+public static Item fcItemFishHookBone
+public static Item fcItemFishSoup
+public static Item fcItemFishingRodBaited
+public static Item fcItemFlour
+public static Item fcItemFoulFood
+public static Item fcItemFriedEgg
+public static Item fcItemFuse
+public static Item fcItemGear
+public static Item fcItemGlue
+public static Item fcItemGoldenDung
+public static Item fcItemGrateOld
+public static Item fcItemGroundNetherrack
+public static Item fcItemHaft
+public static Item fcItemHamAndEggs
+public static Item fcItemHardBoiledEgg
+public static Item fcItemHeartyStew
+public static Item fcItemHellfireDust
+public static Item fcItemHemp
+public static Item fcItemHempCloth
+public static Item fcItemHempFibers
+public static Item fcItemHempSeeds
+public static Item fcItemIngotDiamond
+public static Item fcItemKnitting
+public static Item fcItemKnittingNeedles
+public static Item fcItemLeatherCut
+public static Item fcItemMail
+public static Item fcItemMattock
+public static Item fcItemMeatBurned
+public static Item fcItemMeatCured
+public static Item fcItemMetalFragment
+public static Item fcItemMould
+public static Item fcItemMushroomBrown
+public static Item fcItemMushroomRed
+public static Item fcItemMuttonCooked
+public static Item fcItemMuttonRaw
+public static Item fcItemMysteriousGland
+public static Item fcItemNetherBrick
+public static Item fcItemNetherBrickUnfired
+public static Item fcItemNetherSludge
+public static Item fcItemNethercoal
+public static Item fcItemNitre
+public static Item fcItemNuggetIron
+public static Item fcItemNuggetSteel
+public static Item fcItemOcularOfEnder
+public static Item fcItemPadding
+public static Item fcItemPastryUncookedCake
+public static Item fcItemPastryUncookedCookies
+public static Item fcItemPastryUncookedPumpkinPie
+public static Item fcItemPileClay
+public static Item fcItemPileDirt
+public static Item fcItemPileGoldOre
+public static Item fcItemPileGravel
+public static Item fcItemPileIronOre
+public static Item fcItemPileSand
+public static Item fcItemPileSoulSand
+public static Item fcItemPlateBoots
+public static Item fcItemPlateBreastPlate
+public static Item fcItemPlateHelm
+public static Item fcItemPlateLeggings
+public static Item fcItemPolishedLapis
+public static Item fcItemPorkDinner
+public static Item fcItemPotash
+public static Item fcItemRawEgg
+public static Item fcItemRawKebab
+public static Item fcItemRawMushroomOmelet
+public static Item fcItemRawMysteryMeat
+public static Item fcItemRawScrambledEggs
+public static Item fcItemRedstoneLatch
+public static Item fcItemRefinedAxe
+public static Item fcItemRefinedHoe
+public static Item fcItemRefinedPickAxe
+public static Item fcItemRefinedShovel
+public static Item fcItemRefinedSword
+public static Item fcItemRope
+public static Item fcItemRottenArrow
+public static Item fcItemSawDust
+public static Item fcItemScouredLeather
+public static Item fcItemScouredLeatherCut
+public static Item fcItemScrew
+public static Item fcItemSlatsOld
+public static Item fcItemSoap
+public static Item fcItemSoulDust
+public static Item fcItemSoulFlux
+public static Item fcItemSoulUrn
+public static Item fcItemStake
+public static Item fcItemSteakAndPotatoes
+public static Item fcItemSteakDinner
+public static Item fcItemSteel
+public static Item fcItemStone
+public static Item fcItemStoneBrick
+public static Item fcItemStrap
+public static Item fcItemStraw
+public static Item fcItemStumpRemover
+public static Item fcItemTallow
+public static Item fcItemTannedLeather
+public static Item fcItemTannedLeatherCut
+public static Item fcItemTastySandwich
+public static Item fcItemTuningFork
+public static Item fcItemUrn
+public static Item fcItemWaterWheel
+public static Item fcItemWheat
+public static Item fcItemWheatSeeds
+public static Item fcItemWickerPaneOld
+public static Item fcItemWickerPiece
+public static Item fcItemWickerWeaving
+public static Item fcItemWindMill
+public static Item fcItemWindMillBlade
+public static Item fcItemWindMillVertical
+public static Item fcItemWitchWart
+public static Item fcItemWolfCooked
+public static Item fcItemWolfDinner
+public static Item fcItemWolfRaw
+public static Item fcItemWoodBlade
+public static Item fcItemWool
+public static Item fcItemWoolKnit
+```
+
+## 14. Custom Materials
+```
+public static final Material fcMaterialAsh = ( new MaterialLogic( MapColor.stoneColor ) ).setReplaceable().setTranslucent().setRequiresTool().setNoPushMobility();
+public static final Material fcMaterialBasket = ( new Material( MapColor.woodColor ) ).setNoPushMobility();
+public static final Material fcMaterialCandle = ( new MaterialLogic( MapColor.airColor ) ).setNoPushMobility();
+public static final Material fcMaterialCement = ( new FCMaterialCement( MapColor.stoneColor ) );
+public static final Material fcMaterialLog = ( new Material( MapColor.woodColor ) ).setBurning().setRequiresTool().SetMobsCantSpawnOn();
+public static final Material fcMaterialMilk = ( new MaterialLogic( MapColor.snowColor ) ).setReplaceable().setTranslucent().setRequiresTool().setNoPushMobility();
+public static final Material fcMaterialMiscellaneous = new Material( MapColor.dirtColor ); // used for aesthetic blocks to avoid tool dependancies
+public static final Material fcMaterialNaturalClay = ( new Material( MapColor.clayColor ) ).setRequiresTool();
+public static final Material fcMaterialNetherGrowth = ( new FCMaterialNetherGrowth( MapColor.foliageColor ) ).SetMobsCantSpawnOn();    
+public static final Material fcMaterialNetherRock = ( new Material( MapColor.stoneColor ) ).setRequiresTool().SetNetherMobsCanSpawnOn();
+public static final Material fcMaterialPlanks = ( new Material( MapColor.woodColor ) ).setBurning().setRequiresTool().SetMobsCantSpawnOn();
+public static final Material fcMaterialSoulforgedSteel = ( new FCMaterialSoulforgedSteel( MapColor.ironColor ) );
+public static final Material fcMaterialWicker = ( new Material( MapColor.woodColor ) ).setBurning().setRequiresTool().SetAxesEfficientOn();
+```
+
+## 15. Custom Damage Sources
+```
+public class FCDamageSourceCustom extends DamageSource
+```
+
+## 16. Custom Enchantments
+```
+```
+
+## 17. Packet Classes
+```
+public class FCPacket166StartBlockHarvest extends Packet
+```
+
+## 18. Statistics
+```
+FC source files: 1070
+Common: 373
+Client: 378
+Server: 319
+Vanilla patched: 276
+```

@@ -1,0 +1,374 @@
+// patch_vanilla_adapters.gradle
+// ============================================================================
+// Standalone Gradle task that patches ALL vanilla classes to:
+//   1. Implement the appropriate btw.api interface
+//   2. Add getter/setter methods for fields that FC code accesses directly
+//
+// Usage:  gradle patchVanillaAdapters
+// Run AFTER setupVanilla has completed.
+// This script is idempotent — safe to run multiple times.
+// ============================================================================
+
+task patchVanillaAdapters {
+    group = 'setup'
+    description = 'Patches vanilla classes to implement btw.api interfaces and add accessor methods'
+
+    doLast {
+        def clientDir = file('vanilla/client/net/minecraft/src')
+        def serverDir = file('vanilla/server/net/minecraft/src')
+
+        if (!clientDir.exists() && !serverDir.exists()) {
+            throw new GradleException('vanilla/ not found — run setupVanilla first')
+        }
+
+        def dirs = [clientDir, serverDir].findAll { it.exists() }
+
+        // =================================================================
+        // Utility closures
+        // =================================================================
+
+        // Adds an 'implements <iface>' clause to a class declaration.
+        // Handles these forms:
+        //   public class Foo                           -> public class Foo implements IFoo
+        //   public abstract class Foo                  -> public abstract class Foo implements IFoo
+        //   public class Foo extends Bar               -> public class Foo extends Bar implements IFoo
+        //   public abstract class Foo implements IBar  -> public abstract class Foo implements IBar, IFoo
+        //   public class Foo extends Bar implements IBar -> ... implements IBar, IFoo
+        // Also handles Allman-style braces (class decl on one line, { on next).
+        // Also handles comments between class decl and { (e.g. AxisAlignedBB).
+        def addImplements = { File f, String className, String iface ->
+            if (!f.exists()) return
+            def text = f.text
+            // Short-circuit: already has this interface
+            if (text.contains(iface)) return
+
+            // Match the class declaration line containing the class name
+            // We look for the line that starts with public/abstract/final and contains 'class <className>'
+            def classPattern = ~/(?m)(^public\s+(?:abstract\s+)?(?:final\s+)?class\s+${className}\b[^\n]*)/
+            def m = classPattern.matcher(text)
+            if (!m.find()) {
+                logger.warn("  WARN: Could not find class declaration for ${className} in ${f.name}")
+                return
+            }
+            def origDecl = m.group(1)
+
+            String newDecl
+            if (origDecl.contains(' implements ')) {
+                // Already has implements — append our interface
+                newDecl = origDecl + ', ' + iface
+            } else {
+                // No implements clause yet — add one
+                newDecl = origDecl + ' implements ' + iface
+            }
+
+            text = text.replace(origDecl, newDecl)
+            f.text = text
+            logger.lifecycle("  Added 'implements ${iface}' to ${f.name}")
+        }
+
+        // Adds a getter method to a class file if it does not already exist.
+        // The method is inserted right after the opening '{' of the class body.
+        // Parameters:
+        //   f          - the File
+        //   className  - e.g. 'Entity' (used to find the class body opening)
+        //   methodName - e.g. 'getPosX'
+        //   returnType - e.g. 'double'
+        //   fieldExpr  - e.g. 'this.posX' (the expression to return)
+        def addGetter = { File f, String className, String methodName, String returnType, String fieldExpr ->
+            if (!f.exists()) return
+            def text = f.text
+            // Skip if method already exists (check for the method signature)
+            if (text.contains("${returnType} ${methodName}(")) return
+
+            def methodBody = """
+    // --- Api adapter getter ---
+    public ${returnType} ${methodName}()
+    {
+        return ${fieldExpr};
+    }
+"""
+            // Find the opening brace of the class body.
+            // The class declaration may span multiple lines (with comments between decl and {).
+            // Strategy: find the class declaration line, then find the first '{' after it.
+            def classPattern = ~/(?m)(^public\s+(?:abstract\s+)?(?:final\s+)?class\s+${className}\b)/
+            def m = classPattern.matcher(text)
+            if (!m.find()) {
+                logger.warn("  WARN: Could not find class '${className}' in ${f.name} for getter ${methodName}")
+                return
+            }
+            def declEnd = m.end()
+            def braceIdx = text.indexOf('{', declEnd)
+            if (braceIdx < 0) {
+                logger.warn("  WARN: Could not find opening brace for class '${className}' in ${f.name}")
+                return
+            }
+
+            // Insert right after the opening '{'
+            text = text.substring(0, braceIdx + 1) + methodBody + text.substring(braceIdx + 1)
+            f.text = text
+            logger.lifecycle("  Added ${methodName}() to ${f.name}")
+        }
+
+        // Adds a setter method to a class file if it does not already exist.
+        def addSetter = { File f, String className, String methodName, String paramType, String fieldName ->
+            if (!f.exists()) return
+            def text = f.text
+            if (text.contains("void ${methodName}(")) return
+
+            def methodBody = """
+    // --- Api adapter setter ---
+    public void ${methodName}(${paramType} value)
+    {
+        this.${fieldName} = value;
+    }
+"""
+            def classPattern = ~/(?m)(^public\s+(?:abstract\s+)?(?:final\s+)?class\s+${className}\b)/
+            def m = classPattern.matcher(text)
+            if (!m.find()) {
+                logger.warn("  WARN: Could not find class '${className}' in ${f.name} for setter ${methodName}")
+                return
+            }
+            def declEnd = m.end()
+            def braceIdx = text.indexOf('{', declEnd)
+            if (braceIdx < 0) {
+                logger.warn("  WARN: Could not find opening brace for class '${className}' in ${f.name}")
+                return
+            }
+
+            text = text.substring(0, braceIdx + 1) + methodBody + text.substring(braceIdx + 1)
+            f.text = text
+            logger.lifecycle("  Added ${methodName}() to ${f.name}")
+        }
+
+        // =================================================================
+        // Patch each class in both client and server directories
+        // =================================================================
+
+        dirs.each { File srcDir ->
+            def side = srcDir.absolutePath.contains('client') ? 'CLIENT' : 'SERVER'
+            logger.lifecycle("=== Patching ${side} vanilla classes ===")
+
+            // -----------------------------------------------------------------
+            // Block.java — already has implements btw.api.block.IBlock
+            // Add getters for: blockID, blockHardness, blockResistance,
+            //   blockMaterial, lightValue[blockID], lightOpacity[blockID],
+            //   needsRandomTick (getTickRandomly already exists)
+            // -----------------------------------------------------------------
+            def blockFile = new File(srcDir, 'Block.java')
+            logger.lifecycle("Patching Block.java...")
+            addImplements(blockFile, 'Block', 'btw.api.block.IBlock')
+            addGetter(blockFile, 'Block', 'getBlockID', 'int', 'this.blockID')
+            addGetter(blockFile, 'Block', 'getHardness', 'float', 'this.blockHardness')
+            addGetter(blockFile, 'Block', 'getResistance', 'float', 'this.blockResistance')
+            addGetter(blockFile, 'Block', 'getBlockMaterial', 'Material', 'this.blockMaterial')
+            addGetter(blockFile, 'Block', 'getLightValue', 'int', 'lightValue[this.blockID]')
+            addGetter(blockFile, 'Block', 'getLightOpacity', 'int', 'lightOpacity[this.blockID]')
+            // getTickRandomly() already exists in vanilla — skip
+
+            // -----------------------------------------------------------------
+            // Item.java — already has implements btw.api.item.IItem
+            // Add getter for: itemID
+            // -----------------------------------------------------------------
+            def itemFile = new File(srcDir, 'Item.java')
+            logger.lifecycle("Patching Item.java...")
+            addImplements(itemFile, 'Item', 'btw.api.item.IItem')
+            addGetter(itemFile, 'Item', 'getItemID', 'int', 'this.itemID')
+
+            // -----------------------------------------------------------------
+            // ItemStack.java — already has implements btw.api.item.IItemStack
+            // Add getters: getItemID, getStackSize, setStackSize
+            // getItemDamage() already exists in vanilla
+            // -----------------------------------------------------------------
+            def itemStackFile = new File(srcDir, 'ItemStack.java')
+            logger.lifecycle("Patching ItemStack.java...")
+            addImplements(itemStackFile, 'ItemStack', 'btw.api.item.IItemStack')
+            addGetter(itemStackFile, 'ItemStack', 'getItemID', 'int', 'this.itemID')
+            addGetter(itemStackFile, 'ItemStack', 'getStackSize', 'int', 'this.stackSize')
+            addSetter(itemStackFile, 'ItemStack', 'setStackSize', 'int', 'stackSize')
+            // getItemDamage() already exists in vanilla — skip
+
+            // -----------------------------------------------------------------
+            // Material.java — already has implements btw.api.material.IMaterial
+            // No extra getters needed
+            // -----------------------------------------------------------------
+            def materialFile = new File(srcDir, 'Material.java')
+            logger.lifecycle("Patching Material.java...")
+            addImplements(materialFile, 'Material', 'btw.api.material.IMaterial')
+
+            // -----------------------------------------------------------------
+            // Entity.java — NEEDS implements btw.api.entity.IEntity
+            // Add getters/setters for: posX, posY, posZ, motionX, motionY,
+            //   motionZ, rand (getRandom), worldObj (getWorldObj),
+            //   boundingBox (getBoundingBox — already exists),
+            //   rotationYaw, rotationPitch, onGround, isDead,
+            //   width, height, inWater (isInWater — already exists),
+            //   entityId (getEntityId)
+            // -----------------------------------------------------------------
+            def entityFile = new File(srcDir, 'Entity.java')
+            logger.lifecycle("Patching Entity.java...")
+            addImplements(entityFile, 'Entity', 'btw.api.entity.IEntity')
+
+            // Getters
+            addGetter(entityFile, 'Entity', 'getPosX', 'double', 'this.posX')
+            addGetter(entityFile, 'Entity', 'getPosY', 'double', 'this.posY')
+            addGetter(entityFile, 'Entity', 'getPosZ', 'double', 'this.posZ')
+            addGetter(entityFile, 'Entity', 'getMotionX', 'double', 'this.motionX')
+            addGetter(entityFile, 'Entity', 'getMotionY', 'double', 'this.motionY')
+            addGetter(entityFile, 'Entity', 'getMotionZ', 'double', 'this.motionZ')
+            addGetter(entityFile, 'Entity', 'getRandom', 'Random', 'this.rand')
+            addGetter(entityFile, 'Entity', 'getWorldObj', 'World', 'this.worldObj')
+            // getBoundingBox() already exists in vanilla — skip
+            addGetter(entityFile, 'Entity', 'getRotationYaw', 'float', 'this.rotationYaw')
+            addGetter(entityFile, 'Entity', 'getRotationPitch', 'float', 'this.rotationPitch')
+            addGetter(entityFile, 'Entity', 'isOnGround', 'boolean', 'this.onGround')
+            addGetter(entityFile, 'Entity', 'getIsDead', 'boolean', 'this.isDead')
+            addGetter(entityFile, 'Entity', 'getWidth', 'float', 'this.width')
+            addGetter(entityFile, 'Entity', 'getHeight', 'float', 'this.height')
+            // isInWater() already exists in vanilla — skip
+            addGetter(entityFile, 'Entity', 'getEntityId', 'int', 'this.entityId')
+
+            // Setters
+            addSetter(entityFile, 'Entity', 'setPosX', 'double', 'posX')
+            addSetter(entityFile, 'Entity', 'setPosY', 'double', 'posY')
+            addSetter(entityFile, 'Entity', 'setPosZ', 'double', 'posZ')
+            addSetter(entityFile, 'Entity', 'setMotionX', 'double', 'motionX')
+            addSetter(entityFile, 'Entity', 'setMotionY', 'double', 'motionY')
+            addSetter(entityFile, 'Entity', 'setMotionZ', 'double', 'motionZ')
+            addSetter(entityFile, 'Entity', 'setRotationYaw', 'float', 'rotationYaw')
+            addSetter(entityFile, 'Entity', 'setRotationPitch', 'float', 'rotationPitch')
+
+            // -----------------------------------------------------------------
+            // EntityLiving.java — NEEDS implements btw.api.entity.IEntityLiving
+            // Add getters: health (getHealth already exists), moveSpeed, isLivingDead
+            // -----------------------------------------------------------------
+            def entityLivingFile = new File(srcDir, 'EntityLiving.java')
+            logger.lifecycle("Patching EntityLiving.java...")
+            addImplements(entityLivingFile, 'EntityLiving', 'btw.api.entity.IEntityLiving')
+            // getHealth() already exists in vanilla — skip
+            addGetter(entityLivingFile, 'EntityLiving', 'getMoveSpeed', 'float', 'this.moveSpeed')
+            addGetter(entityLivingFile, 'EntityLiving', 'getIsLivingDead', 'boolean', 'this.isLivingDead')
+
+            // -----------------------------------------------------------------
+            // EntityPlayer.java — NEEDS implements btw.api.entity.IEntityPlayer
+            // Add getters: foodStats (getFoodStats already exists), inventory
+            // -----------------------------------------------------------------
+            def entityPlayerFile = new File(srcDir, 'EntityPlayer.java')
+            logger.lifecycle("Patching EntityPlayer.java...")
+            addImplements(entityPlayerFile, 'EntityPlayer', 'btw.api.entity.IEntityPlayer')
+            // getFoodStats() already exists in vanilla — skip
+            addGetter(entityPlayerFile, 'EntityPlayer', 'getPlayerInventory', 'InventoryPlayer', 'this.inventory')
+
+            // -----------------------------------------------------------------
+            // EntityCreature.java — NEEDS implements btw.api.entity.IEntityCreature
+            // Add getter: entityToAttack (getEntityToAttack already exists)
+            // -----------------------------------------------------------------
+            def entityCreatureFile = new File(srcDir, 'EntityCreature.java')
+            logger.lifecycle("Patching EntityCreature.java...")
+            addImplements(entityCreatureFile, 'EntityCreature', 'btw.api.entity.IEntityCreature')
+            // getEntityToAttack() already exists in vanilla — skip
+
+            // -----------------------------------------------------------------
+            // EntityAnimal.java — NEEDS implements btw.api.entity.IEntityAnimal
+            // No extra getters needed
+            // -----------------------------------------------------------------
+            def entityAnimalFile = new File(srcDir, 'EntityAnimal.java')
+            logger.lifecycle("Patching EntityAnimal.java...")
+            addImplements(entityAnimalFile, 'EntityAnimal', 'btw.api.entity.IEntityAnimal')
+
+            // -----------------------------------------------------------------
+            // World.java — NEEDS implements btw.api.world.IWorld
+            // Already has 'implements IBlockAccess' — will append ', btw.api.world.IWorld'
+            // Add getters: getRandom()→rand, isRemote()→isRemote, getWorldProvider()→provider
+            // -----------------------------------------------------------------
+            def worldFile = new File(srcDir, 'World.java')
+            logger.lifecycle("Patching World.java...")
+            addImplements(worldFile, 'World', 'btw.api.world.IWorld')
+            addGetter(worldFile, 'World', 'getRandom', 'Random', 'this.rand')
+            addGetter(worldFile, 'World', 'getIsRemote', 'boolean', 'this.isRemote')
+            addGetter(worldFile, 'World', 'getWorldProvider', 'WorldProvider', 'this.provider')
+
+            // -----------------------------------------------------------------
+            // TileEntity.java — NEEDS implements btw.api.tileentity.ITileEntity
+            // Add getters: getWorldObj (already exists), getXCoord, getYCoord, getZCoord
+            // -----------------------------------------------------------------
+            def tileEntityFile = new File(srcDir, 'TileEntity.java')
+            logger.lifecycle("Patching TileEntity.java...")
+            addImplements(tileEntityFile, 'TileEntity', 'btw.api.tileentity.ITileEntity')
+            // getWorldObj() already exists in vanilla — skip
+            addGetter(tileEntityFile, 'TileEntity', 'getXCoord', 'int', 'this.xCoord')
+            addGetter(tileEntityFile, 'TileEntity', 'getYCoord', 'int', 'this.yCoord')
+            addGetter(tileEntityFile, 'TileEntity', 'getZCoord', 'int', 'this.zCoord')
+
+            // -----------------------------------------------------------------
+            // AxisAlignedBB.java — NEEDS implements btw.api.util.IAxisAlignedBB
+            // Add getters for: minX, minY, minZ, maxX, maxY, maxZ
+            // -----------------------------------------------------------------
+            def aabbFile = new File(srcDir, 'AxisAlignedBB.java')
+            logger.lifecycle("Patching AxisAlignedBB.java...")
+            addImplements(aabbFile, 'AxisAlignedBB', 'btw.api.util.IAxisAlignedBB')
+            addGetter(aabbFile, 'AxisAlignedBB', 'getMinX', 'double', 'this.minX')
+            addGetter(aabbFile, 'AxisAlignedBB', 'getMinY', 'double', 'this.minY')
+            addGetter(aabbFile, 'AxisAlignedBB', 'getMinZ', 'double', 'this.minZ')
+            addGetter(aabbFile, 'AxisAlignedBB', 'getMaxX', 'double', 'this.maxX')
+            addGetter(aabbFile, 'AxisAlignedBB', 'getMaxY', 'double', 'this.maxY')
+            addGetter(aabbFile, 'AxisAlignedBB', 'getMaxZ', 'double', 'this.maxZ')
+
+            // -----------------------------------------------------------------
+            // Vec3.java — NEEDS implements btw.api.util.IVec3
+            // Add getters for: xCoord, yCoord, zCoord
+            // -----------------------------------------------------------------
+            def vec3File = new File(srcDir, 'Vec3.java')
+            logger.lifecycle("Patching Vec3.java...")
+            addImplements(vec3File, 'Vec3', 'btw.api.util.IVec3')
+            addGetter(vec3File, 'Vec3', 'getXCoord', 'double', 'this.xCoord')
+            addGetter(vec3File, 'Vec3', 'getYCoord', 'double', 'this.yCoord')
+            addGetter(vec3File, 'Vec3', 'getZCoord', 'double', 'this.zCoord')
+
+            // -----------------------------------------------------------------
+            // DamageSource.java — NEEDS implements btw.api.util.IDamageSource
+            // No extra getters needed (interface is a marker or uses existing methods)
+            // -----------------------------------------------------------------
+            def damageSourceFile = new File(srcDir, 'DamageSource.java')
+            logger.lifecycle("Patching DamageSource.java...")
+            addImplements(damageSourceFile, 'DamageSource', 'btw.api.util.IDamageSource')
+
+            // -----------------------------------------------------------------
+            // NBTTagCompound.java — NEEDS implements btw.api.util.INBTTagCompound
+            // No extra getters needed (uses existing NBT methods)
+            // -----------------------------------------------------------------
+            def nbtFile = new File(srcDir, 'NBTTagCompound.java')
+            logger.lifecycle("Patching NBTTagCompound.java...")
+            addImplements(nbtFile, 'NBTTagCompound', 'btw.api.util.INBTTagCompound')
+
+            // -----------------------------------------------------------------
+            // Container.java — NEEDS implements btw.api.crafting.IContainer
+            // No extra getters needed
+            // -----------------------------------------------------------------
+            def containerFile = new File(srcDir, 'Container.java')
+            logger.lifecycle("Patching Container.java...")
+            addImplements(containerFile, 'Container', 'btw.api.crafting.IContainer')
+
+            // -----------------------------------------------------------------
+            // Potion.java — NEEDS implements btw.api.util.IPotion
+            // No extra getters needed
+            // -----------------------------------------------------------------
+            def potionFile = new File(srcDir, 'Potion.java')
+            logger.lifecycle("Patching Potion.java...")
+            addImplements(potionFile, 'Potion', 'btw.api.util.IPotion')
+
+            // -----------------------------------------------------------------
+            // BlockContainer.java — NEEDS implements btw.api.block.IBlockContainer
+            // Already has 'extends Block implements ITileEntityProvider'
+            // Will append ', btw.api.block.IBlockContainer'
+            // No extra getters needed
+            // -----------------------------------------------------------------
+            def blockContainerFile = new File(srcDir, 'BlockContainer.java')
+            logger.lifecycle("Patching BlockContainer.java...")
+            addImplements(blockContainerFile, 'BlockContainer', 'btw.api.block.IBlockContainer')
+
+            logger.lifecycle("=== ${side} patching complete ===")
+        }
+
+        logger.lifecycle('=== All vanilla adapter patches applied ===')
+    }
+}

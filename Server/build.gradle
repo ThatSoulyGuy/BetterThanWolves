@@ -1,0 +1,56 @@
+plugins {
+    id 'java-library'
+}
+
+// Server FC code. Depends on Api + Common ONLY.
+// Vanilla server code will move to MCP backend module.
+
+sourceSets {
+    stubs {
+        java {
+            srcDirs = [
+                "${rootDir}/Common/src/main/java",
+                'src/main/java'
+            ]
+            exclude '**/*.txt'
+        }
+    }
+    main {
+        java.srcDirs = ['src/main/java']
+        compileClasspath += sourceSets.stubs.output
+    }
+}
+
+dependencies {
+    stubsImplementation project(':Api')
+    api project(':Api')
+    api project(':Common')
+}
+
+compileStubsJava.dependsOn ':Api:compileJava'
+compileJava.dependsOn compileStubsJava
+
+jar {
+    archiveBaseName = 'BetterThanWolves-server'
+    from project(':Common').sourceSets.main.output
+    manifest {
+        attributes(
+            'Implementation-Title': 'Better Than Wolves (Server)',
+            'Implementation-Version': version
+        )
+    }
+}
+
+task runServer(type: JavaExec) {
+    group = 'run'
+    description = 'Runs the Minecraft server with BTW'
+    dependsOn classes
+
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'net.minecraft.server.MinecraftServer'
+
+    workingDir = file("${rootDir}/run/server")
+    doFirst { workingDir.mkdirs() }
+    jvmArgs '-Xmx1G', '-Xms512M'
+    standardInput = System.in
+}

@@ -1,0 +1,620 @@
+// Generates Abstract* bridge classes in the Adapter module.
+// These classes sit between vanilla MC classes and FC code, providing
+// a bridge from vanilla-typed method signatures to interface-typed versions.
+//
+// Run: ./gradlew -b generate_abstracts.gradle generateAbstracts
+
+import java.util.regex.Pattern
+import java.util.regex.Matcher
+
+task generateAbstracts {
+    doLast {
+        def projectDir = file('.')
+        def vanillaServer = file('vanilla/server/net/minecraft/src')
+        def vanillaClient = file('vanilla/client/net/minecraft/src')
+        def adapterDir = file('Adapter/src/main/java/btw/adapter')
+
+        // FC source roots to scan for @Override methods
+        def fcSourceRoots = [
+            file('Common/src/main/java'),
+            file('Client/src/main/java'),
+            file('Server/src/main/java'),
+        ]
+
+        // ------------------------------------------------------------------
+        // Type map: vanilla concrete type -> interface type
+        // Only types that have a corresponding I* interface are listed here.
+        // ------------------------------------------------------------------
+        def typeMap = [
+            'World'            : 'IWorld',
+            'Entity'           : 'IEntity',
+            'EntityLiving'     : 'IEntityLiving',
+            'EntityPlayer'     : 'IEntityPlayer',
+            'EntityAnimal'     : 'IEntityAnimal',
+            'EntityCreature'   : 'IEntityCreature',
+            'EntityArrow'      : 'IEntityArrow',
+            'EntityItem'       : 'IEntityItem',
+            'EntityFallingSand': 'IEntityFallingSand',
+            'EntityThrowable'  : 'IEntityThrowable',
+            'ItemStack'        : 'IItemStack',
+            'Block'            : 'IBlock',
+            'Item'             : 'IItem',
+        ]
+
+        // Import map: interface type -> full import
+        def ifaceImports = [
+            'IWorld'             : 'btw.api.world.IWorld',
+            'IEntity'            : 'btw.api.entity.IEntity',
+            'IEntityLiving'      : 'btw.api.entity.IEntityLiving',
+            'IEntityPlayer'      : 'btw.api.entity.IEntityPlayer',
+            'IEntityAnimal'      : 'btw.api.entity.IEntityAnimal',
+            'IEntityCreature'    : 'btw.api.entity.IEntityCreature',
+            'IEntityArrow'       : 'btw.api.entity.IEntityArrow',
+            'IEntityItem'        : 'btw.api.entity.IEntityItem',
+            'IEntityFallingSand' : 'btw.api.entity.IEntityFallingSand',
+            'IEntityThrowable'   : 'btw.api.entity.IEntityThrowable',
+            'IItemStack'         : 'btw.api.item.IItemStack',
+            'IBlock'             : 'btw.api.block.IBlock',
+            'IItem'              : 'btw.api.item.IItem',
+        ]
+
+        // ------------------------------------------------------------------
+        // Interface mapping: vanilla class -> [interfaceName, interfaceImport]
+        // Based on the API interfaces that exist in Api/src
+        // ------------------------------------------------------------------
+        def interfaceMapping = [
+            // Block hierarchy
+            'Block'             : ['IBlock', 'btw.api.block.IBlock'],
+            'BlockContainer'    : ['IBlockContainer', 'btw.api.block.IBlockContainer'],
+            'BlockFlowing'      : ['IBlockFlowing', 'btw.api.block.IBlockFlowing'],
+            // Entity hierarchy
+            'Entity'            : ['IEntity', 'btw.api.entity.IEntity'],
+            'EntityLiving'      : ['IEntityLiving', 'btw.api.entity.IEntityLiving'],
+            'EntityCreature'    : ['IEntityCreature', 'btw.api.entity.IEntityCreature'],
+            'EntityAnimal'      : ['IEntityAnimal', 'btw.api.entity.IEntityAnimal'],
+            'EntityArrow'       : ['IEntityArrow', 'btw.api.entity.IEntityArrow'],
+            'EntityItem'        : ['IEntityItem', 'btw.api.entity.IEntityItem'],
+            'EntityFallingSand' : ['IEntityFallingSand', 'btw.api.entity.IEntityFallingSand'],
+            'EntityThrowable'   : ['IEntityThrowable', 'btw.api.entity.IEntityThrowable'],
+            // Item hierarchy
+            'Item'              : ['IItem', 'btw.api.item.IItem'],
+            'ItemArmor'         : ['IItemArmor', 'btw.api.item.IItemArmor'],
+            'ItemBlock'         : ['IItemBlock', 'btw.api.item.IItemBlock'],
+            'ItemFood'          : ['IItemFood', 'btw.api.item.IItemFood'],
+            'ItemSword'         : ['IItemSword', 'btw.api.item.IItemSword'],
+            // TileEntity
+            'TileEntity'        : ['ITileEntity', 'btw.api.tileentity.ITileEntity'],
+            // Container
+            'Container'         : ['IContainer', 'btw.api.crafting.IContainer'],
+            // Material
+            'Material'          : ['IMaterial', 'btw.api.material.IMaterial'],
+            // Misc with interfaces
+            'DamageSource'      : ['IDamageSource', 'btw.api.util.IDamageSource'],
+            'AxisAlignedBB'     : ['IAxisAlignedBB', 'btw.api.util.IAxisAlignedBB'],
+            'Packet'            : ['IPacket', 'btw.api.network.IPacket'],
+            'BiomeGenBase'      : ['IBiomeGenBase', 'btw.api.world.IBiomeGenBase'],
+            // Client-side
+            'EntityFX'          : ['IEntityFX', 'btw.api.client.IEntityFX'],
+            'GuiContainer'      : ['IGuiContainer', 'btw.api.client.IGuiContainer'],
+            'ModelBase'         : ['IModelBase', 'btw.api.client.IModelBase'],
+            'Render'            : ['IRender', 'btw.api.client.IRender'],
+            'RenderLiving'      : ['IRenderLiving', 'btw.api.client.IRenderLiving'],
+            'TextureStitched'   : ['ITextureStitched', 'btw.api.client.ITextureStitched'],
+            'TileEntitySpecialRenderer' : ['ITileEntitySpecialRenderer', 'btw.api.client.ITileEntitySpecialRenderer'],
+        ]
+
+        // Helper: resolve the parent class of a vanilla class by reading its source
+        def resolveParentClass = { String className ->
+            def sFile = new File(vanillaServer, "${className}.java")
+            if (!sFile.exists()) sFile = new File(vanillaClient, "${className}.java")
+            if (!sFile.exists()) return null
+            def text = sFile.text
+            def m = (text =~ /(?m)^\s*public\s+(?:abstract\s+)?class\s+${className}\s+extends\s+(\w+)/)
+            if (m.find()) return m.group(1)
+            return null
+        }
+
+        // For classes that inherit from a parent with an interface, walk up the
+        // inheritance chain dynamically by reading vanilla source files.
+        def parentInterfaceChain = { String vanillaClass ->
+            def cur = vanillaClass
+            int safety = 0
+            while (cur != null && safety++ < 30) {
+                if (interfaceMapping.containsKey(cur)) {
+                    return interfaceMapping[cur]
+                }
+                cur = resolveParentClass(cur)
+            }
+            return null
+        }
+
+        // ------------------------------------------------------------------
+        // Package mapping: vanilla class name -> adapter subpackage
+        // ------------------------------------------------------------------
+        def getPackage = { String vanillaClass ->
+            // Specific overrides first (before prefix matching)
+            if (vanillaClass == 'EntityFX')                  return 'client'
+            if (vanillaClass == 'GuiContainer')              return 'client'
+            if (vanillaClass == 'TextureStitched')           return 'client'
+            if (vanillaClass == 'TileEntitySpecialRenderer') return 'client'
+            // Prefix-based matching
+            if (vanillaClass.startsWith('Block'))       return 'block'
+            if (vanillaClass.startsWith('Item'))        return 'item'
+            if (vanillaClass.startsWith('Entity'))      return 'entity'
+            if (vanillaClass.startsWith('TileEntity'))  return 'tileentity'
+            if (vanillaClass.startsWith('Container'))   return 'crafting'
+            if (vanillaClass.startsWith('Model'))       return 'client'
+            if (vanillaClass.startsWith('Render'))      return 'client'
+            // Everything else
+            return 'misc'
+        }
+
+        // ------------------------------------------------------------------
+        // Build the full list of vanilla classes that FC code extends
+        // by scanning FC source code
+        // ------------------------------------------------------------------
+        def vanillaClasses = new TreeSet()
+        def extendsPattern = ~/extends\s+([A-Z]\w+)/
+
+        fcSourceRoots.each { root ->
+            if (!root.exists()) return
+            root.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                if (!f.name.endsWith('.java')) return
+                if (!f.exists()) return
+                def text
+                try { text = f.text } catch (Exception e) { return }
+                def m = extendsPattern.matcher(text)
+                while (m.find()) {
+                    def parentClass = m.group(1)
+                    // If FC extends AbstractFoo, the vanilla class is Foo
+                    if (parentClass.startsWith('Abstract')) {
+                        parentClass = parentClass.substring('Abstract'.length())
+                    }
+                    // Check if this parent class exists in vanilla
+                    def serverFile = new File(vanillaServer, "${parentClass}.java")
+                    def clientFile = new File(vanillaClient, "${parentClass}.java")
+                    if (serverFile.exists() || clientFile.exists()) {
+                        vanillaClasses << parentClass
+                    }
+                }
+            }
+        }
+
+        println "Found ${vanillaClasses.size()} vanilla classes that FC code extends"
+        println "Classes: ${vanillaClasses.join(', ')}"
+        println ""
+
+        // ------------------------------------------------------------------
+        // Helper: check if a position in the text is inside a /* ... */ comment block
+        // ------------------------------------------------------------------
+        def isInsideBlockComment = { String text, int pos ->
+            // Find the last /* before this position
+            int lastOpen = text.lastIndexOf('/*', pos)
+            if (lastOpen < 0) return false
+            // Find the first */ after that /*
+            int closeAfterOpen = text.indexOf('*/', lastOpen)
+            // If the close is after our position, we're inside the comment
+            return closeAfterOpen >= 0 && closeAfterOpen > pos
+        }
+
+        // ------------------------------------------------------------------
+        // Helper: Parse constructor signatures from a vanilla source file
+        // Returns list of maps: [params: "int par1, Material par2Material", paramNames: "par1, par2Material"]
+        // ------------------------------------------------------------------
+        def parseConstructors = { File srcFile, String className ->
+            def constructors = []
+            def text = srcFile.text
+            // Match: public ClassName( or protected ClassName(
+            def pattern = ~/(?m)^\s+(?:public|protected)\s+${className}\s*\(([^)]*)\)\s*(?:throws\s+\w+(?:\s*,\s*\w+)*)?\s*\{/
+            def matcher = pattern.matcher(text)
+            while (matcher.find()) {
+                // Skip constructors inside /* ... */ comment blocks
+                if (isInsideBlockComment(text, matcher.start())) continue
+                def rawParams = matcher.group(1).trim()
+                if (rawParams.isEmpty()) {
+                    constructors << [params: '', paramNames: '', paramTypes: []]
+                } else {
+                    // Clean up multi-line
+                    rawParams = rawParams.replaceAll(/\s+/, ' ')
+                    def paramParts = rawParams.split(/\s*,\s*/)
+                    def names = []
+                    def types = []
+                    paramParts.each { p ->
+                        def parts = p.trim().split(/\s+/)
+                        if (parts.length >= 2) {
+                            types << parts[0]
+                            names << parts[1]
+                        }
+                    }
+                    constructors << [
+                        params: rawParams,
+                        paramNames: names.join(', '),
+                        paramTypes: types
+                    ]
+                }
+            }
+            return constructors
+        }
+
+        // ------------------------------------------------------------------
+        // Helper: Parse public non-static non-final method signatures from vanilla source.
+        // Also parses the parent class hierarchy to find inherited methods.
+        // Returns list of maps with: returnType, methodName, paramList
+        // ------------------------------------------------------------------
+        def parseMethods
+        parseMethods = { File srcFile, String className ->
+            def methods = []
+            def text = srcFile.text
+            // Match public methods that are not static and not final
+            def pattern = ~/(?m)^\s+public\s+(?!static\b)(?!final\b)(?!class\b)(\S+)\s+(\w+)\s*\(([^)]*)\)\s*(?:throws\s+[\w\s,]+)?\s*[\{;]/
+            def matcher = pattern.matcher(text)
+            while (matcher.find()) {
+                // Skip methods inside /* ... */ comment blocks
+                if (isInsideBlockComment(text, matcher.start())) continue
+
+                def returnType = matcher.group(1).trim()
+                def methodName = matcher.group(2).trim()
+                def rawParams = matcher.group(3).trim().replaceAll(/\s+/, ' ')
+
+                // Skip constructors
+                if (methodName == className) continue
+                // Skip func_ methods
+                if (methodName.startsWith('func_')) continue
+                // Skip Object methods
+                if (methodName in ['toString', 'hashCode', 'equals', 'clone', 'finalize']) continue
+
+                def paramList = []
+                if (!rawParams.isEmpty()) {
+                    rawParams.split(/\s*,\s*/).each { p ->
+                        def parts = p.trim().split(/\s+/)
+                        if (parts.length >= 2) {
+                            paramList << [type: parts[0], name: parts[1]]
+                        }
+                    }
+                }
+
+                methods << [
+                    returnType: returnType,
+                    methodName: methodName,
+                    rawParams: rawParams,
+                    paramList: paramList,
+                ]
+            }
+
+            // Also parse the parent class for inherited methods
+            def extendsMatch = (text =~ /(?m)^\s*public\s+(?:abstract\s+)?class\s+${className}\s+extends\s+(\w+)/)
+            if (extendsMatch.find()) {
+                def parentName = extendsMatch.group(1)
+                def parentFileServer = new File(vanillaServer, "${parentName}.java")
+                def parentFileClient = new File(vanillaClient, "${parentName}.java")
+                def parentFile = parentFileServer.exists() ? parentFileServer : (parentFileClient.exists() ? parentFileClient : null)
+                if (parentFile != null) {
+                    def parentMethods = parseMethods(parentFile, parentName)
+                    methods.addAll(parentMethods)
+                }
+            }
+
+            // Deduplicate by method name + param types (keep first occurrence / child overrides)
+            def seen = new HashSet()
+            def unique = []
+            methods.each { m ->
+                def key = m.methodName + '(' + m.paramList.collect { it.type }.join(',') + ')'
+                if (!seen.contains(key)) {
+                    seen << key
+                    unique << m
+                }
+            }
+            return unique
+        }
+
+        // ------------------------------------------------------------------
+        // Helper: Find which methods FC code overrides for a specific vanilla class.
+        // Scans ALL FC source files that extend the given vanilla class.
+        // Returns a Set of method names that are overridden.
+        // ------------------------------------------------------------------
+        def findOverriddenMethodsForClass = { String vanillaClass ->
+            def overridden = new HashSet()
+            // Match both "extends VanillaClass" and "extends AbstractVanillaClass"
+            def extendsClassPattern = ~/extends\s+(?:Abstract)?${vanillaClass}\b/
+
+            fcSourceRoots.each { root ->
+                if (!root.exists()) return
+                root.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                    if (!f.name.endsWith('.java')) return
+                    if (!f.exists()) return
+                    def text
+                    try { text = f.text } catch (Exception e) { return }
+                    // Check if this file extends the vanilla class (or its Abstract* bridge)
+                    if (!extendsClassPattern.matcher(text).find()) return
+
+                    // Find @Override followed by method declaration
+                    def pattern = ~/(?m)@Override\s*\n\s*public\s+\S+\s+(\w+)\s*\(/
+                    def matcher = pattern.matcher(text)
+                    while (matcher.find()) {
+                        def methodName = matcher.group(1)
+                        // Strip _btw suffix if present (FC code may override foo_btw
+                        // which corresponds to vanilla method foo)
+                        if (methodName.endsWith('_btw')) {
+                            methodName = methodName.substring(0, methodName.length() - 4)
+                        }
+                        overridden << methodName
+                    }
+
+                    // Also find _btw methods WITHOUT @Override annotation
+                    // These are bridge methods that use interface types (IWorld, IItemStack, etc.)
+                    // and thus don't have @Override because the param types differ from parent
+                    def btwPattern = ~/(?m)^\s*public\s+\S+\s+(\w+_btw)\s*\(/
+                    def btwMatcher = btwPattern.matcher(text)
+                    while (btwMatcher.find()) {
+                        def methodName = btwMatcher.group(1)
+                        if (methodName.endsWith('_btw')) {
+                            methodName = methodName.substring(0, methodName.length() - 4)
+                        }
+                        overridden << methodName
+                    }
+                }
+            }
+            return overridden
+        }
+
+        // ------------------------------------------------------------------
+        // Helper: Check if a method has any parameter whose type is in typeMap
+        // ------------------------------------------------------------------
+        def needsBridge = { paramList ->
+            return paramList.any { p -> typeMap.containsKey(p.type) }
+        }
+
+        // ------------------------------------------------------------------
+        // Helper: Convert a param type from vanilla to interface
+        // ------------------------------------------------------------------
+        def toInterfaceType = { String type ->
+            return typeMap.containsKey(type) ? typeMap[type] : type
+        }
+
+        // Map of non-Minecraft types that need explicit imports
+        def javaTypeImports = [
+            'Random'  : 'java.util.Random',
+            'List'    : 'java.util.List',
+            'Map'     : 'java.util.Map',
+            'Set'     : 'java.util.Set',
+        ]
+
+        // ------------------------------------------------------------------
+        // Generate each abstract class
+        // ------------------------------------------------------------------
+        int generated = 0
+        int skippedNoBridge = 0
+        int skippedNoFile = 0
+        def errors = []
+
+        vanillaClasses.each { String vanillaClass ->
+            def abstractName = "Abstract${vanillaClass}"
+            def pkg = getPackage(vanillaClass)
+
+            // Find the vanilla source file (prefer server, fall back to client)
+            def vanillaFile = new File(vanillaServer, "${vanillaClass}.java")
+            if (!vanillaFile.exists()) {
+                vanillaFile = new File(vanillaClient, "${vanillaClass}.java")
+            }
+            if (!vanillaFile.exists()) {
+                println "SKIP: ${vanillaClass} - vanilla source not found"
+                skippedNoFile++
+                return
+            }
+
+            // Determine the interface to implement
+            def ifaceInfo = parentInterfaceChain(vanillaClass)
+            def ifaceName = ifaceInfo ? ifaceInfo[0] : null
+            def ifaceImport = ifaceInfo ? ifaceInfo[1] : null
+
+            println "Processing ${vanillaClass}..."
+
+            // 1) Parse constructors
+            def constructors = parseConstructors(vanillaFile, vanillaClass)
+            if (constructors.isEmpty()) {
+                // If no constructors found, add a default no-arg constructor
+                // Some classes might have only package-private constructors
+                println "  WARNING: No public/protected constructors found, trying to find any constructor..."
+                // Try matching any constructor
+                def text = vanillaFile.text
+                def anyCtorPattern = ~/(?m)^\s+${vanillaClass}\s*\(([^)]*)\)\s*(?:throws\s+\w+(?:\s*,\s*\w+)*)?\s*\{/
+                def ctorMatcher = anyCtorPattern.matcher(text)
+                while (ctorMatcher.find()) {
+                    // Skip constructors inside /* ... */ comment blocks
+                    if (isInsideBlockComment(text, ctorMatcher.start())) continue
+                    def rawParams = ctorMatcher.group(1).trim()
+                    if (rawParams.isEmpty()) {
+                        constructors << [params: '', paramNames: '', paramTypes: []]
+                    } else {
+                        rawParams = rawParams.replaceAll(/\s+/, ' ')
+                        def paramParts = rawParams.split(/\s*,\s*/)
+                        def names = []
+                        def types = []
+                        paramParts.each { p ->
+                            def parts = p.trim().split(/\s+/)
+                            if (parts.length >= 2) {
+                                types << parts[0]
+                                names << parts[1]
+                            }
+                        }
+                        constructors << [
+                            params: rawParams,
+                            paramNames: names.join(', '),
+                            paramTypes: types
+                        ]
+                    }
+                }
+            }
+            println "  Found ${constructors.size()} constructor(s)"
+
+            // 2) Parse all public non-static non-final methods (including inherited)
+            def allMethods = parseMethods(vanillaFile, vanillaClass)
+            println "  Found ${allMethods.size()} public methods total (including inherited)"
+
+            // 3) Find which methods FC code actually overrides for this class
+            def overriddenNames = findOverriddenMethodsForClass(vanillaClass)
+            println "  FC overrides ${overriddenNames.size()} method names"
+
+            // 4) Filter to methods that are BOTH overridden by FC AND have vanilla-typed params
+            def bridgeMethods = allMethods.findAll { m ->
+                overriddenNames.contains(m.methodName) && needsBridge(m.paramList)
+            }
+            println "  ${bridgeMethods.size()} methods need bridge pattern"
+
+            // 5) Collect needed imports
+            def imports = new TreeSet()
+            imports << 'net.minecraft.src.*'
+            if (ifaceImport) {
+                imports << ifaceImport
+            }
+
+            bridgeMethods.each { m ->
+                m.paramList.each { p ->
+                    def ifaceType = typeMap[p.type]
+                    if (ifaceType && ifaceImports[ifaceType]) {
+                        imports << ifaceImports[ifaceType]
+                    }
+                    if (javaTypeImports.containsKey(p.type)) {
+                        imports << javaTypeImports[p.type]
+                    }
+                }
+                if (javaTypeImports.containsKey(m.returnType)) {
+                    imports << javaTypeImports[m.returnType]
+                }
+            }
+
+            // 6) Build the generated Java source
+            def sb = new StringBuilder()
+            sb << "package btw.adapter.${pkg};\n\n"
+
+            // Group imports
+            def jimp = imports.findAll { it.startsWith('java.') }
+            def mcImp = imports.findAll { it.startsWith('net.minecraft') }
+            def btwImp = imports.findAll { it.startsWith('btw.') }
+
+            jimp.each { sb << "import ${it};\n" }
+            if (jimp && (mcImp || btwImp)) sb << '\n'
+            mcImp.each { sb << "import ${it};\n" }
+            if (mcImp && btwImp) sb << '\n'
+            btwImp.each { sb << "import ${it};\n" }
+            sb << '\n'
+
+            sb << "/**\n"
+            sb << " * Abstract bridge class between vanilla ${vanillaClass} and FC code.\n"
+            sb << " *\n"
+            sb << " * For methods where FC overrides involve vanilla types (World, Entity, etc.),\n"
+            sb << " * this class provides a bridge pattern:\n"
+            sb << " *   1. The vanilla-typed method is overridden as final and delegates to a _btw version\n"
+            sb << " *   2. The _btw version uses interface-typed params (IWorld, IEntity, etc.)\n"
+            sb << " *   3. FC code overrides the _btw version instead of the vanilla one\n"
+            sb << " *\n"
+            sb << " * The _btw suffix avoids overload ambiguity since World implements IWorld.\n"
+            sb << " *\n"
+            sb << " * Generated by generate_abstracts.gradle -- do not edit by hand.\n"
+            sb << " */\n"
+
+            if (ifaceName) {
+                sb << "public abstract class ${abstractName} extends ${vanillaClass} implements ${ifaceName} {\n"
+            } else {
+                sb << "public abstract class ${abstractName} extends ${vanillaClass} {\n"
+            }
+
+            // Constructors
+            sb << '\n'
+            if (constructors.isEmpty()) {
+                // No constructors found at all; use default
+                sb << "    protected ${abstractName}() {\n"
+                sb << "        super();\n"
+                sb << "    }\n\n"
+            } else {
+                constructors.each { c ->
+                    sb << "    protected ${abstractName}(${c.params}) {\n"
+                    sb << "        super(${c.paramNames});\n"
+                    sb << "    }\n\n"
+                }
+            }
+
+            // Bridge methods
+            bridgeMethods.each { m ->
+                def vanillaParams = m.paramList.collect { "${it.type} ${it.name}" }.join(', ')
+
+                // Build _btw param list (interface types where applicable)
+                def btwParams = m.paramList.collect { p ->
+                    def ifType = toInterfaceType(p.type)
+                    "${ifType} ${p.name}"
+                }.join(', ')
+
+                // Build super call args with casts for interface->concrete
+                def superArgs = m.paramList.collect { p ->
+                    if (typeMap.containsKey(p.type)) {
+                        "(${p.type}) ${p.name}"
+                    } else {
+                        p.name
+                    }
+                }.join(', ')
+
+                // Build _btw call args with casts for concrete->interface
+                def btwArgs = m.paramList.collect { p ->
+                    if (typeMap.containsKey(p.type)) {
+                        "(${typeMap[p.type]}) ${p.name}"
+                    } else {
+                        p.name
+                    }
+                }.join(', ')
+
+                sb << "    // Bridge: vanilla engine calls this -> delegates to _btw version\n"
+                sb << "    @Override\n"
+                sb << "    public final ${m.returnType} ${m.methodName}(${vanillaParams}) {\n"
+
+                // Convert return type to interface type if applicable
+                def btwReturnType = toInterfaceType(m.returnType)
+                def returnNeedsCast = (btwReturnType != m.returnType)
+
+                if (m.returnType == 'void') {
+                    sb << "        ${m.methodName}_btw(${btwArgs});\n"
+                } else if (returnNeedsCast) {
+                    // _btw returns interface type, bridge returns vanilla type — cast
+                    sb << "        return (${m.returnType}) ${m.methodName}_btw(${btwArgs});\n"
+                } else {
+                    sb << "        return ${m.methodName}_btw(${btwArgs});\n"
+                }
+
+                sb << "    }\n\n"
+
+                sb << "    // FC code overrides this (with interface-typed params)\n"
+                sb << "    public ${btwReturnType} ${m.methodName}_btw(${btwParams}) {\n"
+
+                if (m.returnType == 'void') {
+                    sb << "        super.${m.methodName}(${superArgs});\n"
+                } else if (returnNeedsCast) {
+                    // super returns vanilla type, _btw returns interface type — cast
+                    sb << "        return (${btwReturnType}) super.${m.methodName}(${superArgs});\n"
+                } else {
+                    sb << "        return super.${m.methodName}(${superArgs});\n"
+                }
+
+                sb << "    }\n\n"
+            }
+
+            sb << "}\n"
+
+            // 7) Write the file
+            def outDir = new File(adapterDir, pkg)
+            outDir.mkdirs()
+            def outFile = new File(outDir, "${abstractName}.java")
+            outFile.text = sb.toString()
+
+            println "  Generated: ${outFile.absolutePath}"
+            println "    - ${constructors.size()} constructor(s)"
+            println "    - ${bridgeMethods.size()} bridge method(s)"
+            generated++
+        }
+
+        println ""
+        println "========================================"
+        println "Generated ${generated} abstract class(es)"
+        println "Skipped (no bridge methods/constructors): ${skippedNoBridge}"
+        println "Skipped (vanilla source not found): ${skippedNoFile}"
+        println "========================================"
+    }
+}

@@ -1,0 +1,39 @@
+package net.minecraft.src.btw.properties;
+
+import btw.api.*;
+import net.minecraft.src.btw.core.*;
+import net.minecraft.src.btw.block.*;
+import net.minecraft.src.btw.item.*;
+import net.minecraft.src.btw.entity.*;
+import net.minecraft.src.btw.tileentity.*;
+import net.minecraft.src.btw.crafting.*;
+import net.minecraft.src.btw.api.*;
+import net.minecraft.src.btw.util.*;
+import net.minecraft.src.btw.world.*;
+import net.minecraft.src.btw.behavior.*;
+import net.minecraft.src.btw.properties.*;
+import net.minecraft.src.btw.model.*;
+import net.minecraft.src.btw.command.*;
+
+// FCMOD
+
+
+public class FCStepSoundSquish extends StepSound
+{
+	public FCStepSoundSquish( String s, float f, float f1 )
+    {
+        super( s, f, f1 );
+    }
+    
+    @Override
+    public String getStepSound()
+    {
+        return "mob.slime.attack";
+    }    
+
+    @Override
+    public String getBreakSound()
+    {
+        return "mob.slime.small";
+    }
+}
