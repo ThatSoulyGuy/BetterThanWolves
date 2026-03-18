@@ -3,7 +3,7 @@ package btw.api;
 public class BlockFurnace extends BlockContainer {
 
     public final boolean isActive;
-    public boolean keepFurnaceInventory;
+    public static boolean keepFurnaceInventory;
     public Icon furnaceIconFront;
     public Icon furnaceIconTop;
 

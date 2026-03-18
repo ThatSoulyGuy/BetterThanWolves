@@ -198,7 +198,7 @@ public abstract class EntityLiving extends Entity {
     public void EntityMobOnLivingUpdate() {}
     public boolean EntityMobAttackEntityFrom(DamageSource source, int amount) { return false; }
     public boolean EntityAnimalInteract(EntityPlayer player) { return false; }
-    public void MeleeAttack(EntityLiving target) {}
+    // Removed: void MeleeAttack(EntityLiving) - vanilla has boolean MeleeAttack(Entity) instead
     public void SetHungerLevel(int level) {}
     public int GetGrowthLevel() { return 0; }
     public void SetGrowthLevelNoNotify(int level) {}
@@ -356,7 +356,8 @@ public abstract class EntityLiving extends Entity {
     public int attacker;
 
     // Missing methods
-    // getLook(float) inherited from Entity
+    public Vec3 getLook(float partialTicks) { return null; }
+    public void knockBack(Entity entity, int damage, double motionX, double motionY) {}
     public int getVerticalFaceSpeed() { return 10; }
     public void spawnExplosionParticle() {}
     public boolean canSee(EntityLiving entity) { return false; }

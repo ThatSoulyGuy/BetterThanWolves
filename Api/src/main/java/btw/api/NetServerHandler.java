@@ -1,8 +1,8 @@
 package btw.api;
 
 public class NetServerHandler extends NetHandler {
-    public Object netManager;
-    public Object mcServer;
+    public INetworkManager netManager;
+    public MinecraftServer mcServer;
     public boolean connectionClosed = false;
     public EntityPlayerMP playerEntity;
 

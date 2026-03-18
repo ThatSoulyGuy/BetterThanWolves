@@ -50,8 +50,8 @@ public class Chunk {
     public void onChunkUnload() {}
     public void generateHeightMap() {}
     public void generateSkylightMap() {}
-    public int getSavedLightValue(int type, int x, int y, int z) { return 0; }
-    public void setLightValue(int type, int x, int y, int z, int value) {}
+    public int getSavedLightValue(EnumSkyBlock type, int x, int y, int z) { return 0; }
+    public void setLightValue(EnumSkyBlock type, int x, int y, int z, int value) {}
     public BiomeGenBase getBiomeGenForWorldCoords(int x, int z, WorldChunkManager manager) { return null; }
     public void getEntitiesWithinAABBForEntity(Entity excluded, AxisAlignedBB bb, List list, IEntitySelector selector) {}
     public void getEntitiesOfTypeWithinAAAB(Class clazz, AxisAlignedBB bb, List list, IEntitySelector selector) {}

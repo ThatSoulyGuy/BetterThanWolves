@@ -27,5 +27,5 @@ public class Slot {
     public int getSlotStackLimit() { return inventory.getInventoryStackLimit(); }
     public ItemStack decrStackSize(int amount) { return inventory.decrStackSize(slotIndex, amount); }
     public boolean canTakeStack(EntityPlayer player) { return true; }
-    public int getBackgroundIconIndex() { return -1; }
+    public Icon getBackgroundIconIndex() { return null; }
 }

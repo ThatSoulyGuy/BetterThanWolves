@@ -43,7 +43,7 @@ public class MerchantRecipe {
     public int getMaxTradeUses() { return maxTradeUses; }
     public void incrementToolUses() { this.toolUses++; }
     public boolean isRecipeDisabled() { return toolUses >= maxTradeUses; }
-    public void func_82783_a(NBTTagCompound tag) {}
+    public void func_82783_a(int maxTradeUses) {}
     public MerchantRecipe(NBTTagCompound tag) { this(null, null, null); }
     public NBTTagCompound writeToTags() { return new NBTTagCompound(); }
     public boolean hasSameIDsAs(MerchantRecipe other) { return false; }

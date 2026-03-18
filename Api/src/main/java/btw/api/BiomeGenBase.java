@@ -32,8 +32,8 @@ public class BiomeGenBase {
 
     public String biomeName;
     public int color;
-    public int topBlock;
-    public int fillerBlock;
+    public byte topBlock;
+    public byte fillerBlock;
     public int field_76754_C;
     public float temperature;
     public float rainfall;
@@ -49,8 +49,8 @@ public class BiomeGenBase {
 
     protected BiomeGenBase(int id) {
         this.biomeID = id;
-        this.topBlock = Block.grass.blockID;
-        this.fillerBlock = Block.dirt.blockID;
+        this.topBlock = (byte) Block.grass.blockID;
+        this.fillerBlock = (byte) Block.dirt.blockID;
         this.waterColorMultiplier = 16777215;
         this.temperature = 0.5F;
         this.rainfall = 0.5F;

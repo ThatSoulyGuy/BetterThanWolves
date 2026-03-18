@@ -697,10 +697,6 @@ public abstract class Block {
         return 0;
     }
 
-    public float getBlockBrightness(World world, int x, int y, int z) {
-        return 0;
-    }
-
     public AxisAlignedBB getSelectedBoundingBoxFromPool(World world, int x, int y, int z) {
         return AxisAlignedBB.getBoundingBox(
             (double)x + this.minX, (double)y + this.minY, (double)z + this.minZ,

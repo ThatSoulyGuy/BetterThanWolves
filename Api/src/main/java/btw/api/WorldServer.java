@@ -9,7 +9,7 @@ public class WorldServer extends World {
 
     public WorldServer() {}
 
-    public Object createChunkProvider() { return null; }
+    public IChunkProvider createChunkProvider() { return null; }
     public int getBlockId(int x, int y, int z) { return 0; }
     public int getBlockMetadata(int x, int y, int z) { return 0; }
     public Material getBlockMaterial(int x, int y, int z) { return Material.air; }

@@ -5,9 +5,9 @@ import java.util.List;
 
 public class EntityPlayerMP extends EntityPlayer implements ICrafting {
     public NetServerHandler playerNetServerHandler;
-    public Object mcServer;
-    public Object theItemInWorldManager;
-    public LinkedList m_chunksToBeSentToClient = new LinkedList();
+    public MinecraftServer mcServer;
+    public ItemInWorldManager theItemInWorldManager;
+    public LinkedList<ChunkCoordIntPair> m_chunksToBeSentToClient = new LinkedList<ChunkCoordIntPair>();
     public double managedPosX;
     public double managedPosZ;
     public final List loadedChunks = new LinkedList();

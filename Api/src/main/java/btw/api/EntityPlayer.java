@@ -109,7 +109,7 @@ public abstract class EntityPlayer extends EntityLiving {
     public int getFoodLevel() { return 20; }
     public boolean isBlocking() { return false; }
     public void heal(int amount) {}
-    public void displayGUIEditSign(TileEntitySign sign) {}
+    public void displayGUIEditSign(TileEntity sign) {}
     public void addStats(int stat, float amount) {}
     public boolean IsWearingFullSuitSoulforgedArmor() { return false; }
     public boolean IsWearingSoulforgedBoots() { return false; }

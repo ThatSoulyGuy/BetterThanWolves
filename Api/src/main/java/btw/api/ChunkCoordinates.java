@@ -30,24 +30,21 @@ public class ChunkCoordinates implements Comparable {
     }
 
     public int compareTo(Object obj) {
-        return compareTo((ChunkCoordinates) obj);
-    }
-
-    public int compareTo(ChunkCoordinates other) {
+        ChunkCoordinates other = (ChunkCoordinates) obj;
         if (this.posY == other.posY) {
             return this.posZ == other.posZ ? this.posX - other.posX : this.posZ - other.posZ;
         }
         return this.posY - other.posY;
     }
 
-    public double getDistanceSquared(int x, int y, int z) {
-        double dx = this.posX - x;
-        double dy = this.posY - y;
-        double dz = this.posZ - z;
+    public float getDistanceSquared(int x, int y, int z) {
+        float dx = this.posX - x;
+        float dy = this.posY - y;
+        float dz = this.posZ - z;
         return dx * dx + dy * dy + dz * dz;
     }
 
-    public double getDistanceSquaredToChunkCoordinates(ChunkCoordinates other) {
+    public float getDistanceSquaredToChunkCoordinates(ChunkCoordinates other) {
         return getDistanceSquared(other.posX, other.posY, other.posZ);
     }
 }

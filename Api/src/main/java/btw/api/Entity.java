@@ -204,10 +204,6 @@ public abstract class Entity {
         return 0;
     }
 
-    public float getDistance(float x, float y, float z) {
-        return 0;
-    }
-
     public double getDistance(double x, double y, double z) {
         return 0;
     }
@@ -220,9 +216,7 @@ public abstract class Entity {
         return null;
     }
 
-    public Vec3 getLook(float partialTicks) {
-        return null;
-    }
+    // getLook is on EntityLiving in vanilla, not Entity
 
     public float getCollisionBorderSize() {
         return 0.1F;
@@ -308,9 +302,7 @@ public abstract class Entity {
 
     public void copyDataFrom(Entity entity, boolean teleport) {}
 
-    // --- Throwable heading (for projectile entities) ---
-
-    public void setThrowableHeading(double x, double y, double z, float speed, float inaccuracy) {}
+    // setThrowableHeading is on IProjectile interface, not Entity
 
     // --- Attack ---
 
@@ -358,7 +350,7 @@ public abstract class Entity {
     public AxisAlignedBB getCollisionBox(Entity entity) { return null; }
     public AxisAlignedBB getBoundingBox() { return null; }
     public void fall(float distance) {}
-    public void knockBack(Entity entity, int damage, double motionX, double motionY) {}
+    // knockBack is on EntityLiving in vanilla, not Entity
     public double getDistanceSq(double x, double y, double z) { return 0; }
     public double getDistanceSqToEntity(Entity entity) { return 0; }
     public float getDistanceToEntity(Entity entity) { return 0; }
@@ -406,8 +398,7 @@ public abstract class Entity {
     public void travelToTheEnd(int dimension) {}
 
     public boolean interact(EntityPlayer player) { return false; }
-    public void spawnExplosionParticle() {}
-    public void heal(int amount) {}
+    // spawnExplosionParticle and heal are on EntityLiving in vanilla, not Entity
     public void addOrRenewAgressor(EntityLiving entity) {}
 
     // --- Client-side rendering ---

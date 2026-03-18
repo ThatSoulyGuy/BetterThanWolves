@@ -2,6 +2,7 @@ package btw.api;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
@@ -36,13 +37,13 @@ public abstract class World implements IBlockAccess {
     public WorldProvider provider;
 
     public List worldAccesses = new ArrayList();
-    public Object chunkProvider;
-    public Object saveHandler;
+    public IChunkProvider chunkProvider;
+    public ISaveHandler saveHandler;
     public WorldInfo worldInfo;
     public boolean findingSpawnPoint;
-    public Object mapStorage;
-    public Object theProfiler;
-    public Object worldScoreboard;
+    public MapStorage mapStorage;
+    public Profiler theProfiler;
+    public Scoreboard worldScoreboard;
     public boolean spawnHostileMobs = true;
     public boolean spawnPeacefulMobs = true;
 
@@ -51,7 +52,7 @@ public abstract class World implements IBlockAccess {
 
     // --- Abstract methods (must be implemented by backend) ---
 
-    public abstract Object createChunkProvider();
+    public abstract IChunkProvider createChunkProvider();
 
     // --- IBlockAccess implementation / Block query methods ---
 
@@ -263,7 +264,7 @@ public abstract class World implements IBlockAccess {
 
     public abstract List getEntitiesWithinAABBExcludingEntity(Entity entity, AxisAlignedBB aabb);
 
-    public List getEntitiesWithinAABBExcludingEntity(Entity entity, AxisAlignedBB aabb, Object selector) {
+    public List getEntitiesWithinAABBExcludingEntity(Entity entity, AxisAlignedBB aabb, IEntitySelector selector) {
         return new ArrayList();
     }
 
@@ -413,7 +414,7 @@ public abstract class World implements IBlockAccess {
 
     // --- World access ---
 
-    public void addWorldAccess(Object worldAccess) {}
+    public void addWorldAccess(IWorldAccess worldAccess) {}
 
     // --- Player interaction ---
 
@@ -429,9 +430,9 @@ public abstract class World implements IBlockAccess {
         return 256;
     }
 
-    public void setItemData(String key, Object data) {}
+    public void setItemData(String key, WorldSavedData data) {}
 
-    public Object loadItemData(Class dataClass, String key) {
+    public WorldSavedData loadItemData(Class dataClass, String key) {
         return null;
     }
 
@@ -453,7 +454,7 @@ public abstract class World implements IBlockAccess {
 
     // --- Structure finding ---
 
-    public Object findClosestStructure(String structureName, int x, int y, int z) {
+    public ChunkPosition findClosestStructure(String structureName, int x, int y, int z) {
         return null;
     }
 
@@ -465,19 +466,19 @@ public abstract class World implements IBlockAccess {
 
     // --- Scoreboard ---
 
-    public Object getScoreboard() {
+    public Scoreboard getScoreboard() {
         return worldScoreboard;
     }
 
     // --- Logging ---
 
-    public Object getWorldLogAgent() {
+    public ILogAgent getWorldLogAgent() {
         return null;
     }
 
     // --- Crash reports ---
 
-    public Object addWorldInfoToCrashReport(Object crashReport) {
+    public CrashReportCategory addWorldInfoToCrashReport(CrashReport crashReport) {
         return null;
     }
 
@@ -487,13 +488,13 @@ public abstract class World implements IBlockAccess {
 
     // --- Minecart ---
 
-    public Object func_82735_a(Object minecart) {
+    public IUpdatePlayerListBox func_82735_a(EntityMinecart minecart) {
         return null;
     }
 
     // --- Initialization ---
 
-    public void initialize(Object worldSettings) {}
+    public void initialize(WorldSettings worldSettings) {}
 
     // --- BTW-added: Mod tick ---
 
@@ -582,8 +583,8 @@ public abstract class World implements IBlockAccess {
 
     // --- BTW-added: Active chunk map ---
 
-    public Object m_activeChunksCoordsMap;
-    public Object m_activeChunksCoordsList;
+    public LongHashMap m_activeChunksCoordsMap;
+    public LinkedList<ChunkCoordIntPair> m_activeChunksCoordsList;
 
     public void UpdateActiveChunkMap() {}
     public void AddEntityToActiveChunkMap(Entity entity) {}
@@ -592,7 +593,7 @@ public abstract class World implements IBlockAccess {
     public void AddToActiveChunkMap(int iChunkX, int iChunkZ) {}
     public boolean IsChunkActive(int iChunkX, int iChunkZ) { return false; }
     public boolean IsBlockPosActive(int i, int j, int k) { return false; }
-    public Object GetActiveChunksCoordsList() { return m_activeChunksCoordsList; }
+    public LinkedList<ChunkCoordIntPair> GetActiveChunksCoordsList() { return m_activeChunksCoordsList; }
 
     public static final int m_iLoadedChunksUpdateRange = 32;
 
@@ -638,15 +639,9 @@ public abstract class World implements IBlockAccess {
         return null;
     }
 
-    public Explosion createExplosion(Entity entity, int x, int y, int z, float strength, boolean isFlaming) {
-        return createExplosion(entity, (double) x, (double) y, (double) z, strength, isFlaming);
-    }
-
     // --- Player location ---
 
     public EntityPlayer getClosestPlayer(double x, double y, double z, double range) { return null; }
-    public EntityPlayer getClosestPlayer(float x, float y, float z, double range) { return null; }
-    public EntityPlayer getClosestPlayer(int x, int y, int z, float range) { return null; }
     public EntityPlayer getClosestPlayerToEntity(Entity entity, double range) { return null; }
     public EntityPlayer getClosestVulnerablePlayerToEntity(Entity entity, double range) { return null; }
     public EntityPlayer getClosestVulnerablePlayer(double x, double y, double z, double range) { return null; }

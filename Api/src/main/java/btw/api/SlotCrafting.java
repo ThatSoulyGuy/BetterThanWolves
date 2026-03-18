@@ -1,7 +1,7 @@
 package btw.api;
 
 public class SlotCrafting extends Slot {
-    private final InventoryCrafting craftMatrix;
+    private final IInventory craftMatrix;
     private EntityPlayer thePlayer;
     private int amountCrafted;
 

@@ -15,7 +15,7 @@ public class ChunkProviderServer implements IChunkProvider {
     public Chunk provideChunk(int x, int z) { return null; }
     public Chunk loadChunk(int x, int z) { return null; }
     public void populate(IChunkProvider provider, int x, int z) {}
-    public boolean saveChunks(boolean flag, Object progress) { return false; }
+    public boolean saveChunks(boolean flag, IProgressUpdate progress) { return false; }
     public boolean unloadQueuedChunks() { return false; }
     public boolean canSave() { return false; }
     public String makeString() { return ""; }

@@ -40,12 +40,12 @@ public class NBTTagCompound extends NBTBase {
         return tagMap.containsKey(key);
     }
 
-    public void setTag(String key, Object value) {
+    public void setTag(String key, NBTBase value) {
         tagMap.put(key, value);
     }
 
-    public Object getTag(String key) {
-        return tagMap.get(key);
+    public NBTBase getTag(String key) {
+        return (NBTBase) tagMap.get(key);
     }
 
     public NBTTagCompound getCompoundTag(String key) {
@@ -129,7 +129,7 @@ public class NBTTagCompound extends NBTBase {
         tagMap.put(key, value);
     }
 
-    public NBTTagCompound copy() {
+    public NBTBase copy() {
         NBTTagCompound copy = new NBTTagCompound();
         copy.tagMap.putAll(this.tagMap);
         return copy;

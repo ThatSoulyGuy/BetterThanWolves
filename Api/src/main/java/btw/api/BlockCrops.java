@@ -17,7 +17,7 @@ public class BlockCrops extends BlockFlower {
     public int getCropItem() { return 0; }
     public void fertilize(World world, int i, int j, int k) {}
 
-    public int GetGrowthLevel(World world, int x, int y, int z) { return 0; }
+    public int GetGrowthLevel(IBlockAccess blockAccess, int x, int y, int z) { return 0; }
     public void SetGrowthLevelNoNotify(World world, int x, int y, int z, int level) {}
     public int getPlantForMeta(int meta) { return 0; }
     public int getMetaForPlant(ItemStack stack) { return 0; }

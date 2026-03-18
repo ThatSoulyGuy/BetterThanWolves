@@ -1,5 +1,7 @@
 package btw.api;
 
+import java.awt.image.BufferedImage;
+
 public class RenderEngine {
 
     public void bindTexture(String textureName) {}
@@ -14,7 +16,7 @@ public class RenderEngine {
         return new int[0];
     }
 
-    public int allocateAndSetupTexture(Object bufferedImage) {
+    public int allocateAndSetupTexture(BufferedImage bufferedImage) {
         return 0;
     }
 

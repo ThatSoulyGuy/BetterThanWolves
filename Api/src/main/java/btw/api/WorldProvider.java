@@ -2,7 +2,7 @@ package btw.api;
 
 public abstract class WorldProvider {
     public World worldObj;
-    public Object terrainType;
+    public WorldType terrainType;
     public WorldChunkManager worldChunkMgr;
     public boolean isHellWorld = false;
     public boolean hasNoSky = false;
@@ -12,7 +12,7 @@ public abstract class WorldProvider {
     public static WorldProvider getProviderForDimension(int dim) { return null; }
 
     public void registerWorldChunkManager() {}
-    public Object createChunkGenerator() { return null; }
+    public IChunkProvider createChunkGenerator() { return null; }
     public boolean canCoordinateBeSpawn(int x, int z) { return false; }
     public float calculateCelestialAngle(long time, float partialTicks) { return 0.0F; }
     public int getMoonPhase(long time) { return 0; }

@@ -34,7 +34,7 @@ public abstract class ModelBase {
 
     protected void setTextureOffset(String name, int x, int y) {}
 
-    public Object getTextureOffset(String name) {
+    public TextureOffset getTextureOffset(String name) {
         return null;
     }
 }

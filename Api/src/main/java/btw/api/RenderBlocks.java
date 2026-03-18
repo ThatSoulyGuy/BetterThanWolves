@@ -220,17 +220,17 @@ public class RenderBlocks {
     public boolean RenderBlockRedstoneLogic(BlockRedstoneLogic block, int x, int y, int z) { return false; }
     public boolean RenderBlockBeacon(BlockBeacon block, int x, int y, int z) { return false; }
     public boolean RenderBlockBed(Block block, int x, int y, int z) { return false; }
-    public boolean RenderBlockBrewingStand(Object block, int x, int y, int z) { return false; }
-    public boolean RenderBlockCocoa(Object block, int x, int y, int z) { return false; }
-    public boolean RenderBlockAnvil(Object block, int x, int y, int z) { return false; }
-    public boolean RenderBlockEndPortalFrame(Object block, int x, int y, int z) { return false; }
+    public boolean RenderBlockBrewingStand(BlockBrewingStand block, int x, int y, int z) { return false; }
+    public boolean RenderBlockCocoa(BlockCocoa block, int x, int y, int z) { return false; }
+    public boolean RenderBlockAnvil(BlockAnvil block, int x, int y, int z) { return false; }
+    public boolean RenderBlockEndPortalFrame(BlockEndPortalFrame block, int x, int y, int z) { return false; }
 
     // --- Torch / helper rendering ---
 
     public void renderTorchAtAngle(Block block, double x, double y, double z, double angleX, double angleZ, int metadata) {}
     public void drawCrossedSquares(Block block, int metadata, double x, double y, double z, float brightness) {}
     public void renderBlockStemSmall(Block block, int metadata, double x, double y, double z, double height) {}
-    public void renderBlockStemBig(Object block, int metadata, int connectedBlockId, double x, double y, double z, double height) {}
+    public void renderBlockStemBig(BlockStem block, int metadata, int connectedBlockId, double x, double y, double z, double height) {}
     public void renderBlockCropsImpl(Block block, int metadata, double x, double y, double z) {}
 
     // --- Face rendering ---
@@ -290,17 +290,13 @@ public class RenderBlocks {
 
     // --- FC additions: falling block rendering ---
 
-    public boolean RenderStandardFallingBlock(Block block, int x, int y, int z, int metadata) {
-        return false;
-    }
+    public void RenderStandardFallingBlock(Block block, int x, int y, int z, int metadata) {}
 
-    public boolean RenderStandardFullBlockMovedByPiston(Block block, int x, int y, int z) {
-        return false;
-    }
+    public void RenderStandardFullBlockMovedByPiston(Block block, int x, int y, int z) {}
 
     // --- FC additions: additional block renders ---
 
-    public boolean RenderBlockFlowerpot(Block block, int x, int y, int z) { return false; }
+    public boolean RenderBlockFlowerpot(BlockFlowerPot block, int x, int y, int z) { return false; }
     public boolean RenderBlockHopper(Block block, int x, int y, int z) { return false; }
 
     // --- Static helpers ---
