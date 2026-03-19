@@ -25,20 +25,32 @@ public class BTWForgeMod {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::commonSetup);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onAttributeCreation);
         MinecraftForge.EVENT_BUS.register(this);
+
+        // Register network channel early so both sides agree on the protocol
+        // before any packets are sent. Must happen during mod construction
+        // (before FMLCommonSetupEvent) so the channel exists when the server
+        // starts sending penalty sync packets.
+        BTWNetwork.register();
     }
 
     /**
      * RegisterEvent fires while registries are still open.
      * We initialize BTW here AND register ProxyBlocks/Items.
+     *
+     * This fires once per registry type. We initialize FC during the BLOCKS
+     * phase, then register proxy items during the ITEMS phase.
      */
     private void onRegister(RegisterEvent event) {
-        // Only run once (RegisterEvent fires per registry type)
         if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCKS)) {
-            LOGGER.info("Better Than Wolves: Initializing legacy systems (during RegisterEvent)...");
+            LOGGER.info("Better Than Wolves: Initializing legacy systems (during RegisterEvent/BLOCKS)...");
             BTWLifecycle.initialize();
             LOGGER.info("Better Than Wolves: Registering proxy blocks...");
             BTWRegistration.registerAllBTWContent(event);
-            LOGGER.info("Better Than Wolves: Registration complete.");
+            LOGGER.info("Better Than Wolves: Block registration complete.");
+        } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS)) {
+            LOGGER.info("Better Than Wolves: Registering proxy items...");
+            BTWRegistration.registerAllBTWContent(event);
+            LOGGER.info("Better Than Wolves: Item registration complete.");
         }
     }
 

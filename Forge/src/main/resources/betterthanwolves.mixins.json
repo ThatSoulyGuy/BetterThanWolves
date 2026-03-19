@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "package": "btw.forge.mixin",
+  "compatibilityLevel": "JAVA_16",
+  "minVersion": "0.8",
+  "mixins": [
+    "BlockBehaviorMixin",
+    "BlockMixin",
+    "FoodDataMixin",
+    "LivingEntityMixin",
+    "PlayerMixin",
+    "ServerLevelMixin",
+    "ServerPlayerGameModeMixin",
+    "ServerPlayerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

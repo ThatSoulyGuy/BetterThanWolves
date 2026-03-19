@@ -112,8 +112,6 @@ public class ItemStack {
         return item != null && item.getMaxDamage() > 0 && !this.getHasSubtypes();
     }
 
-    public void damageItem(int amount, EntityLiving livingEntity) {}
-
     // --- Stack properties ---
 
     public int getMaxStackSize() {
@@ -237,7 +235,51 @@ public class ItemStack {
         return this;
     }
 
-    public void onBlockDestroyed(World world, int blockID, int x, int y, int z, EntityPlayer player) {}
+    /**
+     * FC's item damage system. Applies damage to the item, accounting for
+     * unbreaking enchantment and creative mode bypass.
+     * FC changes: items break at damage >= maxDamage (not > maxDamage).
+     */
+    public void damageItem(int amount, EntityLiving entity) {
+        if (entity instanceof EntityPlayer ep) {
+            if (ep.capabilities != null && ep.capabilities.isCreativeMode) return;
+        }
+
+        if (this.isItemStackDamageable()) {
+            // Apply unbreaking enchantment reduction
+            int unbreaking = EnchantmentHelper.getUnbreakingModifier(entity);
+            if (unbreaking > 0) {
+                int reduced = 0;
+                java.util.Random rand = new java.util.Random();
+                for (int i = 0; i < amount; i++) {
+                    // Each point of damage has a chance to be negated
+                    if (rand.nextInt(unbreaking + 1) > 0) {
+                        reduced++;
+                    }
+                }
+                amount -= reduced;
+                if (amount <= 0) return;
+            }
+
+            this.itemDamage += amount;
+
+            // FC: items break at damage >= maxDamage (not > maxDamage)
+            if (this.itemDamage >= this.getMaxDamage()) {
+                --this.stackSize;
+                if (this.stackSize < 0) {
+                    this.stackSize = 0;
+                }
+                this.itemDamage = 0;
+            }
+        }
+    }
+
+    public void onBlockDestroyed(World world, int blockID, int x, int y, int z, EntityPlayer player) {
+        if (this.getItem() != null) {
+            boolean used = this.getItem().onBlockDestroyed(this, world, blockID, x, y, z, player);
+            // Stats tracking not bridged yet — FC calls addStat for tool use statistics
+        }
+    }
 
     public void hitEntity(EntityLiving target, EntityPlayer player) {}
 
@@ -260,11 +302,24 @@ public class ItemStack {
     public void onPlayerStoppedUsing(World world, EntityPlayer player, int ticksRemaining) {}
 
     public float getStrVsBlock(Block block) {
+        if (this.getItem() != null) {
+            return this.getItem().getStrVsBlock(this, block);
+        }
         return 1.0F;
     }
 
     public float getStrVsBlock(World world, Block block, int i, int j, int k) {
+        if (this.getItem() != null) {
+            return this.getItem().getStrVsBlock(this, world, block, i, j, k);
+        }
         return 1.0F;
+    }
+
+    public boolean canHarvestBlock(World world, Block block, int i, int j, int k) {
+        if (this.getItem() != null) {
+            return this.getItem().canHarvestBlock(block);
+        }
+        return false;
     }
 
     // --- NBT serialization ---

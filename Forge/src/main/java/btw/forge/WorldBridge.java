@@ -2,8 +2,17 @@ package btw.forge;
 
 import btw.modern.*;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.GameRules.BooleanValue;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,6 +50,11 @@ public class WorldBridge extends btw.modern.World {
         this.level = level;
         this.rand = new Random();
         this.isRemote = false;
+        // Eagerly initialise FC-only data holders so FC code never
+        // encounters null when accessing these lists.
+        this.m_MagneticPointList = new FCMagneticPointList();
+        this.m_SpawnLocationList = new FCSpawnLocationList();
+        this.m_LootingBeaconLocationList = new FCBeaconEffectLocationList();
     }
 
     /**
@@ -64,13 +78,10 @@ public class WorldBridge extends btw.modern.World {
     // Block access
     // ================================================================
 
-    
+
     public int getBlockId(int x, int y, int z) {
         BlockState state = level.getBlockState(new BlockPos(x, y, z));
-        if (state.getBlock() instanceof ProxyBlock pb) {
-            return pb.getLegacyId();
-        }
-        return 0;
+        return ProxyRegistry.getBlockId(state.getBlock());
     }
 
     
@@ -107,8 +118,10 @@ public class WorldBridge extends btw.modern.World {
 
     
     public TileEntity getBlockTileEntity(int x, int y, int z) {
-        // TODO: bridge modern BlockEntity to btw.modern.TileEntity
-        return null;
+        BlockPos pos = new BlockPos(x, y, z);
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be == null) return null;
+        return TileEntityBridge.getOrCreate(be, this);
     }
 
     // ================================================================
@@ -153,12 +166,27 @@ public class WorldBridge extends btw.modern.World {
 
     
     public void setBlockTileEntity(int x, int y, int z, TileEntity tileEntity) {
-        // TODO: bridge btw.modern.TileEntity to modern BlockEntity
+        BlockPos pos = new BlockPos(x, y, z);
+        if (tileEntity instanceof TileEntityBridge bridge) {
+            // Re-use the real BlockEntity wrapped by the bridge
+            level.setBlockEntity(bridge.getBlockEntity());
+        } else if (tileEntity != null) {
+            // FC code created a pure FC TileEntity (not backed by a real
+            // BlockEntity).  We cannot place it directly into the modern
+            // world since MC requires a real BlockEntity.  Log and skip.
+            LOGGER.debug("setBlockTileEntity: cannot place pure FC TileEntity {} at {}",
+                    tileEntity.getClass().getSimpleName(), pos);
+        }
     }
 
     
     public void removeBlockTileEntity(int x, int y, int z) {
-        // TODO: implement
+        BlockPos pos = new BlockPos(x, y, z);
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be != null) {
+            TileEntityBridge.uncache(be);
+            level.removeBlockEntity(pos);
+        }
     }
 
     // ================================================================
@@ -218,6 +246,28 @@ public class WorldBridge extends btw.modern.World {
     public void func_82740_a(int x, int y, int z, int blockID, int delay, int priority) {
         // Same as scheduleBlockUpdate with priority (ignored for simplicity)
         scheduleBlockUpdate(x, y, z, blockID, delay);
+    }
+
+    @Override
+    public boolean isBlockTickScheduled(int x, int y, int z, int blockID) {
+        BlockPos pos = new BlockPos(x, y, z);
+        net.minecraft.world.level.block.Block modernBlock = ProxyRegistry.getModernBlock(blockID);
+        if (modernBlock != null) {
+            return level.getBlockTicks().hasScheduledTick(pos, modernBlock);
+        }
+        return false;
+    }
+
+    @Override
+    public boolean IsUpdateScheduledForBlock(int i, int j, int k, int iBlockID) {
+        return isBlockTickScheduled(i, j, k, iBlockID);
+    }
+
+    @Override
+    public boolean IsUpdatePendingThisTickForBlock(int i, int j, int k, int iBlockID) {
+        // MC 1.20.1 does not expose "pending this tick" easily; approximate
+        // by checking if any tick is scheduled for the block.
+        return isBlockTickScheduled(i, j, k, iBlockID);
     }
 
     // ================================================================
@@ -311,14 +361,89 @@ public class WorldBridge extends btw.modern.World {
 
     
     public BiomeGenBase getBiomeGenForCoords(int x, int z) {
-        // TODO: bridge modern biome to btw.modern.BiomeGenBase
-        return null;
+        Holder<Biome> holder = level.getBiome(new BlockPos(x, 64, z));
+        return mapBiomeToFc(holder);
+    }
+
+    /**
+     * Maps a modern Biome holder to the closest FC BiomeGenBase static
+     * instance.  Falls back to {@link BiomeGenBase#plains} if the biome
+     * is unknown or FC biomes have not been initialised yet.
+     */
+    private static BiomeGenBase mapBiomeToFc(Holder<Biome> holder) {
+        // Safety: if FC biomes were never initialised, return a non-null default
+        if (BiomeGenBase.plains == null) {
+            return new BiomeGenBase(1) {};
+        }
+
+        ResourceKey<Biome> key = holder.unwrapKey().orElse(null);
+        if (key == null) return BiomeGenBase.plains;
+
+        ResourceLocation loc = key.location();
+        String path = loc.getPath(); // e.g. "plains", "desert", "frozen_ocean"
+
+        return switch (path) {
+            case "ocean", "deep_ocean",
+                 "deep_lukewarm_ocean", "deep_cold_ocean",
+                 "deep_frozen_ocean", "warm_ocean",
+                 "lukewarm_ocean", "cold_ocean" -> BiomeGenBase.ocean;
+            case "plains", "sunflower_plains",
+                 "meadow" -> BiomeGenBase.plains;
+            case "desert" -> BiomeGenBase.desert;
+            case "windswept_hills", "windswept_gravelly_hills",
+                 "windswept_forest", "stony_peaks" -> BiomeGenBase.extremeHills;
+            case "forest", "flower_forest",
+                 "birch_forest", "old_growth_birch_forest",
+                 "dark_forest" -> BiomeGenBase.forest;
+            case "taiga", "old_growth_pine_taiga",
+                 "old_growth_spruce_taiga" -> BiomeGenBase.taiga;
+            case "swamp", "mangrove_swamp" -> BiomeGenBase.swampland;
+            case "river" -> BiomeGenBase.river;
+            case "nether_wastes", "soul_sand_valley",
+                 "crimson_forest", "warped_forest",
+                 "basalt_deltas" -> BiomeGenBase.hell;
+            case "the_end", "end_highlands",
+                 "end_midlands", "end_barrens",
+                 "small_end_islands", "the_void" -> BiomeGenBase.sky;
+            case "frozen_ocean" -> BiomeGenBase.frozenOcean;
+            case "frozen_river" -> BiomeGenBase.frozenRiver;
+            case "snowy_plains", "snowy_slopes",
+                 "frozen_peaks", "ice_spikes" -> BiomeGenBase.icePlains;
+            case "snowy_taiga", "grove",
+                 "jagged_peaks" -> BiomeGenBase.iceMountains;
+            case "mushroom_fields" -> BiomeGenBase.mushroomIsland;
+            case "beach", "stony_shore" -> BiomeGenBase.beach;
+            case "jungle", "sparse_jungle",
+                 "bamboo_jungle" -> BiomeGenBase.jungle;
+            case "snowy_beach" -> BiomeGenBase.frozenOcean;
+            case "savanna", "savanna_plateau",
+                 "windswept_savanna" -> BiomeGenBase.plains;
+            case "badlands", "eroded_badlands",
+                 "wooded_badlands" -> BiomeGenBase.desert;
+            case "cherry_grove" -> BiomeGenBase.forest;
+            case "dripstone_caves", "lush_caves",
+                 "deep_dark" -> BiomeGenBase.plains;
+            default -> BiomeGenBase.plains;
+        };
     }
 
     
+    /**
+     * Lazy-initialised WorldChunkManager bridge that delegates biome
+     * lookups to the real MC level.
+     */
+    private WorldChunkManager chunkManagerBridge;
+
     public WorldChunkManager getWorldChunkManager() {
-        // TODO: bridge
-        return null;
+        if (chunkManagerBridge == null) {
+            chunkManagerBridge = new WorldChunkManager() {
+                @Override
+                public BiomeGenBase getBiomeGenAt(int x, int z) {
+                    return getBiomeGenForCoords(x, z);
+                }
+            };
+        }
+        return chunkManagerBridge;
     }
 
     // ================================================================
@@ -453,27 +578,59 @@ public class WorldBridge extends btw.modern.World {
     // Sound methods
     // ================================================================
 
-    
+
     public void playSoundEffect(double x, double y, double z,
                                 String sound, float volume, float pitch) {
-        // Map legacy sound names to modern SoundEvents (simplified)
         try {
-            level.playSound(null, x, y, z,
-                    net.minecraft.sounds.SoundEvents.STONE_BREAK,
-                    net.minecraft.sounds.SoundSource.BLOCKS,
-                    volume, pitch);
+            SoundEvent event = resolveSoundEvent(sound);
+            if (event != null) {
+                level.playSound(null, x, y, z, event,
+                        SoundSource.BLOCKS, volume, pitch);
+            }
         } catch (Exception e) {
             LOGGER.debug("Could not play sound '{}': {}", sound, e.getMessage());
         }
     }
 
-    
+
     public void playSoundAtEntity(btw.modern.Entity entity, String sound,
                                   float volume, float pitch) {
-        // TODO: bridge entity position
+        try {
+            SoundEvent event = resolveSoundEvent(sound);
+            if (event != null && entity != null) {
+                // Use entity's FC position to play the sound at its location
+                level.playSound(null, entity.posX, entity.posY, entity.posZ,
+                        event, SoundSource.NEUTRAL, volume, pitch);
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not play sound '{}' at entity: {}",
+                    sound, e.getMessage());
+        }
     }
 
-    
+    @Override
+    public void playSoundToNearExcept(EntityPlayer player, String sound,
+                                      float volume, float pitch) {
+        try {
+            SoundEvent event = resolveSoundEvent(sound);
+            if (event != null && player != null) {
+                // Play sound to all nearby players EXCEPT the given player.
+                // If the player is a PlayerBridge, use the real ServerPlayer
+                // so level.playSound excludes them from hearing it.
+                ServerPlayer excluded = null;
+                if (player instanceof PlayerBridge pb) {
+                    excluded = pb.getServerPlayer();
+                }
+                level.playSound(excluded, player.posX, player.posY, player.posZ,
+                        event, SoundSource.PLAYERS, volume, pitch);
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not play sound '{}' near-except: {}",
+                    sound, e.getMessage());
+        }
+    }
+
+
     public void spawnParticle(String particle, double x, double y, double z,
                               double velocityX, double velocityY, double velocityZ) {
         // Particles are client-side; server can send packets but we skip for now
@@ -499,9 +656,14 @@ public class WorldBridge extends btw.modern.World {
         return level.isRaining();
     }
 
-    
+
     public boolean isThundering() {
         return level.isThundering();
+    }
+
+    @Override
+    public boolean IsRainingAtPos(int i, int j, int k) {
+        return level.isRainingAt(new BlockPos(i, j, k));
     }
 
     // ================================================================
@@ -533,16 +695,69 @@ public class WorldBridge extends btw.modern.World {
     // Player
     // ================================================================
 
-    
+
     public boolean canMineBlock(EntityPlayer player, int x, int y, int z) {
-        // TODO: bridge player permissions
+        // Check player permissions via the real ServerPlayer if available
+        if (player instanceof PlayerBridge pb) {
+            ServerPlayer sp = pb.getServerPlayer();
+            if (sp != null) {
+                BlockPos pos = new BlockPos(x, y, z);
+                if (sp.isSpectator()) return false;
+                if (!sp.mayBuild()) return false;
+                if (sp.server.isUnderSpawnProtection(level, pos, sp)) return false;
+            }
+            return true;
+        }
         return true;
     }
 
-    
+
     public EntityPlayer getClosestPlayer(double x, double y, double z, double range) {
-        // TODO: bridge player entity
+        // Delegate to modern level -- range<0 means unlimited
+        net.minecraft.world.entity.player.Player nearest =
+                level.getNearestPlayer(x, y, z, range, false);
+        if (nearest instanceof ServerPlayer sp) {
+            return PlayerBridge.getOrCreate(sp);
+        }
         return null;
+    }
+
+    @Override
+    public EntityPlayer getClosestPlayerToEntity(btw.modern.Entity entity, double range) {
+        if (entity == null) return null;
+        return getClosestPlayer(entity.posX, entity.posY, entity.posZ, range);
+    }
+
+    @Override
+    public EntityPlayer getClosestVulnerablePlayerToEntity(btw.modern.Entity entity, double range) {
+        if (entity == null) return null;
+        return getClosestVulnerablePlayer(entity.posX, entity.posY, entity.posZ, range);
+    }
+
+    @Override
+    public EntityPlayer getClosestVulnerablePlayer(double x, double y, double z, double range) {
+        // "Vulnerable" in FC means not in creative/spectator mode
+        net.minecraft.world.entity.player.Player nearest =
+                level.getNearestPlayer(x, y, z, range, true); // true = ignore creative
+        if (nearest instanceof ServerPlayer sp) {
+            // Also exclude spectators
+            if (sp.isSpectator()) return null;
+            return PlayerBridge.getOrCreate(sp);
+        }
+        return null;
+    }
+
+    // ================================================================
+    // Entity state
+    // ================================================================
+
+    @Override
+    public void setEntityState(btw.modern.Entity entity, byte state) {
+        if (entity == null) return;
+        net.minecraft.world.entity.Entity proxy = fcToForgeEntity.get(entity);
+        if (proxy != null) {
+            level.broadcastEntityEvent(proxy, state);
+        }
     }
 
     // ================================================================
@@ -554,16 +769,20 @@ public class WorldBridge extends btw.modern.World {
                                      float strength, boolean isFlaming) {
         level.explode(null, x, y, z, strength,
                 net.minecraft.world.level.Level.ExplosionInteraction.BLOCK);
-        // Return a stub Explosion; FC code mostly ignores the return value
-        return null;
+        Explosion fcExplosion = new Explosion(this, entity, x, y, z, strength);
+        fcExplosion.isFlaming = isFlaming;
+        return fcExplosion;
     }
 
-    
+
     public Explosion newExplosion(btw.modern.Entity entity, double x, double y, double z,
                                   float strength, boolean isFlaming, boolean isSmoking) {
         level.explode(null, x, y, z, strength,
                 net.minecraft.world.level.Level.ExplosionInteraction.BLOCK);
-        return null;
+        Explosion fcExplosion = new Explosion(this, entity, x, y, z, strength);
+        fcExplosion.isFlaming = isFlaming;
+        fcExplosion.isSmoking = isSmoking;
+        return fcExplosion;
     }
 
     // ================================================================
@@ -631,9 +850,207 @@ public class WorldBridge extends btw.modern.World {
     // Game rules
     // ================================================================
 
-    
+    /**
+     * Lazy-initialised wrapper that delegates btw.modern.GameRules methods
+     * to the real MC 1.20.1 GameRules stored in the ServerLevel.
+     */
+    private GameRules gameRulesBridge;
+
+
     public GameRules getGameRules() {
-        // TODO: bridge modern GameRules to btw.modern.GameRules
-        return null;
+        if (gameRulesBridge == null) {
+            gameRulesBridge = new GameRules() {
+                @Override
+                public String getGameRuleStringValue(String name) {
+                    net.minecraft.world.level.GameRules.Key<? extends net.minecraft.world.level.GameRules.Value<?>> key =
+                            findRuleKey(name);
+                    if (key != null) {
+                        return level.getGameRules().getRule(key).toString();
+                    }
+                    return "";
+                }
+
+                @Override
+                public boolean getGameRuleBooleanValue(String name) {
+                    net.minecraft.world.level.GameRules.Key<BooleanValue> key =
+                            findBooleanRuleKey(name);
+                    if (key != null) {
+                        return level.getGameRules().getBoolean(key);
+                    }
+                    return false;
+                }
+
+                @Override
+                public boolean hasRule(String name) {
+                    return findRuleKey(name) != null;
+                }
+
+                /**
+                 * Finds a GameRules key by name. MC 1.20.1 uses typed keys
+                 * so we check the well-known set.
+                 */
+                private net.minecraft.world.level.GameRules.Key<? extends net.minecraft.world.level.GameRules.Value<?>> findRuleKey(String name) {
+                    return switch (name) {
+                        case "doFireTick" -> net.minecraft.world.level.GameRules.RULE_DOFIRETICK;
+                        case "mobGriefing" -> net.minecraft.world.level.GameRules.RULE_MOBGRIEFING;
+                        case "keepInventory" -> net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY;
+                        case "doMobSpawning" -> net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING;
+                        case "doMobLoot" -> net.minecraft.world.level.GameRules.RULE_DOMOBLOOT;
+                        case "doTileDrops" -> net.minecraft.world.level.GameRules.RULE_DOBLOCKDROPS;
+                        case "commandBlockOutput" -> net.minecraft.world.level.GameRules.RULE_COMMANDBLOCKOUTPUT;
+                        case "naturalRegeneration" -> net.minecraft.world.level.GameRules.RULE_NATURAL_REGENERATION;
+                        case "doDaylightCycle" -> net.minecraft.world.level.GameRules.RULE_DAYLIGHT;
+                        // doWeatherCycle not in MC 1.5.2 FC, skip
+                        case "showDeathMessages" -> net.minecraft.world.level.GameRules.RULE_SHOWDEATHMESSAGES;
+                        default -> null;
+                    };
+                }
+
+                @SuppressWarnings("unchecked")
+                private net.minecraft.world.level.GameRules.Key<BooleanValue> findBooleanRuleKey(String name) {
+                    var key = findRuleKey(name);
+                    if (key != null) {
+                        // All the rules mapped above are BooleanValue rules
+                        return (net.minecraft.world.level.GameRules.Key<BooleanValue>) key;
+                    }
+                    return null;
+                }
+            };
+        }
+        return gameRulesBridge;
+    }
+
+    // ================================================================
+    // FC-only data holders (magnetic points, spawn locations, beacons)
+    // ================================================================
+
+    /**
+     * Initialises the FC-only list fields that FC code expects to be
+     * non-null on a World instance.  Called lazily / from the constructor.
+     */
+    private void initFcDataHolders() {
+        if (m_MagneticPointList == null) {
+            m_MagneticPointList = new FCMagneticPointList();
+        }
+        if (m_SpawnLocationList == null) {
+            m_SpawnLocationList = new FCSpawnLocationList();
+        }
+        if (m_LootingBeaconLocationList == null) {
+            m_LootingBeaconLocationList = new FCBeaconEffectLocationList();
+        }
+    }
+
+    @Override
+    public FCMagneticPointList GetMagneticPointList() {
+        initFcDataHolders();
+        return m_MagneticPointList;
+    }
+
+    @Override
+    public FCSpawnLocationList GetSpawnLocationList() {
+        initFcDataHolders();
+        return m_SpawnLocationList;
+    }
+
+    @Override
+    public FCBeaconEffectLocationList GetLootingBeaconLocationList() {
+        initFcDataHolders();
+        return m_LootingBeaconLocationList;
+    }
+
+    // ================================================================
+    // Tile entity collection
+    // ================================================================
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List getAllTileEntityInBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        List result = new ArrayList();
+        for (int x = minX; x < maxX; x++) {
+            for (int y = minY; y < maxY; y++) {
+                for (int z = minZ; z < maxZ; z++) {
+                    BlockEntity be = level.getBlockEntity(new BlockPos(x, y, z));
+                    if (be != null) {
+                        result.add(TileEntityBridge.getOrCreate(be, this));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    // ================================================================
+    // Celestial angle / sun brightness
+    // ================================================================
+
+    @Override
+    public float ComputeOverworldSunBrightnessWithMoonPhases() {
+        // Compute sun angle from time-of-day
+        float celestialAngle = level.getTimeOfDay(0);
+
+        // Sun brightness curve: 1.0 at noon, 0.0 at midnight, with
+        // smooth transitions at dawn/dusk.
+        float sunBrightness;
+        if (celestialAngle < 0.25F) {
+            // Night to sunrise (0.0 = midnight, 0.25 = sunrise)
+            sunBrightness = 0.0F;
+        } else if (celestialAngle < 0.27F) {
+            // Dawn transition
+            sunBrightness = (celestialAngle - 0.25F) / 0.02F;
+        } else if (celestialAngle < 0.73F) {
+            // Daytime
+            sunBrightness = 1.0F;
+        } else if (celestialAngle < 0.75F) {
+            // Dusk transition
+            sunBrightness = 1.0F - (celestialAngle - 0.73F) / 0.02F;
+        } else {
+            // Night
+            sunBrightness = 0.0F;
+        }
+
+        // Modulate by moon phase (0=full, 4=new). Full moon adds some
+        // night brightness; new moon means total darkness.
+        int moonPhase = level.getMoonPhase();
+        float moonBrightness = switch (moonPhase) {
+            case 0 -> 1.0F;   // full moon
+            case 1, 7 -> 0.75F;
+            case 2, 6 -> 0.5F;
+            case 3, 5 -> 0.25F;
+            case 4 -> 0.0F;   // new moon
+            default -> 0.5F;
+        };
+
+        // When the sun is up, moon has no effect. At night, use moon
+        // brightness scaled down.
+        if (sunBrightness > 0.0F) {
+            return sunBrightness;
+        }
+        return moonBrightness * 0.25F;
+    }
+
+    // ================================================================
+    // Sound resolution helper
+    // ================================================================
+
+    /**
+     * Resolves a legacy FC sound name (e.g. "random.drink") to a modern
+     * SoundEvent.  Uses {@link SoundEvent#createVariableRangeEvent} with
+     * the FC name as a ResourceLocation under the "minecraft" namespace,
+     * converting dots to underscores so "random.drink" becomes
+     * "minecraft:random/drink" (matching vanilla's path convention where
+     * applicable).  Returns null if the name is blank.
+     */
+    private static SoundEvent resolveSoundEvent(String fcSoundName) {
+        if (fcSoundName == null || fcSoundName.isEmpty()) return null;
+        try {
+            // FC uses dot-separated names like "random.drink", "mob.zombie.say".
+            // Modern MC uses slash-separated ResourceLocation paths.
+            String path = fcSoundName.replace('.', '/');
+            ResourceLocation loc = new ResourceLocation("minecraft", path);
+            return SoundEvent.createVariableRangeEvent(loc);
+        } catch (Exception e) {
+            // Invalid resource location or other issue — silently ignore
+            return null;
+        }
     }
 }

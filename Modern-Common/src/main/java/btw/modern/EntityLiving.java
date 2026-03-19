@@ -156,6 +156,37 @@ public abstract class EntityLiving extends Entity {
 
     public void clearActivePotions() {}
 
+    // --- Enchantment bridge methods ---
+    // These return 0/false by default. PlayerBridge overrides them to query
+    // the real MC 1.20.1 enchantment system via the underlying Player entity.
+
+    /** Returns the efficiency enchantment level on the held item. */
+    public int getEfficiencyEnchantLevel() { return 0; }
+
+    /** Returns the respiration enchantment level on worn armor. */
+    public int getRespirationEnchantLevel() { return 0; }
+
+    /** Returns the knockback enchantment level on the held weapon. */
+    public int getKnockbackEnchantLevel() { return 0; }
+
+    /** Returns the fire aspect enchantment level on the held weapon. */
+    public int getFireAspectEnchantLevel() { return 0; }
+
+    /** Returns the looting enchantment level on the held weapon. */
+    public int getLootingEnchantLevel() { return 0; }
+
+    /** Returns the unbreaking enchantment level on the held item. */
+    public int getUnbreakingEnchantLevel() { return 0; }
+
+    /** Returns the fortune enchantment level on the held item. */
+    public int getFortuneEnchantLevel() { return 0; }
+
+    /** Returns true if the player has aqua affinity on worn armor. */
+    public boolean getAquaAffinityEnchant() { return false; }
+
+    /** Returns true if the player has silk touch on the held item. */
+    public boolean getSilkTouchEnchant() { return false; }
+
     // --- BTW-added methods ---
 
     public void dropFewItems(boolean bKilledByPlayer, int iLootingModifier) {}

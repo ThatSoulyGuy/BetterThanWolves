@@ -6,7 +6,6 @@ import java.util.Map;
 public class NBTTagCompound extends NBTBase {
 
     private Map tagMap = new HashMap();
-
     public NBTTagCompound() {}
 
     public void setInteger(String key, int value) {

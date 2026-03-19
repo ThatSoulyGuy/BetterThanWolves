@@ -39,4 +39,39 @@ public class InventoryPlayer implements IInventory {
     public void dropAllItems() {}
     public int getTotalArmorValue() { return 0; }
     public void damageArmor(int damage) {}
+
+    /**
+     * FC's tool speed calculation. Gets the held item's strength vs the block.
+     */
+    public float getStrVsBlock(Block block) {
+        float str = 1.0F;
+        if (this.currentItem >= 0 && this.currentItem < this.mainInventory.length
+                && this.mainInventory[this.currentItem] != null) {
+            str = this.mainInventory[this.currentItem].getStrVsBlock(block);
+        }
+        return str;
+    }
+
+    /**
+     * FC's position-aware tool speed calculation.
+     */
+    public float getStrVsBlock(World world, Block block, int i, int j, int k) {
+        float str = 1.0F;
+        if (this.currentItem >= 0 && this.currentItem < this.mainInventory.length
+                && this.mainInventory[this.currentItem] != null) {
+            str = this.mainInventory[this.currentItem].getStrVsBlock(world, block, i, j, k);
+        }
+        return str;
+    }
+
+    /**
+     * FC's harvest check. Can the current tool harvest this block?
+     */
+    public boolean canHarvestBlock(World world, Block block, int i, int j, int k) {
+        if (this.currentItem >= 0 && this.currentItem < this.mainInventory.length
+                && this.mainInventory[this.currentItem] != null) {
+            return this.mainInventory[this.currentItem].canHarvestBlock(world, block, i, j, k);
+        }
+        return false;
+    }
 }

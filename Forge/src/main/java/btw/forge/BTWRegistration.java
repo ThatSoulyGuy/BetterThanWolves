@@ -1,12 +1,15 @@
 package btw.forge;
 
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.util.LinkedHashMap;
 
 /**
  * Post-initialization registration that creates {@link ProxyBlock} instances
@@ -21,10 +24,14 @@ public class BTWRegistration {
 
     /**
      * Registers all BTW content that was populated during FC initialization.
+     * Called once for each registry type (blocks, items, entities, etc.).
      */
     public static void registerAllBTWContent(net.minecraftforge.registries.RegisterEvent event) {
-        registerBlocks(event);
-        // Items and entities registered separately or via later events
+        if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCKS)) {
+            registerBlocks(event);
+        } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS)) {
+            registerItems(event);
+        }
     }
 
     /**
@@ -57,42 +64,84 @@ public class BTWRegistration {
     }
 
     /**
-     * Iterates btw.modern.Item.itemsList for IDs 256..31999 (non-block item range)
-     * and registers FC-created items with Forge's built-in item registry.
-     *
-     * Items that already have a modern delegate (via IDMappingService) are
-     * vanilla items and do not need separate registration. Only FC custom
-     * items (those without a modern backing item) get a proxy registered.
+     * Registers items for all BTW content:
+     * 1. BlockItems for every ProxyBlock (so block drops and /give work)
+     * 2. Standalone items from Item.itemsList[256..32000]
      */
-    private static void registerItems() {
+    private static void registerItems(net.minecraftforge.registries.RegisterEvent event) {
         int registered = 0;
-        for (int id = 256; id < 32000; id++) {
+
+        // --- Register BlockItems for ALL ProxyBlocks ---
+        // Without this, ProxyBlock.asItem() returns Items.AIR and drops are empty.
+        for (int id = 175; id < btw.modern.Block.blocksList.length; id++) {
+            ProxyBlock proxy = ProxyRegistry.getProxy(id);
+            if (proxy == null) continue;
+
+            try {
+                // Get FC display name from the FC block
+                btw.modern.Block fcBlock = proxy.getFcBlock();
+                String fcName = fcBlock != null ? fcBlock.getUnlocalizedName() : "";
+                String displayName = formatFcName(fcName, "Block " + id);
+
+                net.minecraft.world.item.BlockItem blockItem =
+                        new net.minecraft.world.item.BlockItem(proxy, new Item.Properties()) {
+                            @Override
+                            public net.minecraft.network.chat.Component getName(
+                                    net.minecraft.world.item.ItemStack stack) {
+                                return net.minecraft.network.chat.Component.literal(displayName);
+                            }
+                        };
+
+                ResourceLocation key = new ResourceLocation(
+                        BTWForgeMod.MOD_ID, "block_" + id);
+
+                event.register(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS,
+                        helper -> helper.register(key, blockItem));
+
+                ProxyRegistry.registerItem(id, blockItem);
+                registered++;
+            } catch (Exception e) {
+                LOGGER.error("Failed to register BlockItem for ProxyBlock ID {}: {}",
+                        id, e.getMessage());
+            }
+        }
+
+        // --- Register standalone FC items (non-block items) ---
+        // FC items go up to 32000 (e.g., fcItemPileDirt = 22542)
+        for (int id = 256; id < btw.modern.Item.itemsList.length; id++) {
             btw.modern.Item fcItem = btw.modern.Item.itemsList[id];
             if (fcItem == null) continue;
 
             // Skip items that already have a modern item registered
-            // (e.g. block items registered during registerBlocks, or vanilla items)
+            // (block items registered above, or vanilla items)
             net.minecraft.world.item.Item existingModern = ProxyRegistry.getModernItem(id);
             if (existingModern != null) continue;
 
             try {
-                // Build properties from the FC item
                 Item.Properties props = new Item.Properties();
                 props.stacksTo(fcItem.maxStackSize);
                 if (fcItem.getMaxDamage() > 0) {
                     props.durability(fcItem.getMaxDamage());
                 }
 
-                // Create a simple proxy modern item
-                Item proxyItem = new Item(props);
+                String fcName = fcItem.getUnlocalizedName();
+                String displayName = formatFcName(fcName, "Item " + id);
+
+                Item proxyItem = new Item(props) {
+                    @Override
+                    public net.minecraft.network.chat.Component getName(
+                            net.minecraft.world.item.ItemStack stack) {
+                        return net.minecraft.network.chat.Component.literal(displayName);
+                    }
+                };
 
                 ResourceLocation key = new ResourceLocation(
                         BTWForgeMod.MOD_ID, "item_" + id);
-                Registry.register(BuiltInRegistries.ITEM, key, proxyItem);
 
-                // Store in ProxyRegistry so legacy ID <-> modern item lookups work
+                event.register(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS,
+                        helper -> helper.register(key, proxyItem));
+
                 ProxyRegistry.registerItem(id, proxyItem);
-
                 registered++;
             } catch (Exception e) {
                 LOGGER.error("Failed to register proxy item for legacy ID {}: {}",
@@ -100,6 +149,42 @@ public class BTWRegistration {
             }
         }
         LOGGER.info("Registered {} BTW proxy items with Forge registries.", registered);
+    }
+
+    /**
+     * Formats an FC unlocalized name into a human-readable display name.
+     * E.g. "fcBlockGear" → "Gear", "tile.dirt" → "Dirt", "item.helmetPlate" → "Helmet Plate"
+     */
+    private static String formatFcName(String fcName, String fallback) {
+        if (fcName == null || fcName.isEmpty()) return fallback;
+
+        // Strip common prefixes
+        String name = fcName;
+        for (String prefix : new String[]{
+                "tile.", "item.", "fcBlock", "fcItem", "fc_", "FC"}) {
+            if (name.startsWith(prefix)) {
+                name = name.substring(prefix.length());
+                break;
+            }
+        }
+        if (name.isEmpty()) return fallback;
+
+        // Insert spaces before capitals: "GearBox" → "Gear Box"
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (i > 0 && Character.isUpperCase(c) && !Character.isUpperCase(name.charAt(i - 1))) {
+                sb.append(' ');
+            }
+            sb.append(c);
+        }
+
+        // Capitalize first letter
+        String result = sb.toString().trim();
+        if (!result.isEmpty()) {
+            result = Character.toUpperCase(result.charAt(0)) + result.substring(1);
+        }
+        return result.isEmpty() ? fallback : result;
     }
 
     /**

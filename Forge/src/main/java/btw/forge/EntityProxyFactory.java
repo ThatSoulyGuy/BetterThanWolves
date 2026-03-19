@@ -82,7 +82,12 @@ public class EntityProxyFactory {
                     (btw.modern.EntityLiving) fcEntity, registeredType, level);
         }
 
-        // Plain entity (items, arrows, fireballs, mech power, etc.)
+        // EntityItem → real MC ItemEntity (pickupable item drop)
+        if (fcEntity instanceof btw.modern.EntityItem fcItem) {
+            return createItemEntity(fcItem, level);
+        }
+
+        // Plain entity (arrows, fireballs, mech power, etc.)
         return createPlainProxy(fcEntity, registeredType, level);
     }
 
@@ -149,6 +154,39 @@ public class EntityProxyFactory {
         applyPositionFromFc(proxy, fcEntity);
         LOGGER.debug("Created ProxyEntity for {}", fcEntity.getClass().getSimpleName());
         return proxy;
+    }
+
+    /**
+     * Creates a real MC ItemEntity from an FC EntityItem.
+     * This produces a visible, pickupable item drop in the world.
+     */
+    private static net.minecraft.world.entity.Entity createItemEntity(
+            btw.modern.EntityItem fcItem, Level level) {
+        btw.modern.ItemStack fcStack = fcItem.getEntityItem();
+        if (fcStack == null) {
+            LOGGER.debug("EntityItem has null ItemStack, skipping");
+            return null;
+        }
+
+        net.minecraft.world.item.ItemStack mcStack = ItemStackHelper.toMcStack(fcStack);
+        if (mcStack.isEmpty()) {
+            LOGGER.debug("Could not convert FC ItemStack (id={}) to MC ItemStack",
+                    fcStack.itemID);
+            return null;
+        }
+
+        net.minecraft.world.entity.item.ItemEntity itemEntity =
+                new net.minecraft.world.entity.item.ItemEntity(
+                        level, fcItem.posX, fcItem.posY, fcItem.posZ, mcStack);
+        itemEntity.setPickUpDelay(fcItem.delayBeforeCanPickup);
+
+        // Apply velocity if FC set any
+        itemEntity.setDeltaMovement(fcItem.motionX, fcItem.motionY, fcItem.motionZ);
+
+        LOGGER.debug("Created ItemEntity for FC item id={} count={} at ({},{},{})",
+                fcStack.itemID, fcStack.stackSize,
+                fcItem.posX, fcItem.posY, fcItem.posZ);
+        return itemEntity;
     }
 
     /**

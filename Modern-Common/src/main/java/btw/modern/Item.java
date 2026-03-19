@@ -211,7 +211,10 @@ public class Item {
         return this;
     }
 
+    private String unlocalizedName = "";
+
     public Item setUnlocalizedName(String name) {
+        this.unlocalizedName = name;
         return this;
     }
 
@@ -274,7 +277,7 @@ public class Item {
     }
 
     public String getUnlocalizedName() {
-        return "";
+        return unlocalizedName;
     }
 
     // --- Item use methods ---

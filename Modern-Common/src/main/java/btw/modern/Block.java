@@ -248,7 +248,10 @@ public abstract class Block {
         return this;
     }
 
+    private String unlocalizedName = "";
+
     public Block setUnlocalizedName(String name) {
+        this.unlocalizedName = name;
         return this;
     }
 
@@ -315,15 +318,27 @@ public abstract class Block {
     }
 
     public float getPlayerRelativeBlockHardness(EntityPlayer player, World world, int x, int y, int z) {
-        return 0;
+        float fBlockHardness = getBlockHardness(world, x, y, z);
+
+        if (fBlockHardness >= 0F) {
+            float fRelativeHardness = player.getCurrentPlayerStrVsBlock(this, x, y, z) / fBlockHardness;
+
+            if (player.IsCurrentToolEffectiveOnBlock(this, x, y, z)) {
+                return fRelativeHardness / 30F;
+            } else {
+                return fRelativeHardness / 200F;
+            }
+        } else {
+            return 0F;
+        }
     }
 
     public int tickRate(World world) {
         return 10;
     }
 
-    public String getLocalizedName() { return ""; }
-    public String getUnlocalizedName() { return ""; }
+    public String getLocalizedName() { return getUnlocalizedName(); }
+    public String getUnlocalizedName() { return unlocalizedName; }
     public CreativeTabs getCreativeTabToDisplayOn() { return null; }
 
     // --- Drops ---
@@ -426,15 +441,65 @@ public abstract class Block {
 
     // --- Harvesting ---
 
-    public void harvestBlock(World world, EntityPlayer player, int x, int y, int z, int metadata) {}
+    public void harvestBlock(World world, EntityPlayer player, int x, int y, int z, int metadata) {
+        // FC implementation from patched vanilla Block.java
+        if (player != null) {
+            player.AddHarvestBlockExhaustion(blockID, x, y, z, metadata);
+        }
 
-    public final void dropBlockAsItem(World world, int x, int y, int z, int metadata, int fortune) {}
+        if (this.canSilkHarvest(metadata) && player != null
+                && EnchantmentHelper.getSilkTouchModifier(player)) {
+            ItemStack silkStack = this.createStackedBlock(metadata);
+            if (silkStack != null) {
+                this.dropBlockAsItem_do(world, x, y, z, silkStack);
+            }
+        } else {
+            int fortune = (player != null) ? EnchantmentHelper.getFortuneModifier(player) : 0;
+            this.dropBlockAsItem(world, x, y, z, metadata, fortune);
+        }
+    }
 
-    public void dropBlockAsItemWithChance(World world, int x, int y, int z, int metadata, float chance, int fortune) {}
+    public final void dropBlockAsItem(World world, int x, int y, int z, int metadata, int fortune) {
+        this.dropBlockAsItemWithChance(world, x, y, z, metadata, 1.0F, fortune);
+    }
 
-    public void dropBlockAsItem_do(World world, int x, int y, int z, ItemStack stack) {}
+    public void dropBlockAsItemWithChance(World world, int x, int y, int z, int metadata, float chance, int fortune) {
+        if (!world.isRemote) {
+            int count = this.quantityDroppedWithBonus(fortune, world.rand);
 
-    public void dropXpOnBlockBreak(World world, int x, int y, int z, int xpAmount) {}
+            for (int i = 0; i < count; i++) {
+                if (world.rand.nextFloat() <= chance) {
+                    int droppedId = this.idDropped(metadata, world.rand, fortune);
+
+                    if (droppedId > 0) {
+                        this.dropBlockAsItem_do(world, x, y, z,
+                                new ItemStack(droppedId, 1, this.damageDropped(metadata)));
+                    }
+                }
+            }
+        }
+    }
+
+    public void dropBlockAsItem_do(World world, int x, int y, int z, ItemStack stack) {
+        if (!world.isRemote && stack != null && stack.stackSize > 0) {
+            if (world.getGameRules() != null
+                    && !world.getGameRules().getGameRuleBooleanValue("doTileDrops")) {
+                return;
+            }
+            float spread = 0.7F;
+            double dx = (double)(world.rand.nextFloat() * spread) + (double)(1.0F - spread) * 0.5D;
+            double dy = (double)(world.rand.nextFloat() * spread) + (double)(1.0F - spread) * 0.5D;
+            double dz = (double)(world.rand.nextFloat() * spread) + (double)(1.0F - spread) * 0.5D;
+            EntityItem entityItem = new EntityItem(world,
+                    (double) x + dx, (double) y + dy, (double) z + dz, stack);
+            entityItem.delayBeforeCanPickup = 10;
+            world.spawnEntityInWorld(entityItem);
+        }
+    }
+
+    public void dropXpOnBlockBreak(World world, int x, int y, int z, int xpAmount) {
+        // FC removes XP drops from block breaking
+    }
 
     // --- BTW-added: Falling block methods ---
 
@@ -866,8 +931,31 @@ public abstract class Block {
 
     // --- BTW-added: Harvesting/improper tool ---
 
-    public void OnBlockDestroyedWithImproperTool(World world, EntityPlayer player, int i, int j, int k, int iMetadata) {}
-    public void DropItemsIndividualy(World world, int i, int j, int k, int iIDDropped, int iPileCount, int iDamageDropped, float fChanceOfPileDrop) {}
+    public void OnBlockDestroyedWithImproperTool(World world, EntityPlayer player, int i, int j, int k, int iMetadata) {
+        // FC implementation: play SFX and drop component items
+        org.apache.logging.log4j.LogManager.getLogger("BTW-Harvest").info(
+                "[BTW-DEBUG] OnBlockDestroyedWithImproperTool calling DropComponentItemsOnBadBreak on {}",
+                this.getClass().getSimpleName());
+        boolean result = DropComponentItemsOnBadBreak(world, i, j, k, iMetadata, 1F);
+        org.apache.logging.log4j.LogManager.getLogger("BTW-Harvest").info(
+                "[BTW-DEBUG] DropComponentItemsOnBadBreak returned {}", result);
+    }
+    public void DropItemsIndividualy(World world, int i, int j, int k, int iIDDropped, int iPileCount, int iDamageDropped, float fChanceOfPileDrop) {
+        org.apache.logging.log4j.LogManager.getLogger("BTW-Harvest").info(
+                "[BTW-DEBUG] DropItemsIndividualy itemID={} count={} isRemote={}",
+                iIDDropped, iPileCount, world.isRemote);
+        if (!world.isRemote) {
+            for (int count = 0; count < iPileCount; count++) {
+                if (world.rand.nextFloat() <= fChanceOfPileDrop) {
+                    ItemStack stack = new ItemStack(iIDDropped, 1, iDamageDropped);
+                    org.apache.logging.log4j.LogManager.getLogger("BTW-Harvest").info(
+                            "[BTW-DEBUG] dropping stack itemID={} item={}",
+                            stack.itemID, stack.getItem() != null ? stack.getItem().getClass().getSimpleName() : "null");
+                    dropBlockAsItem_do(world, i, j, k, stack);
+                }
+            }
+        }
+    }
     public boolean DropComponentItemsOnBadBreak(World world, int i, int j, int k, int iMetadata, float fChanceOfDrop) { return false; }
     public void DropItemsOnDestroyedByExplosion(World world, int i, int j, int k, Explosion explosion) {}
 
@@ -1082,25 +1170,31 @@ public abstract class Block {
      * Uses a concrete inner class since Block itself is abstract.
      */
     public static void initializeVanillaBlocks() {
+        // Minimal placeholders so Block.stone/grass/etc. static fields are
+        // non-null before FC classes load.  BTWLifecycle.replaceVanillaBlocksWithFc()
+        // replaces every entry in blocksList[] with the real FC subclass which
+        // sets hardness, resistance, step sounds, and all other properties.
+
         stone = new ConcreteBlock(1, Material.rock);
         grass = (BlockGrass) new ConcreteBlockGrass(2);
         dirt = new ConcreteBlock(3, Material.ground);
         cobblestone = new ConcreteBlock(4, Material.rock);
         planks = new ConcreteBlock(5, Material.wood);
-        sand = new ConcreteBlock(12, Material.sand);
-        gravel = new ConcreteBlock(13, Material.sand);
-        glass = new ConcreteBlock(20, Material.glass);
+        sapling = new ConcreteBlock(6, Material.plants);
+        bedrock = new ConcreteBlock(7, Material.rock);
         waterMoving = new ConcreteBlockFluid(8, Material.water);
         waterStill = new ConcreteBlock(9, Material.water);
         lavaMoving = new ConcreteBlockFluid(10, Material.lava);
         lavaStill = new ConcreteBlock(11, Material.lava);
-        bedrock = new ConcreteBlock(7, Material.rock);
-        sapling = new ConcreteBlock(6, Material.plants);
-        wood = new ConcreteBlock(17, Material.wood);
-        sponge = new ConcreteBlock(19, Material.sponge);
+        sand = new ConcreteBlock(12, Material.sand);
+        gravel = new ConcreteBlock(13, Material.sand);
         oreGold = new ConcreteBlock(14, Material.rock);
         oreIron = new ConcreteBlock(15, Material.rock);
         oreCoal = new ConcreteBlock(16, Material.rock);
+        wood = new ConcreteBlock(17, Material.wood);
+        leaves = new ConcreteBlockLeaves(18);
+        sponge = new ConcreteBlock(19, Material.sponge);
+        glass = new ConcreteBlock(20, Material.glass);
         oreLapis = new ConcreteBlock(21, Material.rock);
         blockLapis = new ConcreteBlock(22, Material.rock);
         dispenser = new ConcreteBlock(23, Material.rock);
@@ -1109,21 +1203,35 @@ public abstract class Block {
         bed = new ConcreteBlock(26, Material.cloth);
         railPowered = new ConcreteBlock(27, Material.circuits);
         railDetector = new ConcreteBlock(28, Material.circuits);
+        pistonStickyBase = new ConcreteBlockPistonBase(29, true);
         web = new ConcreteBlock(30, Material.web);
+        tallGrass = new ConcreteBlockTallGrass(31);
+        pistonBase = new ConcreteBlockPistonBase(33, false);
+        pistonExtension = new ConcreteBlockPistonExtension(34);
         cloth = new ConcreteBlock(35, Material.cloth);
+        pistonMoving = new ConcreteBlockPistonMoving(36);
         plantYellow = new ConcreteBlockFlower(37, Material.plants);
         plantRed = new ConcreteBlockFlower(38, Material.plants);
         mushroomBrown = new ConcreteBlockFlower(39, Material.plants);
         mushroomRed = new ConcreteBlockFlower(40, Material.plants);
         blockGold = new ConcreteBlock(41, Material.iron);
         blockIron = new ConcreteBlock(42, Material.iron);
+        stoneDoubleSlab = new ConcreteBlockHalfSlab(43, true);
+        stoneSingleSlab = new ConcreteBlockHalfSlab(44, false);
         brick = new ConcreteBlock(45, Material.rock);
         tnt = new ConcreteBlock(46, Material.tnt);
         bookShelf = new ConcreteBlock(47, Material.wood);
         cobblestoneMossy = new ConcreteBlock(48, Material.rock);
         obsidian = new ConcreteBlock(49, Material.rock);
         torchWood = new ConcreteBlock(50, Material.circuits);
+        fire = new ConcreteBlockFire(51);
         mobSpawner = new ConcreteBlock(52, Material.rock);
+        stairsWoodOak = new ConcreteBlock(53, Material.wood);
+        chest = new ConcreteBlockChest(54);
+        redstoneWire = new ConcreteBlockRedstoneWire(55);
+        oreDiamond = new ConcreteBlock(56, Material.rock);
+        blockDiamond = new ConcreteBlock(57, Material.iron);
+        workbench = new ConcreteBlock(58, Material.wood);
         crops = new ConcreteBlock(59, Material.plants);
         tilledField = new ConcreteBlock(60, Material.ground);
         furnaceIdle = new ConcreteBlock(61, Material.rock);
@@ -1149,36 +1257,13 @@ public abstract class Block {
         cactus = new ConcreteBlock(81, Material.cactus);
         blockClay = new ConcreteBlock(82, Material.clay);
         reed = new ConcreteBlock(83, Material.plants);
+        jukebox = new ConcreteBlock(84, Material.wood);
         fence = new ConcreteBlock(85, Material.wood);
+        pumpkin = new ConcreteBlock(86, Material.pumpkin);
         netherrack = new ConcreteBlock(87, Material.rock);
         slowSand = new ConcreteBlock(88, Material.sand);
         glowStone = new ConcreteBlock(89, Material.glass);
-        stairsWoodOak = new ConcreteBlock(53, Material.wood);
-        oreDiamond = new ConcreteBlock(56, Material.rock);
-        blockDiamond = new ConcreteBlock(57, Material.iron);
-        workbench = new ConcreteBlock(58, Material.wood);
-        chest = new ConcreteBlockChest(54);
-        redstoneWire = new ConcreteBlockRedstoneWire(55);
-        stoneDoubleSlab = new ConcreteBlockHalfSlab(43, true);
-        stoneSingleSlab = new ConcreteBlockHalfSlab(44, false);
-        leaves = new ConcreteBlockLeaves(18);
-        tallGrass = new ConcreteBlockTallGrass(31);
         portal = new ConcreteBlockPortal(90);
-        vine = new ConcreteBlock(106, Material.vine);
-        fire = new ConcreteBlockFire(51);
-        anvil = new ConcreteBlock(145, Material.anvil);
-        beacon = new ConcreteBlockBeacon(138);
-        melon = new ConcreteBlock(103, Material.pumpkin);
-        pumpkinStem = new ConcreteBlock(104, Material.plants);
-        melonStem = new ConcreteBlock(105, Material.plants);
-
-        // --- Remaining vanilla blocks ---
-        pistonStickyBase = new ConcreteBlockPistonBase(29, true);
-        pistonBase = new ConcreteBlockPistonBase(33, false);
-        pistonExtension = new ConcreteBlockPistonExtension(34);
-        pistonMoving = new ConcreteBlockPistonMoving(36);
-        jukebox = new ConcreteBlock(84, Material.wood);
-        pumpkin = new ConcreteBlock(86, Material.pumpkin);
         pumpkinLantern = new ConcreteBlock(91, Material.pumpkin);
         redstoneRepeaterIdle = new ConcreteBlockRedstoneRepeater(93, false);
         trapdoor = new ConcreteBlock(96, Material.wood);
@@ -1186,6 +1271,10 @@ public abstract class Block {
         stoneBrick = new ConcreteBlock(98, Material.rock);
         fenceIron = new ConcreteBlock(101, Material.iron);
         thinGlass = new ConcreteBlock(102, Material.glass);
+        melon = new ConcreteBlock(103, Material.pumpkin);
+        pumpkinStem = new ConcreteBlock(104, Material.plants);
+        melonStem = new ConcreteBlock(105, Material.plants);
+        vine = new ConcreteBlock(106, Material.vine);
         fenceGate = new ConcreteBlock(107, Material.wood);
         stairsBrick = new ConcreteBlock(108, Material.rock);
         stairsStoneBrick = new ConcreteBlock(109, Material.rock);
@@ -1212,10 +1301,12 @@ public abstract class Block {
         stairsWoodSpruce = new ConcreteBlock(134, Material.wood);
         stairsWoodBirch = new ConcreteBlock(135, Material.wood);
         stairsWoodJungle = new ConcreteBlock(136, Material.wood);
+        beacon = new ConcreteBlockBeacon(138);
         carrot = new ConcreteBlock(141, Material.plants);
         potato = new ConcreteBlock(142, Material.plants);
         woodenButton = new ConcreteBlock(143, Material.circuits);
         skull = new ConcreteBlock(144, Material.circuits);
+        anvil = new ConcreteBlock(145, Material.anvil);
         chestTrapped = new ConcreteBlock(146, Material.wood);
         pressurePlateGold = new ConcreteBlock(147, Material.iron);
         pressurePlateIron = new ConcreteBlock(148, Material.iron);

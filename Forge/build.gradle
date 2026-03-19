@@ -34,6 +34,9 @@ minecraft {
             workingDirectory project.file('run/server')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${project.projectDir}/build/createSrgToMcp/output.srg"
+            arg '--mixin.config=betterthanwolves.mixins.json'
             mods {
                 betterthanwolves {
                     source sourceSets.main
@@ -47,6 +50,9 @@ minecraft {
             workingDirectory project.file('run/client')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${project.projectDir}/build/createSrgToMcp/output.srg"
+            arg '--mixin.config=betterthanwolves.mixins.json'
             mods {
                 betterthanwolves {
                     source sourceSets.main
