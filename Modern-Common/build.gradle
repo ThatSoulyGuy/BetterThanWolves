@@ -1,0 +1,25 @@
+apply plugin: 'java'
+apply plugin: 'net.minecraftforge.gradle'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+
+    // btw.api stubs — Modern-Common implements these contracts
+    implementation project(':Api')
+}
+
+sourceSets {
+    main {
+        java.srcDirs = ['src/main/java']
+    }
+}

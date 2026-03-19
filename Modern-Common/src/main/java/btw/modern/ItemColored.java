@@ -1,0 +1,8 @@
+package btw.modern;
+
+public class ItemColored extends ItemBlock {
+
+    public ItemColored(int id, boolean hasSubtypes) {
+        super(id);
+    }
+}

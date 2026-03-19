@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="betterthanwolves"
+version="4.B0000003"
+displayName="Better Than Wolves"
+description='''
+Better Than Wolves total conversion mod, ported to Forge 1.20.1.
+Originally by FlowerChild for Minecraft 1.5.2.
+'''
+
+[[dependencies.betterthanwolves]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.betterthanwolves]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"

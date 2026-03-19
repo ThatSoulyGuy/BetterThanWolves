@@ -1,0 +1,99 @@
+apply plugin: 'java'
+apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'com.github.johnrengelman.shadow'
+
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
+evaluationDependsOn(':Api')
+evaluationDependsOn(':Modern-Common')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+// Define source sets BEFORE minecraft {} so 'fc' is available in mods {} block
+sourceSets {
+    main {
+        java.srcDirs = ['src/main/java']
+        resources.srcDirs = ['src/main/resources']
+    }
+    // FC source set — holds remapped FC class files so ForgeGradle's
+    // TRANSFORMER classloader includes them in the mod's module layer.
+    fc {
+        resources.srcDirs = []
+    }
+}
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+
+    runs {
+        server {
+            workingDirectory project.file('run/server')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                betterthanwolves {
+                    source sourceSets.main
+                    source project(':Api').sourceSets.main
+                    source project(':Modern-Common').sourceSets.main
+                    source sourceSets.fc
+                }
+            }
+        }
+        client {
+            workingDirectory project.file('run/client')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                betterthanwolves {
+                    source sourceSets.main
+                    source project(':Api').sourceSets.main
+                    source project(':Modern-Common').sourceSets.main
+                    source sourceSets.fc
+                }
+            }
+        }
+    }
+}
+
+// --- Shadow: remap FC bytecode btw.api.* -> btw.modern.* ---
+
+task remapFcCode(type: ShadowJar) {
+    description = 'Remaps btw.api.* to btw.modern.* in FC code and packages it'
+    archiveBaseName = 'fc-remapped'
+    archiveClassifier = ''
+    destinationDirectory = file("$buildDir/remapped")
+
+    // Only include FC code — NOT Api stubs (Modern-Common provides real btw.modern.* classes)
+    from(project(':Client').sourceSets.main.output) { exclude 'btw/api/**' }
+    from(project(':Common').sourceSets.main.output) { exclude 'btw/api/**' }
+    from(project(':Server').sourceSets.main.output) { exclude 'btw/api/**' }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    relocate 'btw.api', 'btw.modern'
+    configurations = []
+}
+
+remapFcCode.dependsOn ':Api:compileJava', ':Common:compileJava', ':Client:compileJava', ':Server:compileJava'
+
+// Extract remapped JAR into fc source set so ForgeGradle's classloader loads it
+task extractFcClasses(type: Copy) {
+    dependsOn remapFcCode
+    from { fileTree(dir: "$buildDir/remapped", include: '*.jar').collect { zipTree(it) } }
+    into sourceSets.fc.output.classesDirs.files.first()
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// Wire task dependencies
+tasks.matching { it.name.startsWith('prepareRun') || it.name.startsWith('run') || it.name == 'classes' }.configureEach {
+    dependsOn extractFcClasses
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+    implementation project(':Modern-Common')
+    implementation project(':Api')
+}

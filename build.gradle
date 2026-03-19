@@ -4,26 +4,32 @@ buildscript {
     repositories {
         mavenCentral()
         gradlePluginPortal()
+        maven { url = 'https://maven.minecraftforge.net/' }
     }
     dependencies {
-        classpath 'com.github.jengelman.gradle.plugins:shadow:5.2.0'
+        classpath 'com.github.johnrengelman:shadow:8.1.1'
+        classpath 'net.minecraftforge.gradle:ForgeGradle:6.0.+'
     }
 }
 
 subprojects {
-    apply plugin: 'java'
+    // Modern-Common uses ForgeGradle which manages its own java plugin and settings
+    if (project.name != 'Modern-Common' && project.name != 'Forge') {
+        apply plugin: 'java'
+
+        java {
+            sourceCompatibility = JavaVersion.VERSION_1_8
+            targetCompatibility = JavaVersion.VERSION_1_8
+        }
+    }
 
     group = 'net.minecraft.btw'
     version = rootProject.modVersion
 
-    java {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-
     repositories {
         mavenCentral()
         maven { url = 'https://libraries.minecraft.net' }
+        maven { url = 'https://maven.minecraftforge.net/' }
     }
 
     tasks.withType(JavaCompile) {
