@@ -1,0 +1,38 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "down": "betterthanwolves:block/fcblockmillstone_bottom_on",
+    "up": "betterthanwolves:block/fcblockmillstone_top_on",
+    "north": "betterthanwolves:block/fcblockmillstone_side_on",
+    "south": "betterthanwolves:block/fcblockmillstone_side_on",
+    "west": "betterthanwolves:block/fcblockmillstone_side_on",
+    "east": "betterthanwolves:block/fcblockmillstone_side_on",
+    "particle": "betterthanwolves:block/fcblockmillstone_bottom_on"
+  },
+  "elements": [
+    {
+      "from": [1.0, 7.0, 1.0],
+      "to": [15.0, 16.0, 15.0],
+      "faces": {
+        "down": {"texture": "#down"},
+        "up": {"texture": "#up"},
+        "north": {"texture": "#north"},
+        "south": {"texture": "#south"},
+        "west": {"texture": "#west"},
+        "east": {"texture": "#east"}
+      }
+    },
+    {
+      "from": [0.0, 11.0, 0.0],
+      "to": [16.0, 15.0, 16.0],
+      "faces": {
+        "down": {"texture": "#down"},
+        "up": {"texture": "#up"},
+        "north": {"texture": "#north"},
+        "south": {"texture": "#south"},
+        "west": {"texture": "#west"},
+        "east": {"texture": "#east"}
+      }
+    }
+  ]
+}

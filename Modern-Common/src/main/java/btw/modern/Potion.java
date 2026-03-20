@@ -23,6 +23,8 @@ public class Potion {
     public static Potion weakness;
     public static Potion poison;
     public static Potion wither;
+    public static Potion healthBoost;
+    public static Potion absorption;
 
     public final int id;
     private String name = "";
@@ -100,5 +102,7 @@ public class Potion {
         weakness        = new Potion(18, true,  4738376).setPotionName("potion.weakness").setIconIndex(5, 1);
         poison          = new Potion(19, true,  5149489).setPotionName("potion.poison").setIconIndex(6, 0);
         wither          = new Potion(20, true,  3484199).setPotionName("potion.wither").setIconIndex(1, 2);
+        healthBoost     = new Potion(21, false, 16284963).setPotionName("potion.healthBoost").setIconIndex(2, 2);
+        absorption      = new Potion(22, false, 2445989).setPotionName("potion.absorption").setIconIndex(2, 2);
     }
 }

@@ -1,22 +1,37 @@
 {
+  "parent": "minecraft:block/block",
   "textures": {
-    "side": "betterthanwolves:block/fcblockhamper",
-    "top": "betterthanwolves:block/fcblockhamper_open_top",
-    "bottom": "betterthanwolves:block/fcblockhamper_bottom",
-    "front": "betterthanwolves:block/fcblockhamper_front",
-    "particle": "betterthanwolves:block/fcblockhamper"
+    "down": "betterthanwolves:block/fcblockhamper_bottom",
+    "up": "betterthanwolves:block/fcblockhamper_top",
+    "north": "betterthanwolves:block/fcblockhamper_front",
+    "south": "betterthanwolves:block/fcblockhamper",
+    "west": "betterthanwolves:block/fcblockhamper",
+    "east": "betterthanwolves:block/fcblockhamper",
+    "particle": "betterthanwolves:block/fcblockhamper_bottom"
   },
   "elements": [
     {
-      "from": [0.0, 0.0, 0.0],
-      "to": [16.0, 16.0, 16.0],
+      "from": [1.0, 2.0, 2.0],
+      "to": [15.0, 13.0, 14.0],
       "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
+        "down": {"texture": "#down"},
+        "up": {"texture": "#up"},
+        "north": {"texture": "#north"},
+        "south": {"texture": "#south"},
+        "west": {"texture": "#west"},
+        "east": {"texture": "#east"}
+      }
+    },
+    {
+      "from": [2.0, 0.0, 3.0],
+      "to": [14.0, 2.0, 13.0],
+      "faces": {
+        "down": {"texture": "#down"},
+        "up": {"texture": "#up"},
+        "north": {"texture": "#north"},
+        "south": {"texture": "#south"},
+        "west": {"texture": "#west"},
+        "east": {"texture": "#east"}
       }
     }
   ]

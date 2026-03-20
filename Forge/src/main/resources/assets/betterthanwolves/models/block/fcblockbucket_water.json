@@ -1,4 +1,5 @@
 {
+  "parent": "minecraft:block/block",
   "textures": {
     "side": "betterthanwolves:block/fcblockbucket_water",
     "top": "betterthanwolves:block/fcblockbucket_water",
@@ -8,15 +9,63 @@
   },
   "elements": [
     {
-      "from": [4.5, 1.0, 4.5],
-      "to": [11.5, 8.0, 11.5],
+      "from": [5.0, 0.0, 5.0],
+      "to": [11.0, 1.0, 11.0],
       "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
+        "north": {"texture": "#front"},
+        "south": {"texture": "#side"},
+        "east": {"texture": "#side"},
+        "west": {"texture": "#side"},
+        "up": {"texture": "#top"},
+        "down": {"texture": "#bottom"}
+      }
+    },
+    {
+      "from": [4.5, 1.0, 4.5],
+      "to": [11.5, 7.0, 11.5],
+      "faces": {
+        "north": {"texture": "#front"},
+        "south": {"texture": "#side"},
+        "east": {"texture": "#side"},
+        "west": {"texture": "#side"},
+        "up": {"texture": "#top"},
+        "down": {"texture": "#bottom"}
+      }
+    },
+    {
+      "from": [4.0, 7.0, 4.0],
+      "to": [12.0, 8.0, 12.0],
+      "faces": {
+        "north": {"texture": "#front"},
+        "south": {"texture": "#side"},
+        "east": {"texture": "#side"},
+        "west": {"texture": "#side"},
+        "up": {"texture": "#top"},
+        "down": {"texture": "#bottom"}
+      }
+    },
+    {
+      "from": [11.0, 8.0, 11.0],
+      "to": [5.0, 2.5, 5.0],
+      "faces": {
+        "north": {"texture": "#front"},
+        "south": {"texture": "#side"},
+        "east": {"texture": "#side"},
+        "west": {"texture": "#side"},
+        "up": {"texture": "#top"},
+        "down": {"texture": "#bottom"}
+      }
+    },
+    {
+      "from": [5.0, 2.0, 5.0],
+      "to": [11.0, 7.5, 11.0],
+      "faces": {
+        "north": {"texture": "#front"},
+        "south": {"texture": "#side"},
+        "east": {"texture": "#side"},
+        "west": {"texture": "#side"},
+        "up": {"texture": "#top"},
+        "down": {"texture": "#bottom"}
       }
     }
   ]

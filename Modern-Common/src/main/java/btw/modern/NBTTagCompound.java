@@ -128,9 +128,34 @@ public class NBTTagCompound extends NBTBase {
         tagMap.put(key, value);
     }
 
+    @Override
+    public byte getId() { return 10; }
+
+    @Override
     public NBTBase copy() {
         NBTTagCompound copy = new NBTTagCompound();
-        copy.tagMap.putAll(this.tagMap);
+        for (Object entryObj : this.tagMap.entrySet()) {
+            Map.Entry entry = (Map.Entry) entryObj;
+            String key = (String) entry.getKey();
+            Object value = entry.getValue();
+
+            if (value instanceof NBTBase) {
+                copy.tagMap.put(key, ((NBTBase) value).copy());
+            } else if (value instanceof byte[]) {
+                byte[] src = (byte[]) value;
+                byte[] dst = new byte[src.length];
+                System.arraycopy(src, 0, dst, 0, src.length);
+                copy.tagMap.put(key, dst);
+            } else if (value instanceof int[]) {
+                int[] src = (int[]) value;
+                int[] dst = new int[src.length];
+                System.arraycopy(src, 0, dst, 0, src.length);
+                copy.tagMap.put(key, dst);
+            } else {
+                // Immutable types: Integer, String, Boolean, Byte, Float, Long, Short, Double
+                copy.tagMap.put(key, value);
+            }
+        }
         return copy;
     }
 }

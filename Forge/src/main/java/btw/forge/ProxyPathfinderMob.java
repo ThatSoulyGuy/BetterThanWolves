@@ -141,10 +141,31 @@ public class ProxyPathfinderMob extends PathfinderMob {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        if (fcEntity != null && tag.contains("FCData")) {
+            CompoundTag fcCompound = tag.getCompound("FCData");
+            ForgeNBTCompound wrapper = new ForgeNBTCompound(fcCompound);
+            try {
+                fcEntity.readFromNBT(wrapper);
+                fcEntity.readEntityFromNBT(wrapper);
+            } catch (Exception e) {
+                LOGGER.warn("Failed to read FC entity NBT data: {}", e.getMessage());
+            }
+        }
     }
 
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+        if (fcEntity != null) {
+            CompoundTag fcCompound = new CompoundTag();
+            ForgeNBTCompound wrapper = new ForgeNBTCompound(fcCompound);
+            try {
+                fcEntity.writeToNBT(wrapper);
+                fcEntity.writeEntityToNBT(wrapper);
+            } catch (Exception e) {
+                LOGGER.warn("Failed to write FC entity NBT data: {}", e.getMessage());
+            }
+            tag.put("FCData", fcCompound);
+        }
     }
 }

@@ -70,6 +70,30 @@ public abstract class World implements IBlockAccess {
         return Block.isNormalCube(getBlockId(x, y, z));
     }
 
+    /**
+     * Returns the Block instance at the given position, or null if the
+     * block ID is out of range or the slot is empty.
+     */
+    public Block getBlock(int x, int y, int z) {
+        int id = getBlockId(x, y, z);
+        if (id >= 0 && id < Block.blocksList.length) {
+            return Block.blocksList[id];
+        }
+        return null;
+    }
+
+    /**
+     * Returns true if the block at the given position has a solid side
+     * on the specified face.  Checks the block's material solidity.
+     */
+    public boolean isBlockSolidOnSide(int x, int y, int z, int side) {
+        Block block = getBlock(x, y, z);
+        if (block != null) {
+            return block.blockMaterial.isSolid();
+        }
+        return false;
+    }
+
     // --- Block modification methods ---
 
     public abstract boolean setBlock(int x, int y, int z, int blockID, int metadata, int flags);
@@ -161,11 +185,11 @@ public abstract class World implements IBlockAccess {
     public abstract int getFullBlockLightValue(int x, int y, int z);
 
     public int getBlockLightValue(int x, int y, int z) {
-        return 0;
+        return 15;
     }
 
     public int getBlockLightValue_do(int x, int y, int z, boolean useNeighborBrightness) {
-        return 0;
+        return 15;
     }
 
     public abstract int getSavedLightValue(EnumSkyBlock enumSkyBlock, int x, int y, int z);
@@ -217,7 +241,7 @@ public abstract class World implements IBlockAccess {
     // --- Chunk methods ---
 
     public boolean blockExists(int x, int y, int z) {
-        return false;
+        return true;
     }
 
     public boolean doChunksNearChunkExist(int x, int y, int z, int range) {
@@ -664,7 +688,9 @@ public abstract class World implements IBlockAccess {
 
     // --- Game rules ---
 
-    public GameRules getGameRules() { return null; }
+    private static final GameRules DEFAULT_GAME_RULES = new GameRules();
+
+    public GameRules getGameRules() { return DEFAULT_GAME_RULES; }
 
     // --- Block density ---
 

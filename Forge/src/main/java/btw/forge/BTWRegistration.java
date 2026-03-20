@@ -2,14 +2,19 @@ package btw.forge;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.mojang.datafixers.types.Type;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Set;
 
 /**
  * Post-initialization registration that creates {@link ProxyBlock} instances
@@ -31,6 +36,8 @@ public class BTWRegistration {
             registerBlocks(event);
         } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS)) {
             registerItems(event);
+        } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCK_ENTITY_TYPES)) {
+            registerBlockEntityType(event);
         }
     }
 
@@ -132,13 +139,8 @@ public class BTWRegistration {
                 String fcName = fcItem.getUnlocalizedName();
                 String displayName = formatFcName(fcName, "Item " + id);
 
-                Item proxyItem = new Item(props) {
-                    @Override
-                    public net.minecraft.network.chat.Component getName(
-                            net.minecraft.world.item.ItemStack stack) {
-                        return net.minecraft.network.chat.Component.literal(displayName);
-                    }
-                };
+                // ProxyItem delegates ALL item interactions to the FC item class
+                Item proxyItem = new ProxyItem(props, id, displayName);
 
                 ResourceLocation key = new ResourceLocation(
                         BTWForgeMod.MOD_ID, "item_" + id);
@@ -203,5 +205,45 @@ public class BTWRegistration {
         } catch (Exception e) {
             LOGGER.error("Failed to register BTW entities", e);
         }
+    }
+
+    /**
+     * Registers a single generic {@link BlockEntityType} for all ProxyBlocks
+     * that have FC tile entities.  The type is valid for every ProxyBlock whose
+     * FC block returns non-null from {@code createNewTileEntity(null)}.
+     *
+     * <p>Forge 1.20.1 requires that a BlockEntityType lists all valid blocks
+     * in its builder.  We collect every ProxyBlock that has a tile entity and
+     * pass them all to the builder.</p>
+     */
+    private static void registerBlockEntityType(net.minecraftforge.registries.RegisterEvent event) {
+        // Collect all ProxyBlocks whose FC block creates a tile entity
+        Set<Block> validBlocks = new HashSet<>();
+        for (int id = 175; id < 4096; id++) {
+            ProxyBlock proxy = ProxyRegistry.getProxy(id);
+            if (proxy != null && proxy.hasFcTileEntity()) {
+                validBlocks.add(proxy);
+            }
+        }
+
+        if (validBlocks.isEmpty()) {
+            LOGGER.info("No FC blocks with tile entities found; skipping BlockEntityType registration.");
+            return;
+        }
+
+        // Build the BlockEntityType with all valid blocks
+        Block[] blocks = validBlocks.toArray(new Block[0]);
+        BlockEntityType<ProxyBlockEntity> type = BlockEntityType.Builder.of(
+                ProxyBlockEntity::new, blocks
+        ).build((Type<?>) null);
+
+        ProxyBlockEntity.TYPE = type;
+
+        ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, "proxy_block_entity");
+        event.register(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCK_ENTITY_TYPES,
+                helper -> helper.register(key, type));
+
+        LOGGER.info("Registered ProxyBlockEntity type for {} FC blocks with tile entities.",
+                validBlocks.size());
     }
 }

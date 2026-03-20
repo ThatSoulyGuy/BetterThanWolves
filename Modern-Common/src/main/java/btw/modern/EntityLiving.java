@@ -1,6 +1,11 @@
 package btw.modern;
 
+import java.util.HashMap;
+
 public abstract class EntityLiving extends Entity {
+
+    /** Active potion effects, keyed by potion ID. */
+    private final HashMap<Integer, PotionEffect> activePotionsMap = new HashMap<>();
 
     public int health;
     public float landMovementFactor;
@@ -78,12 +83,29 @@ public abstract class EntityLiving extends Entity {
     public void onLivingUpdate() {}
 
     public boolean attackEntityFrom(DamageSource source, int amount) {
-        return false;
+        if (this.isEntityInvulnerable()) {
+            return false;
+        }
+        if (this.health <= 0) {
+            return false;
+        }
+        this.limbSwing = 1.5F;
+        this.hurtResistantTime = 10;
+        this.hurtTime = 10;
+        this.health -= amount;
+        if (this.health <= 0) {
+            this.onDeath(source);
+        }
+        return true;
     }
 
-    public void onDeath(DamageSource source) {}
+    public void onDeath(DamageSource source) {
+        this.setDead();
+    }
 
-    public void setAttackTarget(EntityLiving target) {}
+    public void setAttackTarget(EntityLiving target) {
+        this.entityLivingToAttack = target;
+    }
 
     public float getEyeHeight() {
         return 0.0F;
@@ -98,21 +120,36 @@ public abstract class EntityLiving extends Entity {
     }
 
     public boolean isPotionActive(int potionId) {
-        return false;
+        return this.activePotionsMap.containsKey(potionId);
     }
 
     public boolean isPotionActive(Potion potion) {
-        return false;
+        return potion != null && this.activePotionsMap.containsKey(potion.id);
     }
 
     public PotionEffect getActivePotionEffect(Potion potion) {
-        return null;
+        return potion != null ? this.activePotionsMap.get(potion.id) : null;
     }
 
-    public void addPotionEffect(PotionEffect effect) {}
-    public void removePotionEffect(int potionId) {}
+    public void addPotionEffect(PotionEffect effect) {
+        if (effect != null) {
+            this.activePotionsMap.put(effect.getPotionID(), effect);
+        }
+    }
 
-    public void heal(int amount) {}
+    public void removePotionEffect(int potionId) {
+        this.activePotionsMap.remove(potionId);
+    }
+
+    public void heal(int amount) {
+        if (this.health > 0) {
+            this.health += amount;
+            if (this.health > this.getMaxHealth()) {
+                this.health = this.getMaxHealth();
+            }
+            this.hurtTime = 0;
+        }
+    }
 
     public ItemStack getCurrentItemOrArmor(int slot) {
         return null;
@@ -129,7 +166,7 @@ public abstract class EntityLiving extends Entity {
     }
 
     public boolean isEntityAlive() {
-        return false;
+        return !this.isDead && this.health > 0;
     }
 
     public String getTranslatedEntityName() {
@@ -140,10 +177,15 @@ public abstract class EntityLiving extends Entity {
         return false;
     }
 
-    public void setRevengeTarget(EntityLiving target) {}
+    public void setRevengeTarget(EntityLiving target) {
+        this.entityLivingToAttack = target;
+        if (target != null) {
+            this.revengeTimer = this.ticksExisted;
+        }
+    }
 
     public EntityLiving getLastAttackingEntity() {
-        return null;
+        return this.lastAttackingEntity;
     }
 
     public boolean isPlayerSleeping() {
@@ -151,10 +193,12 @@ public abstract class EntityLiving extends Entity {
     }
 
     public int getAge() {
-        return 0;
+        return this.entityAge;
     }
 
-    public void clearActivePotions() {}
+    public void clearActivePotions() {
+        this.activePotionsMap.clear();
+    }
 
     // --- Enchantment bridge methods ---
     // These return 0/false by default. PlayerBridge overrides them to query
@@ -205,7 +249,7 @@ public abstract class EntityLiving extends Entity {
     public void dropHead() {}
     public boolean canTriggerWalking() { return true; }
     public AxisAlignedBB getCollisionBox(Entity entity) { return null; }
-    public AxisAlignedBB getBoundingBox() { return null; }
+    public AxisAlignedBB getBoundingBox() { return this.boundingBox; }
     public void despawnEntity() {}
     public void setCanPickUpLoot(boolean canPickUp) {}
     public boolean getCanPickUpLoot() { return false; }
@@ -220,7 +264,7 @@ public abstract class EntityLiving extends Entity {
     public PathEntity getPathEntityToEntity(Entity entity) { return null; }
     public boolean hasPath() { return false; }
     public void setPathToEntity(PathEntity path) {}
-    public EntityLiving getAITarget() { return null; }
+    public EntityLiving getAITarget() { return this.entityLivingToAttack; }
     public boolean isChild() { return false; }
     public void renderBrokenItemStack(ItemStack stack) {}
     public java.util.Random getRNG() { return this.rand; }
@@ -392,7 +436,9 @@ public abstract class EntityLiving extends Entity {
     public int getVerticalFaceSpeed() { return 10; }
     public void spawnExplosionParticle() {}
     public boolean canSee(EntityLiving entity) { return false; }
-    public void addOrRenewAgressor(EntityLiving entity) {}
+    public void addOrRenewAgressor(EntityLiving entity) {
+        this.lastAttackingEntity = entity;
+    }
     public void dealFireDamage(int amount) {}
     public void TransmitAttackTargetToClients() {}
     public void EntityLivingSetAttackTarget(EntityLiving target) {}

@@ -20,8 +20,40 @@ public class PathEntity {
     public void setCurrentPathLength(int length) { this.pathLength = length; }
     public int getCurrentPathIndex() { return pathIndex; }
     public void setCurrentPathIndex(int index) { this.pathIndex = index; }
-    public Vec3 getVectorFromIndex(Entity entity, int index) { return null; }
-    public Vec3 getPosition(Entity entity) { return null; }
-    public boolean isSamePath(PathEntity other) { return false; }
-    public boolean isDestinationSame(Vec3 vec) { return false; }
+    public Vec3 getVectorFromIndex(Entity entity, int index) {
+        PathPoint point = this.points[index];
+        return Vec3.createVectorHelper(
+            (double) point.xCoord + (double) ((int) (entity.width + 1.0F)) * 0.5D,
+            (double) point.yCoord,
+            (double) point.zCoord + (double) ((int) (entity.width + 1.0F)) * 0.5D
+        );
+    }
+
+    public Vec3 getPosition(Entity entity) {
+        return this.getVectorFromIndex(entity, this.pathIndex);
+    }
+
+    public boolean isSamePath(PathEntity other) {
+        if (other == null) {
+            return false;
+        }
+        if (other.points.length != this.points.length) {
+            return false;
+        }
+        for (int i = 0; i < this.points.length; i++) {
+            if (!this.points[i].equals(other.points[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean isDestinationSame(Vec3 vec) {
+        PathPoint finalPoint = this.getFinalPathPoint();
+        if (finalPoint == null) {
+            return false;
+        }
+        return finalPoint.xCoord == (int) vec.xCoord
+            && finalPoint.zCoord == (int) vec.zCoord;
+    }
 }

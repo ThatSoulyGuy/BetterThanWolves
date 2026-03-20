@@ -1,23 +1,4 @@
 {
-  "textures": {
-    "side": "betterthanwolves:block/fcblockweeds_0",
-    "top": "betterthanwolves:block/fcblockweeds_0",
-    "bottom": "betterthanwolves:block/fcblockweeds_0",
-    "front": "betterthanwolves:block/fcblockweeds_0",
-    "particle": "betterthanwolves:block/fcblockweeds_0"
-  },
-  "elements": [
-    {
-      "from": [0.0, 0.0, 0.0],
-      "to": [16.0, 8.0, 16.0],
-      "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
-      }
-    }
-  ]
+  "parent": "minecraft:block/cube_all",
+  "textures": {"all": "betterthanwolves:block/fcblockvinetrap"}
 }

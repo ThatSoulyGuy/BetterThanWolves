@@ -54,6 +54,7 @@ public class BiomeGenBase {
         this.waterColorMultiplier = 16777215;
         this.temperature = 0.5F;
         this.rainfall = 0.5F;
+        this.enableRain = true;
         if (id >= 0 && id < biomeList.length) biomeList[id] = this;
     }
 
@@ -94,8 +95,8 @@ public class BiomeGenBase {
     public float getSpawningChance() { return 0.1F; }
 
     public void decorate(World world, Random rand, int x, int z) {}
-    public int getBiomeGrassColor() { return 0; }
-    public int getBiomeFoliageColor() { return 0; }
+    public int getBiomeGrassColor() { return 0x7CBD6B; }
+    public int getBiomeFoliageColor() { return 0x59AE30; }
     public int getSkyColorByTemp(float temp) { return 0; }
 
     public boolean CanLightningStrikeInBiome() { return canSpawnLightningBolt(); }

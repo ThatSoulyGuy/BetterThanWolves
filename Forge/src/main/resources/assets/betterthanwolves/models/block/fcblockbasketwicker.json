@@ -1,23 +1,12 @@
 {
+  "parent": "minecraft:block/cube",
   "textures": {
-    "side": "betterthanwolves:block/fcblockbasketwicker",
-    "top": "betterthanwolves:block/fcblockbasketwicker_open_top",
-    "bottom": "betterthanwolves:block/fcblockbasketwicker_bottom",
-    "front": "betterthanwolves:block/fcblockbasketwicker_front",
-    "particle": "betterthanwolves:block/fcblockbasketwicker"
-  },
-  "elements": [
-    {
-      "from": [0.0, 0.0, 0.0],
-      "to": [16.0, 8.0, 16.0],
-      "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
-      }
-    }
-  ]
+    "down": "betterthanwolves:block/fcblockbasketwicker_bottom",
+    "up": "betterthanwolves:block/fcblockbasketwicker_top",
+    "north": "betterthanwolves:block/fcblockbasketwicker_front",
+    "south": "betterthanwolves:block/fcblockbasketwicker",
+    "west": "betterthanwolves:block/fcblockbasketwicker",
+    "east": "betterthanwolves:block/fcblockbasketwicker",
+    "particle": "betterthanwolves:block/fcblockbasketwicker_bottom"
+  }
 }

@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "betterthanwolves:block/fcblockblightl3_roots",
+    "up": "betterthanwolves:block/fcblockblightl3_top",
+    "north": "betterthanwolves:block/fcblockblightl3_side",
+    "south": "betterthanwolves:block/fcblockblightl3_side",
+    "west": "betterthanwolves:block/fcblockblightl3_side",
+    "east": "betterthanwolves:block/fcblockblightl3_side",
+    "particle": "betterthanwolves:block/fcblockblightl3_roots"
+  }
+}

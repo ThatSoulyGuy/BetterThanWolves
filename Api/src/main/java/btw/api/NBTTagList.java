@@ -27,7 +27,20 @@ public class NBTTagList extends NBTBase {
         return (NBTBase) tagList.remove(index);
     }
 
+    @Override
     public byte getId() { return 9; }
+
+    @Override
     public String getName() { return ""; }
-    public NBTBase copy() { return new NBTTagList(); }
+
+    @Override
+    public NBTBase copy() {
+        NBTTagList copy = new NBTTagList();
+        copy.tagType = this.tagType;
+        for (int i = 0; i < this.tagList.size(); i++) {
+            NBTBase tag = (NBTBase) this.tagList.get(i);
+            copy.tagList.add(tag.copy());
+        }
+        return copy;
+    }
 }

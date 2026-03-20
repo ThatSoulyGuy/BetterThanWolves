@@ -1,4 +1,0 @@
-{
-  "parent": "minecraft:block/cube_all",
-  "textures": {"all": "betterthanwolves:block/fcblocklogchewedoak_side_border"}
-}

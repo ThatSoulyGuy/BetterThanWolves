@@ -1,23 +1,4 @@
 {
-  "textures": {
-    "side": "betterthanwolves:block/fcblockpadding",
-    "top": "betterthanwolves:block/fcblockpadding",
-    "bottom": "betterthanwolves:block/fcblockpadding",
-    "front": "betterthanwolves:block/fcblockpadding",
-    "particle": "betterthanwolves:block/fcblockpadding"
-  },
-  "elements": [
-    {
-      "from": [0.0, 0.0, 0.0],
-      "to": [16.0, 8.0, 16.0],
-      "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
-      }
-    }
-  ]
+  "parent": "minecraft:block/cube_all",
+  "textures": {"all": "minecraft:block/cloth_0"}
 }

@@ -2,6 +2,7 @@ package btw.forge.mixin;
 
 import btw.forge.PlayerBridge;
 import btw.forge.ProxyRegistry;
+import btw.forge.WorldBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
@@ -45,31 +46,44 @@ public abstract class LivingEntityMixin {
     private void btw$getBlockSpeedFactor(CallbackInfoReturnable<Float> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
 
+        // Get FC world — works for both server (ServerLevel) and client
+        btw.modern.World fcWorld = null;
+        if (self.level() instanceof net.minecraft.server.level.ServerLevel sl) {
+            fcWorld = WorldBridge.getOrCreate(sl);
+        }
+
         // Check the block the entity is standing on
         BlockPos below = self.blockPosition().below();
         BlockState belowState = self.level().getBlockState(below);
 
         btw.modern.Block fcBlock = ProxyRegistry.getFcBlock(belowState.getBlock());
         if (fcBlock != null) {
-            float modifier = fcBlock.GetMovementModifier(null,
-                    below.getX(), below.getY(), below.getZ());
-            if (modifier > 0 && modifier != 1.0F) {
-                cir.setReturnValue(modifier);
-                return;
+            try {
+                float modifier = fcBlock.GetMovementModifier(fcWorld,
+                        below.getX(), below.getY(), below.getZ());
+                if (modifier > 0 && modifier != 1.0F) {
+                    cir.setReturnValue(modifier);
+                    return;
+                }
+            } catch (Exception e) {
+                // FC code may fail if world is null on client — fall through to vanilla
             }
         }
 
         // Also check the block the entity is currently inside
-        // (e.g., cobweb replacement, soul sand)
         BlockPos at = self.blockPosition();
         BlockState atState = self.level().getBlockState(at);
 
         btw.modern.Block fcBlockAt = ProxyRegistry.getFcBlock(atState.getBlock());
         if (fcBlockAt != null) {
-            float modifier = fcBlockAt.GetMovementModifier(null,
-                    at.getX(), at.getY(), at.getZ());
-            if (modifier > 0 && modifier != 1.0F) {
-                cir.setReturnValue(modifier);
+            try {
+                float modifier = fcBlockAt.GetMovementModifier(fcWorld,
+                        at.getX(), at.getY(), at.getZ());
+                if (modifier > 0 && modifier != 1.0F) {
+                    cir.setReturnValue(modifier);
+                }
+            } catch (Exception e) {
+                // FC code may fail if world is null on client — fall through to vanilla
             }
         }
     }

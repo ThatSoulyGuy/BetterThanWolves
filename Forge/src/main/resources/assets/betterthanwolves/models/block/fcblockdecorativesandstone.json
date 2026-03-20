@@ -1,23 +1,12 @@
 {
+  "parent": "minecraft:block/cube",
   "textures": {
-    "side": "betterthanwolves:block/fcblockdecorativesandstone_side",
-    "top": "betterthanwolves:block/fcblockdecorativesandstone_top",
-    "bottom": "betterthanwolves:block/fcblockdecorativesandstone_bottom",
-    "front": "betterthanwolves:block/fcblockdecorativesandstone_side",
+    "down": "betterthanwolves:block/fcblockdecorativesandstone_bottom",
+    "up": "betterthanwolves:block/fcblockdecorativesandstone_top",
+    "north": "betterthanwolves:block/fcblockdecorativesandstone_side",
+    "south": "betterthanwolves:block/fcblockdecorativesandstone_side",
+    "west": "betterthanwolves:block/fcblockdecorativesandstone_side",
+    "east": "betterthanwolves:block/fcblockdecorativesandstone_side",
     "particle": "betterthanwolves:block/fcblockdecorativesandstone_bottom"
-  },
-  "elements": [
-    {
-      "from": [4.0, 4.0, 0.0],
-      "to": [12.0, 12.0, 16.0],
-      "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
-      }
-    }
-  ]
+  }
 }

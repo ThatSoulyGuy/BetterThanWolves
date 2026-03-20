@@ -7,11 +7,16 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -40,7 +45,7 @@ import java.util.Random;
  * Every vanilla Block callback that has a corresponding method on
  * btw.modern.Block is forwarded here.
  */
-public class ProxyBlock extends Block {
+public class ProxyBlock extends Block implements EntityBlock {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-ProxyBlock");
 
@@ -53,12 +58,29 @@ public class ProxyBlock extends Block {
     private final int legacyId;
     private final btw.modern.Block fcBlock;
 
+    /**
+     * Cached flag: true when the FC block's {@code createNewTileEntity(null)}
+     * returns a non-null value, meaning this block needs a BlockEntity.
+     * Computed once in the constructor and never changes.
+     */
+    private final boolean hasTileEntity;
+
     public ProxyBlock(int legacyId, btw.modern.Block fcBlock) {
         super(initAndBuildProperties(fcBlock));
         this.legacyId = legacyId;
         this.fcBlock = fcBlock;
         CONSTRUCTING.remove();
         this.registerDefaultState(this.stateDefinition.any().setValue(META, 0));
+
+        // Probe the FC block to see if it creates a tile entity
+        boolean needsTe = false;
+        try {
+            btw.modern.TileEntity te = fcBlock.createNewTileEntity(null);
+            needsTe = (te != null);
+        } catch (Exception e) {
+            // Some FC blocks may NPE when passed null world; treat as no tile entity
+        }
+        this.hasTileEntity = needsTe;
     }
 
     private static BlockBehaviour.Properties initAndBuildProperties(btw.modern.Block fcBlock) {
@@ -131,7 +153,11 @@ public class ProxyBlock extends Block {
     @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         btw.modern.World world = WorldBridge.getOrCreate(level);
-        fc().updateTick(world, pos.getX(), pos.getY(), pos.getZ(), new Random(random.nextLong()));
+        try {
+            fc().updateTick(world, pos.getX(), pos.getY(), pos.getZ(), new Random(random.nextLong()));
+        } catch (NullPointerException e) {
+            // FC block may expect tile entity or world state not yet bridged
+        }
     }
 
     // --- randomTick ---
@@ -139,7 +165,11 @@ public class ProxyBlock extends Block {
     @Override
     public void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         btw.modern.World world = WorldBridge.getOrCreate(level);
-        fc().RandomUpdateTick(world, pos.getX(), pos.getY(), pos.getZ(), new Random(random.nextLong()));
+        try {
+            fc().RandomUpdateTick(world, pos.getX(), pos.getY(), pos.getZ(), new Random(random.nextLong()));
+        } catch (NullPointerException e) {
+            // FC block may expect tile entity or world state not yet bridged
+        }
     }
 
     @Override
@@ -177,20 +207,7 @@ public class ProxyBlock extends Block {
         }
     }
 
-    // --- onRemove ---
-
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos,
-                         BlockState newState, boolean moving) {
-        if (!state.is(newState.getBlock())) {
-            if (level instanceof ServerLevel sl) {
-                btw.modern.World world = WorldBridge.getOrCreate(sl);
-                fc().breakBlock(world, pos.getX(), pos.getY(), pos.getZ(),
-                        legacyId, state.getValue(META));
-            }
-        }
-        super.onRemove(state, level, pos, newState, moving);
-    }
+    // --- onRemove --- (moved to EntityBlock section at bottom of class)
 
     // --- use (onBlockActivated) ---
 
@@ -199,14 +216,28 @@ public class ProxyBlock extends Block {
                                  Player player, InteractionHand hand, BlockHitResult hit) {
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
+            PlayerBridge fcPlayer = PlayerBridge.getOrCreate(player);
+            fcPlayer.syncFromReal();
             int side = hit.getDirection().get3DDataValue();
             Vec3 hitLoc = hit.getLocation();
-            // Player wrapping is not yet implemented -- pass null for now.
+            float hitX = (float)(hitLoc.x - pos.getX());
+            float hitY = (float)(hitLoc.y - pos.getY());
+            float hitZ = (float)(hitLoc.z - pos.getZ());
+
+            // Stage 1: FC block activation
             boolean result = fc().onBlockActivated(world, pos.getX(), pos.getY(), pos.getZ(),
-                    null, side,
-                    (float)(hitLoc.x - pos.getX()),
-                    (float)(hitLoc.y - pos.getY()),
-                    (float)(hitLoc.z - pos.getZ()));
+                    fcPlayer, side, hitX, hitY, hitZ);
+
+            if (!result) {
+                // Stage 2: FC item use on block
+                btw.modern.ItemStack fcHeld = fcPlayer.getCurrentEquippedItem();
+                if (fcHeld != null) {
+                    result = fcHeld.tryPlaceItemIntoWorld(
+                            fcPlayer, world, pos.getX(), pos.getY(), pos.getZ(),
+                            side, hitX, hitY, hitZ);
+                }
+            }
+
             return result ? InteractionResult.SUCCESS : InteractionResult.PASS;
         }
         return InteractionResult.PASS;
@@ -218,8 +249,9 @@ public class ProxyBlock extends Block {
     public void attack(BlockState state, Level level, BlockPos pos, Player player) {
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
-            // Player wrapping not yet implemented
-            fc().onBlockClicked(world, pos.getX(), pos.getY(), pos.getZ(), null);
+            PlayerBridge fcPlayer = PlayerBridge.getOrCreate(player);
+            fcPlayer.syncFromReal();
+            fc().onBlockClicked(world, pos.getX(), pos.getY(), pos.getZ(), fcPlayer);
         }
     }
 
@@ -229,8 +261,8 @@ public class ProxyBlock extends Block {
     public void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
-            // Entity wrapping not yet implemented -- pass null for now.
-            fc().onEntityCollidedWithBlock(world, pos.getX(), pos.getY(), pos.getZ(), null);
+            btw.modern.Entity fcEntity = wrapEntity(entity);
+            fc().onEntityCollidedWithBlock(world, pos.getX(), pos.getY(), pos.getZ(), fcEntity);
         }
     }
 
@@ -240,7 +272,8 @@ public class ProxyBlock extends Block {
     public void stepOn(Level level, BlockPos pos, BlockState state, Entity entity) {
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
-            fc().onEntityWalking(world, pos.getX(), pos.getY(), pos.getZ(), null);
+            btw.modern.Entity fcEntity = wrapEntity(entity);
+            fc().onEntityWalking(world, pos.getX(), pos.getY(), pos.getZ(), fcEntity);
         }
     }
 
@@ -251,7 +284,8 @@ public class ProxyBlock extends Block {
                        float fallDistance) {
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
-            fc().onFallenUpon(world, pos.getX(), pos.getY(), pos.getZ(), null, fallDistance);
+            btw.modern.Entity fcEntity = wrapEntity(entity);
+            fc().onFallenUpon(world, pos.getX(), pos.getY(), pos.getZ(), fcEntity, fallDistance);
         } else {
             super.fallOn(level, state, pos, entity, fallDistance);
         }
@@ -377,8 +411,15 @@ public class ProxyBlock extends Block {
 
     @Override
     public float getSpeedFactor() {
-        float modifier = fc().GetMovementModifier(null, 0, 0, 0);
-        return modifier > 0 ? modifier : 1.0F;
+        // getSpeedFactor() has no world/position context, but FC's GetMovementModifier
+        // may query block metadata which requires a world. Catch NPE for blocks that
+        // need metadata (like dirt slabs) — the mixin handles position-aware speed.
+        try {
+            float modifier = fc().GetMovementModifier(null, 0, 0, 0);
+            return modifier > 0 ? modifier : 1.0F;
+        } catch (NullPointerException e) {
+            return 1.0F;
+        }
     }
 
     @Override
@@ -446,14 +487,120 @@ public class ProxyBlock extends Block {
 
     @Override
     public net.minecraft.world.level.block.RenderShape getRenderShape(BlockState state) {
-        return fc().renderAsNormalBlock() ?
-            net.minecraft.world.level.block.RenderShape.MODEL :
-            net.minecraft.world.level.block.RenderShape.ENTITYBLOCK_ANIMATED;
+        // Always use MODEL — the JSON model system renders all ProxyBlocks.
+        // ENTITYBLOCK_ANIMATED would make the block invisible since we have
+        // no BlockEntityRenderer for ProxyBlocks.
+        return net.minecraft.world.level.block.RenderShape.MODEL;
     }
 
     @Override
     public boolean useShapeForLightOcclusion(BlockState state) {
         return !fc().isOpaqueCube();
+    }
+
+    // ================================================================
+    // Entity wrapping helper
+    // ================================================================
+
+    /**
+     * Wraps a vanilla MC entity as a btw.modern.Entity for FC callbacks.
+     * Returns a {@link PlayerBridge} for Player entities (richer state and
+     * correct EntityPlayer type), a {@link LivingEntityBridge} for non-player
+     * living entities, or an {@link EntityBridge} for other entities.
+     */
+    private static btw.modern.Entity wrapEntity(Entity entity) {
+        if (entity instanceof Player player) {
+            PlayerBridge pb = PlayerBridge.getOrCreate(player);
+            pb.syncFromReal();
+            return pb;
+        }
+        if (entity instanceof LivingEntity living) {
+            LivingEntityBridge lb = LivingEntityBridge.getOrCreate(living);
+            lb.syncFromReal();
+            return lb;
+        }
+        EntityBridge eb = EntityBridge.getOrCreate(entity);
+        eb.syncFromReal();
+        return eb;
+    }
+
+    // ================================================================
+    // EntityBlock implementation — FC tile entity bridge
+    // ================================================================
+
+    /**
+     * Returns whether this ProxyBlock's FC block creates a tile entity.
+     */
+    public boolean hasFcTileEntity() {
+        return hasTileEntity;
+    }
+
+    /**
+     * Creates a new {@link ProxyBlockEntity} wrapping the FC tile entity
+     * produced by the FC block's {@code createNewTileEntity()} method.
+     *
+     * <p>Returns null if the FC block does not use tile entities, which
+     * tells MC not to store a BlockEntity at this position.</p>
+     */
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        if (!hasTileEntity) return null;
+        if (ProxyBlockEntity.TYPE == null) return null; // not yet registered
+        try {
+            btw.modern.TileEntity fcTe = fc().createNewTileEntity(null);
+            if (fcTe != null) {
+                return new ProxyBlockEntity(pos, state, fcTe, legacyId);
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Failed to create FC tile entity for block {}: {}",
+                    legacyId, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Returns a ticker for ProxyBlockEntities that calls the FC tile
+     * entity's {@code updateEntity()} method every server tick.
+     *
+     * <p>Only returns a ticker on the server side (when the level is a
+     * {@link ServerLevel}); client-side ticking is not needed for FC
+     * tile entities which are server-only.</p>
+     */
+    @Override
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level,
+            BlockState state, BlockEntityType<T> type) {
+        if (!hasTileEntity) return null;
+        if (level.isClientSide()) return null;
+        if (type == ProxyBlockEntity.TYPE) {
+            @SuppressWarnings("unchecked")
+            BlockEntityTicker<T> ticker = (BlockEntityTicker<T>) (BlockEntityTicker<ProxyBlockEntity>) ProxyBlockEntity::tick;
+            return ticker;
+        }
+        return null;
+    }
+
+    // ================================================================
+    // onRemove — must remove BlockEntity AFTER FC breakBlock runs
+    // ================================================================
+
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos,
+                         BlockState newState, boolean moving) {
+        if (!state.is(newState.getBlock())) {
+            if (level instanceof ServerLevel sl) {
+                btw.modern.World world = WorldBridge.getOrCreate(sl);
+                try {
+                    fc().breakBlock(world, pos.getX(), pos.getY(), pos.getZ(),
+                            legacyId, state.getValue(META));
+                } catch (NullPointerException e) {
+                    // FC block may expect a tile entity that doesn't exist yet
+                    // (tile entity bridge not fully implemented for all FC blocks)
+                }
+            }
+        }
+        // super.onRemove handles BlockEntity removal — must happen AFTER
+        // breakBlock so FC code can still access the tile entity during cleanup.
+        super.onRemove(state, level, pos, newState, moving);
     }
 
 }

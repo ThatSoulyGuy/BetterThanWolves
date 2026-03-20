@@ -1,5 +1,6 @@
 package btw.forge;
 
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.Item;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,6 +27,7 @@ public class ItemStackHelper {
         if (fcStack == null) return net.minecraft.world.item.ItemStack.EMPTY;
 
         int legacyId = fcStack.itemID;
+        if (legacyId <= 0) return net.minecraft.world.item.ItemStack.EMPTY;
 
         // Try as an item first
         Item modernItem = ProxyRegistry.getModernItem(legacyId);
@@ -51,8 +53,13 @@ public class ItemStackHelper {
             mcStack.setDamageValue(fcStack.getItemDamage());
         }
 
-        // TODO: copy NBT/enchantments if fcStack has tag data (stackTagCompound)
-        // This requires bridging btw.modern.NBTTagCompound to net.minecraft.nbt.CompoundTag
+        // Copy NBT/enchantments if the FC stack has tag data
+        if (fcStack.hasTagCompound()) {
+            CompoundTag mcTag = toMcTag(fcStack.getTagCompound());
+            if (mcTag != null) {
+                mcStack.setTag(mcTag);
+            }
+        }
 
         return mcStack;
     }
@@ -84,9 +91,38 @@ public class ItemStackHelper {
         btw.modern.ItemStack fcStack = new btw.modern.ItemStack(
                 legacyId, mcStack.getCount(), mcStack.getDamageValue());
 
-        // TODO: copy NBT/enchantments from MC CompoundTag to btw.modern.NBTTagCompound
+        // Copy NBT/enchantments from MC CompoundTag to FC NBTTagCompound
+        CompoundTag mcTag = mcStack.getTag();
+        if (mcTag != null && !mcTag.isEmpty()) {
+            fcStack.setTagCompound(new ForgeNBTCompound(mcTag.copy()));
+        }
 
         return fcStack;
+    }
+
+    /**
+     * Convert an FC {@link btw.modern.NBTTagCompound} to an MC {@link CompoundTag}.
+     *
+     * <p>If the FC tag is a {@link ForgeNBTCompound} (backed by a real CompoundTag),
+     * the inner tag is extracted and copied. Otherwise, conversion is not possible
+     * because the plain {@link btw.modern.NBTTagCompound} does not expose its keys
+     * for iteration.</p>
+     *
+     * @param fcTag the FC NBT compound (may be null)
+     * @return a copy of the underlying MC CompoundTag, or null if conversion is not possible
+     */
+    static CompoundTag toMcTag(btw.modern.NBTTagCompound fcTag) {
+        if (fcTag == null) return null;
+
+        if (fcTag instanceof ForgeNBTCompound fnbt) {
+            // Already backed by a real CompoundTag — return a copy to avoid shared state
+            return fnbt.getTag().copy();
+        }
+
+        // Plain NBTTagCompound with private tagMap — cannot iterate keys
+        LOGGER.warn("Cannot convert plain NBTTagCompound to CompoundTag: " +
+                "tag is not a ForgeNBTCompound. NBT data will be lost.");
+        return null;
     }
 
     /**

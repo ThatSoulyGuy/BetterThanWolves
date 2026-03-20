@@ -1,23 +1,4 @@
 {
-  "textures": {
-    "side": "betterthanwolves:block/fcblockcandle_c00",
-    "top": "betterthanwolves:block/fcblockcandle_c00",
-    "bottom": "betterthanwolves:block/fcblockcandle_c00",
-    "front": "betterthanwolves:block/fcblockcandle_c00",
-    "particle": "betterthanwolves:block/fcblockcandle_c00"
-  },
-  "elements": [
-    {
-      "from": [7.0, 0.0, 7.0],
-      "to": [9.0, 6.0, 9.0],
-      "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
-      }
-    }
-  ]
+  "parent": "minecraft:block/cube_all",
+  "textures": {"all": "betterthanwolves:block/fcblockcandle_c00"}
 }

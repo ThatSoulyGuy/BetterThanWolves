@@ -1,23 +1,12 @@
 {
+  "parent": "minecraft:block/cube",
   "textures": {
-    "side": "betterthanwolves:block/fcblockfarmlandfertilized_dry",
-    "top": "betterthanwolves:block/fcblockfarmlandfertilized_dry",
-    "bottom": "betterthanwolves:block/fcblockfarmlandfertilized_dry",
-    "front": "betterthanwolves:block/fcblockfarmlandfertilized_dry",
-    "particle": "betterthanwolves:block/fcblockfarmlandfertilized_dry"
-  },
-  "elements": [
-    {
-      "from": [0.0, 0.0, 0.0],
-      "to": [16.0, 15.0, 16.0],
-      "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
-      }
-    }
-  ]
+    "down": "minecraft:block/dirt",
+    "up": "betterthanwolves:block/fcblockfarmlandfertilized_dry",
+    "north": "minecraft:block/dirt",
+    "south": "minecraft:block/dirt",
+    "west": "minecraft:block/dirt",
+    "east": "minecraft:block/dirt",
+    "particle": "minecraft:block/dirt"
+  }
 }

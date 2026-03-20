@@ -42,8 +42,14 @@ public class DamageSourceMapping {
             case "fallingBlock" -> sources.fallingBlock(null);
             case "cactus" -> sources.cactus();
             case "lightningBolt" -> sources.lightningBolt();
-            // FC custom damage types
-            case "fcGloom" -> sources.generic(); // TODO: register custom FC damage type
+            // FC custom damage types — fcGloom is BTW's "gloom" darkness damage.
+            // Mapped to generic() because registering a custom MC DamageType requires
+            // a datapack JSON + DamageType registry entry. Generic works for now since
+            // the damage amount and bypass logic are handled on the FC side; the MC
+            // DamageSource only controls the death message and armor interaction.
+            // To add a proper death message, register a custom DamageType in a datapack
+            // under data/btw/damage_type/gloom.json and reference it here.
+            case "fcGloom" -> sources.generic();
             default -> sources.generic();
         };
     }

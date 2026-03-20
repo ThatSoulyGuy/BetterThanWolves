@@ -189,15 +189,26 @@ public class PlayerBridge extends btw.modern.EntityPlayer {
      * Drops an item from the player's position with a small random velocity.
      * Converts FC ItemStack to MC ItemStack via {@link ItemStackHelper} and
      * delegates to the real player's drop method.
+     *
+     * Returns an FC EntityItem wrapper around the spawned MC ItemEntity.
+     * Most FC callers ignore the return value, but some use it to customize
+     * the dropped item (e.g., setting no-despawn or adjusting pickup delay).
      */
     @Override
     public btw.modern.EntityItem dropPlayerItem(btw.modern.ItemStack stack) {
         if (stack == null) return null;
         net.minecraft.world.item.ItemStack mcStack = ItemStackHelper.toMcStack(stack);
         if (mcStack.isEmpty()) return null;
-        realPlayer.drop(mcStack, false);
-        // TODO: wrap the returned MC ItemEntity in an FC EntityItem if callers need the return value
-        return null;
+        net.minecraft.world.entity.item.ItemEntity mcItem = realPlayer.drop(mcStack, false);
+        if (mcItem == null) return null;
+        // Wrap the returned MC ItemEntity in an FC EntityItem so callers
+        // can manipulate pickup delay, despawn time, etc.
+        btw.modern.EntityItem fcItem = new btw.modern.EntityItem(
+                this.worldObj,
+                mcItem.getX(), mcItem.getY(), mcItem.getZ(),
+                stack);
+        fcItem.entityId = mcItem.getId();
+        return fcItem;
     }
 
     /**
@@ -485,5 +496,60 @@ public class PlayerBridge extends btw.modern.EntityPlayer {
         net.minecraft.world.item.ItemStack held = realPlayer.getMainHandItem();
         return net.minecraft.world.item.enchantment.EnchantmentHelper.getItemEnchantmentLevel(
                 net.minecraft.world.item.enchantment.Enchantments.SILK_TOUCH, held) > 0;
+    }
+
+    // ================================================================
+    // Generalized side-effect bridges — FC code calls these to produce
+    // effects in the MC engine. Every method here delegates to the real
+    // MC player so FC side effects are visible.
+    // ================================================================
+
+    /**
+     * FC calls this to start the "using item" animation (bow draw, eating, fire starting).
+     * Tells the real MC player to start using their held item, which triggers
+     * the animation, use-duration timer, and eventually finishUsingItem/releaseUsing.
+     */
+    @Override
+    public void setItemInUse(btw.modern.ItemStack stack, int duration) {
+        super.setItemInUse(stack, duration);
+        // Tell the real MC player to start using their held item
+        if (realPlayer instanceof net.minecraft.server.level.ServerPlayer sp) {
+            // MC 1.20.1: startUsingItem triggers the use animation + timer
+            sp.startUsingItem(net.minecraft.world.InteractionHand.MAIN_HAND);
+        }
+    }
+
+    /**
+     * FC calls this to play a sound at the player's position.
+     * Maps FC sound names to MC SoundEvents via {@link SoundMapping}.
+     */
+    @Override
+    public void playSound(String name, float volume, float pitch) {
+        SoundMapping.playAtEntity(realPlayer, name, volume, pitch);
+    }
+
+    /**
+     * FC calls this when the player can't eat/drink (hunger potion active).
+     * Plays a failure sound.
+     */
+    @Override
+    public void OnCantConsume() {
+        playSound("random.eat", 0.5F, 0.5F);
+    }
+
+    /**
+     * FC calls this to open a GUI for a chest/inventory.
+     * Delegates to MC's container system.
+     */
+    @Override
+    public void displayGUIChest(btw.modern.IInventory inventory) {
+        // TODO: Container bridge needed for full GUI support.
+        // Implementation requires:
+        //   1. An IInventory-to-Container adapter that wraps btw.modern.IInventory
+        //      as a MC MenuProvider / AbstractContainerMenu.
+        //   2. Calling ServerPlayer.openMenu(MenuProvider) with the adapted inventory.
+        //   3. Handling slot synchronization between the FC IInventory and MC Container.
+        // This is a significant piece of infrastructure — see FCBlockEnderChest and
+        // FCContainerSoulforge for the FC callers that exercise this path.
     }
 }

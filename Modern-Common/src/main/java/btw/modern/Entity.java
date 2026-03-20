@@ -114,6 +114,11 @@ public abstract class Entity {
         this.posX = x;
         this.posY = y;
         this.posZ = z;
+        float halfWidth = this.width / 2.0F;
+        this.boundingBox.setBounds(
+            x - (double) halfWidth, y - (double) this.yOffset + (double) this.ySize, z - (double) halfWidth,
+            x + (double) halfWidth, y - (double) this.yOffset + (double) this.ySize + (double) this.height, z + (double) halfWidth
+        );
     }
 
     public void onUpdate() {}
@@ -123,13 +128,28 @@ public abstract class Entity {
     // --- Fire ---
 
     public void setOnFireFromLava() {}
-    public void setFire(int seconds) {}
-    public void extinguish() {}
-    public void kill() {}
+    public void setFire(int seconds) {
+        int ticks = seconds * 20;
+        if (ticks > this.fire) {
+            this.fire = ticks;
+        }
+    }
+
+    public void extinguish() {
+        this.fire = 0;
+    }
+    public void kill() {
+        this.setDead();
+    }
 
     // --- Movement and collision ---
 
-    public void moveEntity(double dMoveX, double dMoveY, double dMoveZ) {}
+    public void moveEntity(double dMoveX, double dMoveY, double dMoveZ) {
+        this.posX += dMoveX;
+        this.posY += dMoveY;
+        this.posZ += dMoveZ;
+        this.setPosition(this.posX, this.posY, this.posZ);
+    }
 
     public boolean isOffsetPositionInLiquid(double x, double y, double z) {
         return false;
@@ -205,7 +225,10 @@ public abstract class Entity {
     }
 
     public double getDistance(double x, double y, double z) {
-        return 0;
+        double dx = this.posX - x;
+        double dy = this.posY - y;
+        double dz = this.posZ - z;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     public float getEyeHeight() {
@@ -296,7 +319,10 @@ public abstract class Entity {
 
     // --- Web ---
 
-    public void setInWeb() {}
+    public void setInWeb() {
+        this.isInWeb = true;
+        this.fallDistance = 0.0F;
+    }
 
     // --- Copy ---
 
@@ -338,25 +364,79 @@ public abstract class Entity {
 
     public void playSound(String sound, float volume, float pitch) {}
     public boolean canTriggerWalking() { return true; }
-    public boolean isWet() { return false; }
-    public boolean isInWater() { return false; }
-    public boolean isBurning() { return false; }
-    public void setLocationAndAngles(double x, double y, double z, float yaw, float pitch) {}
+    public boolean isWet() { return this.inWater; }
+    public boolean isInWater() { return this.inWater; }
+
+    public boolean isBurning() {
+        return !this.isImmuneToFire && this.fire > 0;
+    }
+
+    public void setLocationAndAngles(double x, double y, double z, float yaw, float pitch) {
+        this.prevPosX = this.posX = x;
+        this.prevPosY = this.posY = y;
+        this.prevPosZ = this.posZ = z;
+        this.prevRotationYaw = this.rotationYaw = yaw;
+        this.prevRotationPitch = this.rotationPitch = pitch;
+        this.lastTickPosX = this.posX;
+        this.lastTickPosY = this.posY;
+        this.lastTickPosZ = this.posZ;
+        this.setPosition(this.posX, this.posY, this.posZ);
+    }
     public void setBeenAttacked() {}
     public boolean canBeCollidedWith() { return false; }
-    public EntityItem entityDropItem(ItemStack stack, float yOffset) { return null; }
-    public EntityItem dropItem(int itemID, int count) { return null; }
-    public EntityItem dropItemWithOffset(int itemID, int count, float yOffset) { return null; }
+    public EntityItem entityDropItem(ItemStack stack, float yOffset) {
+        if (stack.stackSize == 0) {
+            return null;
+        }
+        EntityItem entityItem = new EntityItem(this.worldObj, this.posX, this.posY + (double) yOffset, this.posZ, stack);
+        entityItem.delayBeforeCanPickup = 10;
+        if (this.worldObj != null) {
+            this.worldObj.spawnEntityInWorld(entityItem);
+        }
+        return entityItem;
+    }
+
+    public EntityItem dropItem(int itemID, int count) {
+        return this.dropItemWithOffset(itemID, count, 0.0F);
+    }
+
+    public EntityItem dropItemWithOffset(int itemID, int count, float yOffset) {
+        return this.entityDropItem(new ItemStack(itemID, count, 0), yOffset);
+    }
     public AxisAlignedBB getCollisionBox(Entity entity) { return null; }
-    public AxisAlignedBB getBoundingBox() { return null; }
+    public AxisAlignedBB getBoundingBox() { return this.boundingBox; }
     public void fall(float distance) {}
     // knockBack is on EntityLiving in vanilla, not Entity
-    public double getDistanceSq(double x, double y, double z) { return 0; }
-    public double getDistanceSqToEntity(Entity entity) { return 0; }
-    public float getDistanceToEntity(Entity entity) { return 0; }
-    public void addVelocity(double x, double y, double z) {}
+    public double getDistanceSq(double x, double y, double z) {
+        double dx = this.posX - x;
+        double dy = this.posY - y;
+        double dz = this.posZ - z;
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    public double getDistanceSqToEntity(Entity entity) {
+        double dx = this.posX - entity.posX;
+        double dy = this.posY - entity.posY;
+        double dz = this.posZ - entity.posZ;
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    public float getDistanceToEntity(Entity entity) {
+        return (float) Math.sqrt(this.getDistanceSqToEntity(entity));
+    }
+
+    public void addVelocity(double x, double y, double z) {
+        this.motionX += x;
+        this.motionY += y;
+        this.motionZ += z;
+        this.isAirBorne = true;
+    }
     public void applyEntityCollision(Entity entity) {}
-    public void setVelocity(double x, double y, double z) {}
+    public void setVelocity(double x, double y, double z) {
+        this.motionX = x;
+        this.motionY = y;
+        this.motionZ = z;
+    }
     public void readEntityFromNBT(NBTTagCompound tag) {}
     public void writeEntityToNBT(NBTTagCompound tag) {}
 

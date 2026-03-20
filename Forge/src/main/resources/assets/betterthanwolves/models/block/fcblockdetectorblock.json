@@ -1,4 +1,5 @@
 {
+  "parent": "minecraft:block/block",
   "textures": {
     "side": "betterthanwolves:block/fcblockdetectorblock_side",
     "top": "betterthanwolves:block/fcblockdetectorblock_top",

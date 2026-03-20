@@ -132,12 +132,31 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity {
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
-        // TODO: bridge NBT for FC entity persistence
+        if (fcEntity != null && tag.contains("FCData")) {
+            CompoundTag fcCompound = tag.getCompound("FCData");
+            ForgeNBTCompound wrapper = new ForgeNBTCompound(fcCompound);
+            try {
+                fcEntity.readFromNBT(wrapper);
+                fcEntity.readEntityFromNBT(wrapper);
+            } catch (Exception e) {
+                LOGGER.warn("Failed to read FC entity NBT data: {}", e.getMessage());
+            }
+        }
     }
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
-        // TODO: bridge NBT for FC entity persistence
+        if (fcEntity != null) {
+            CompoundTag fcCompound = new CompoundTag();
+            ForgeNBTCompound wrapper = new ForgeNBTCompound(fcCompound);
+            try {
+                fcEntity.writeToNBT(wrapper);
+                fcEntity.writeEntityToNBT(wrapper);
+            } catch (Exception e) {
+                LOGGER.warn("Failed to write FC entity NBT data: {}", e.getMessage());
+            }
+            tag.put("FCData", fcCompound);
+        }
     }
 
     @Override

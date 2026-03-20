@@ -80,6 +80,11 @@ task remapFcCode(type: ShadowJar) {
 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     relocate 'btw.api', 'btw.modern'
+    // Remap GL11 calls in FC code to our no-op stub. FC CLIENT code calls
+    // org.lwjgl.opengl.GL11.glTranslatef etc. for display transforms, but
+    // MC 1.20.1 uses a core GL profile where these fixed-function calls
+    // cause a fatal JVM abort. Our btw.modern.GL11 is a safe no-op.
+    relocate 'org.lwjgl.opengl.GL11', 'btw.modern.GL11'
     configurations = []
 }
 
@@ -103,3 +108,81 @@ dependencies {
     implementation project(':Modern-Common')
     implementation project(':Api')
 }
+
+// ============================================================
+// Copy BTW textures to Forge assets with lowercase filenames.
+// MC 1.20.1 rejects resource paths with uppercase characters.
+// Source: build/btw-resources/textures/{blocks,items}/
+// Dest:   src/main/resources/assets/betterthanwolves/textures/{block,item}/
+// ============================================================
+
+task copyBtwTextures {
+    description = 'Copies BTW textures to Forge assets, lowercasing all filenames'
+    group = 'btw'
+
+    def blockSrc = file("${rootProject.projectDir}/build/btw-resources/textures/blocks")
+    def itemSrc  = file("${rootProject.projectDir}/build/btw-resources/textures/items")
+    def blockDst = file("src/main/resources/assets/betterthanwolves/textures/block")
+    def itemDst  = file("src/main/resources/assets/betterthanwolves/textures/item")
+
+    // Always run — incremental check is inside doLast (timestamp-based)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        blockDst.mkdirs()
+        itemDst.mkdirs()
+
+        def copyLowercase = { File srcDir, File dstDir ->
+            int count = 0
+            if (srcDir.exists()) {
+                srcDir.eachFile { f ->
+                    if (f.name.endsWith('.png')) {
+                        def lower = f.name.toLowerCase()
+                        def dest = new File(dstDir, lower)
+                        if (!dest.exists() || f.lastModified() > dest.lastModified()) {
+                            dest.bytes = f.bytes
+                            count++
+                        }
+                    }
+                }
+            }
+            return count
+        }
+
+        def blocks = copyLowercase(blockSrc, blockDst)
+        def items  = copyLowercase(itemSrc, itemDst)
+        logger.lifecycle("Copied ${blocks} block textures + ${items} item textures (lowercased)")
+    }
+}
+
+// Also lowercase all texture references inside model JSONs
+task lowercaseModelRefs {
+    description = 'Lowercases texture path references in model JSON files'
+    group = 'btw'
+    dependsOn copyBtwTextures
+
+    def modelsDir = file("src/main/resources/assets/betterthanwolves/models")
+    inputs.dir(modelsDir)
+    outputs.dir(modelsDir)
+
+    doLast {
+        int fixed = 0
+        modelsDir.eachFileRecurse { f ->
+            if (f.name.endsWith('.json')) {
+                def text = f.text
+                // Lowercase texture paths: "betterthanwolves:block/SomeName" → "betterthanwolves:block/somename"
+                def updated = text.replaceAll('"betterthanwolves:(block|item)/([^"]*)"') { match, type, name ->
+                    '"betterthanwolves:' + type + '/' + name.toLowerCase() + '"'
+                }
+                if (updated != text) {
+                    f.text = updated
+                    fixed++
+                }
+            }
+        }
+        logger.lifecycle("Lowercased texture refs in ${fixed} model JSON files")
+    }
+}
+
+// Run before processResources so textures are in place for the build
+processResources.dependsOn lowercaseModelRefs

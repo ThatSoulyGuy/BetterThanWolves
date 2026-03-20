@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "betterthanwolves:block/fcblockcompanioncube",
+    "up": "betterthanwolves:block/fcblockcompanioncube_guts",
+    "north": "betterthanwolves:block/fcblockcompanioncube",
+    "south": "betterthanwolves:block/fcblockcompanioncube",
+    "west": "betterthanwolves:block/fcblockcompanioncube",
+    "east": "betterthanwolves:block/fcblockcompanioncube",
+    "particle": "betterthanwolves:block/fcblockcompanioncube"
+  }
+}

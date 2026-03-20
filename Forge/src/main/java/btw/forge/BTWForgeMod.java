@@ -69,6 +69,10 @@ public class BTWForgeMod {
             LOGGER.info("Better Than Wolves: Registering proxy items...");
             BTWRegistration.registerAllBTWContent(event);
             LOGGER.info("Better Than Wolves: Item registration complete.");
+        } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCK_ENTITY_TYPES)) {
+            LOGGER.info("Better Than Wolves: Registering block entity types...");
+            BTWRegistration.registerAllBTWContent(event);
+            LOGGER.info("Better Than Wolves: Block entity type registration complete.");
         }
     }
 
@@ -81,6 +85,11 @@ public class BTWForgeMod {
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("Better Than Wolves: Server starting...");
         BTWLifecycle.onServerStarting(event.getServer());
+
+        // Inject FC recipes into the MC recipe manager.
+        // FC recipes take precedence — they're added after vanilla recipes load.
+        LOGGER.info("Better Than Wolves: Injecting FC recipes...");
+        RecipeBridge.injectRecipes(event.getServer());
     }
 
     @SubscribeEvent

@@ -1,93 +1,215 @@
 package btw.modern;
 
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Captures vertex data from FC's rendering code.
+ *
+ * FC code calls addVertexWithUV/addVertex to build quads.
+ * In MC 1.5.2 these went to OpenGL. Here we capture them
+ * so the Forge bridge can convert them to BakedQuads.
+ *
+ * When capturing is enabled, every 4 vertices form a quad
+ * stored in the {@link #capturedQuads} list.
+ */
 public class Tessellator {
 
     /** The static instance of the Tessellator. */
     public static final Tessellator instance = new Tessellator();
 
+    /** Whether vertex capture is active. */
+    private boolean capturing = false;
+
+    /** Captured quads — each quad is 4 CapturedVertex objects. */
+    private final List<CapturedQuad> capturedQuads = new ArrayList<>();
+
+    /** Vertices being accumulated for the current quad. */
+    private final List<CapturedVertex> currentVertices = new ArrayList<>();
+
+    // Current state applied to each vertex
+    private double curU, curV;
+    private float curR = 1, curG = 1, curB = 1, curA = 1;
+    private float curNX, curNY, curNZ;
+    private int curBrightness = 0xF000F0;
+    private double transX, transY, transZ;
+
+    /** The texture name to associate with captured quads (set before adding vertices). */
+    private String currentTextureName;
+
     protected Tessellator() {}
 
-    /**
-     * Draws the data set up in this tessellator and resets the state to prepare for new drawing.
-     */
+    /** A single captured vertex with position, UV, color, normal. */
+    public static class CapturedVertex {
+        public final double x, y, z;
+        public final double u, v;
+        public final float r, g, b, a;
+        public final float nx, ny, nz;
+        public final int brightness;
+
+        public CapturedVertex(double x, double y, double z, double u, double v,
+                              float r, float g, float b, float a,
+                              float nx, float ny, float nz, int brightness) {
+            this.x = x; this.y = y; this.z = z;
+            this.u = u; this.v = v;
+            this.r = r; this.g = g; this.b = b; this.a = a;
+            this.nx = nx; this.ny = ny; this.nz = nz;
+            this.brightness = brightness;
+        }
+    }
+
+    /** A captured quad (4 vertices) with its associated texture name. */
+    public static class CapturedQuad {
+        public final CapturedVertex[] vertices = new CapturedVertex[4];
+        /** The texture/icon name for this quad (from the Icon passed to the face method). */
+        public String textureName;
+    }
+
+    // ================================================================
+    // Capture control
+    // ================================================================
+
+    /** Enable vertex capture mode. Clears any previously captured data. */
+    public void startCapturing() {
+        capturing = true;
+        capturedQuads.clear();
+        currentVertices.clear();
+        currentTextureName = null;
+    }
+
+    /** Disable capture mode and return captured quads. */
+    public List<CapturedQuad> stopCapturing() {
+        capturing = false;
+        List<CapturedQuad> result = new ArrayList<>(capturedQuads);
+        capturedQuads.clear();
+        currentVertices.clear();
+        return result;
+    }
+
+    /** Whether capture mode is active. */
+    public boolean isCapturing() {
+        return capturing;
+    }
+
+    // ================================================================
+    // Drawing lifecycle
+    // ================================================================
+
     public int draw() {
+        currentVertices.clear();
         return 0;
     }
 
-    /**
-     * Sets draw mode in the tessellator to draw quads.
-     */
-    public void startDrawingQuads() {}
+    public void startDrawingQuads() {
+        currentVertices.clear();
+    }
+
+    public void startDrawing(int drawMode) {
+        currentVertices.clear();
+    }
+
+    // ================================================================
+    // Vertex state
+    // ================================================================
+
+    public void setTextureUV(double u, double v) {
+        this.curU = u;
+        this.curV = v;
+    }
+
+    public void setBrightness(int brightness) {
+        this.curBrightness = brightness;
+    }
+
+    public void setColorOpaque_F(float r, float g, float b) {
+        this.curR = r; this.curG = g; this.curB = b; this.curA = 1.0f;
+    }
+
+    public void setColorRGBA_F(float r, float g, float b, float a) {
+        this.curR = r; this.curG = g; this.curB = b; this.curA = a;
+    }
+
+    public void setColorOpaque(int r, int g, int b) {
+        this.curR = r / 255f; this.curG = g / 255f; this.curB = b / 255f; this.curA = 1.0f;
+    }
+
+    public void setColorRGBA(int r, int g, int b, int a) {
+        this.curR = Math.min(255, Math.max(0, r)) / 255f;
+        this.curG = Math.min(255, Math.max(0, g)) / 255f;
+        this.curB = Math.min(255, Math.max(0, b)) / 255f;
+        this.curA = Math.min(255, Math.max(0, a)) / 255f;
+    }
+
+    public void setColorOpaque_I(int color) {
+        this.curR = ((color >> 16) & 0xFF) / 255f;
+        this.curG = ((color >> 8) & 0xFF) / 255f;
+        this.curB = (color & 0xFF) / 255f;
+        this.curA = 1.0f;
+    }
+
+    public void setColorRGBA_I(int color, int alpha) {
+        this.curR = ((color >> 16) & 0xFF) / 255f;
+        this.curG = ((color >> 8) & 0xFF) / 255f;
+        this.curB = (color & 0xFF) / 255f;
+        this.curA = alpha / 255f;
+    }
+
+    public void disableColor() {
+        this.curR = 1; this.curG = 1; this.curB = 1; this.curA = 1;
+    }
+
+    public void setNormal(float x, float y, float z) {
+        this.curNX = x; this.curNY = y; this.curNZ = z;
+    }
+
+    public void setTranslation(double x, double y, double z) {
+        this.transX = x; this.transY = y; this.transZ = z;
+    }
+
+    public void addTranslation(float x, float y, float z) {
+        this.transX += x; this.transY += y; this.transZ += z;
+    }
 
     /**
-     * Resets tessellator state and prepares for drawing (with the specified draw mode).
+     * Sets the texture name to associate with subsequently captured quads.
+     * Called by face rendering methods before emitting vertices so that
+     * the captured quad knows which sprite to resolve later.
      */
-    public void startDrawing(int drawMode) {}
+    public void setCurrentTextureName(String name) {
+        this.currentTextureName = name;
+    }
 
-    /**
-     * Sets the texture coordinates.
-     */
-    public void setTextureUV(double u, double v) {}
+    // ================================================================
+    // Vertex submission
+    // ================================================================
 
-    public void setBrightness(int brightness) {}
+    public void addVertexWithUV(double x, double y, double z, double u, double v) {
+        this.curU = u;
+        this.curV = v;
+        addVertex(x, y, z);
+    }
 
-    /**
-     * Sets the RGB values as specified, converting from floats between 0 and 1 to integers from 0-255.
-     */
-    public void setColorOpaque_F(float r, float g, float b) {}
+    public void addVertex(double x, double y, double z) {
+        if (!capturing) return;
 
-    /**
-     * Sets the RGBA values for the color, converting from floats between 0 and 1 to integers from 0-255.
-     */
-    public void setColorRGBA_F(float r, float g, float b, float a) {}
+        CapturedVertex vert = new CapturedVertex(
+                x + transX, y + transY, z + transZ,
+                curU, curV,
+                curR, curG, curB, curA,
+                curNX, curNY, curNZ,
+                curBrightness
+        );
+        currentVertices.add(vert);
 
-    /**
-     * Sets the RGB values as specified, and sets alpha to opaque.
-     */
-    public void setColorOpaque(int r, int g, int b) {}
-
-    /**
-     * Sets the RGBA values for the color. Also clamps them to 0-255.
-     */
-    public void setColorRGBA(int r, int g, int b, int a) {}
-
-    /**
-     * Adds a vertex specifying both x,y,z and the texture u,v for it.
-     */
-    public void addVertexWithUV(double x, double y, double z, double u, double v) {}
-
-    /**
-     * Adds a vertex with the specified x,y,z to the current draw call.
-     */
-    public void addVertex(double x, double y, double z) {}
-
-    /**
-     * Sets the color to the given opaque value (stored as byte values packed in an integer).
-     */
-    public void setColorOpaque_I(int color) {}
-
-    /**
-     * Sets the color to the given color (packed as bytes in integer) and alpha values.
-     */
-    public void setColorRGBA_I(int color, int alpha) {}
-
-    /**
-     * Disables colors for the current draw call.
-     */
-    public void disableColor() {}
-
-    /**
-     * Sets the normal for the current draw call.
-     */
-    public void setNormal(float x, float y, float z) {}
-
-    /**
-     * Sets the translation for all vertices in the current draw call.
-     */
-    public void setTranslation(double x, double y, double z) {}
-
-    /**
-     * Offsets the translation for all vertices in the current draw call.
-     */
-    public void addTranslation(float x, float y, float z) {}
+        // Every 4 vertices = one quad
+        if (currentVertices.size() == 4) {
+            CapturedQuad quad = new CapturedQuad();
+            for (int i = 0; i < 4; i++) {
+                quad.vertices[i] = currentVertices.get(i);
+            }
+            quad.textureName = currentTextureName;
+            capturedQuads.add(quad);
+            currentVertices.clear();
+        }
+    }
 }

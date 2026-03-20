@@ -76,6 +76,16 @@ public class InventoryBridge extends btw.modern.InventoryPlayer {
             legacyId = ProxyRegistry.getItemId(modern.getItem());
         }
 
+        // If the legacy ID doesn't map to any FC item or block, return null.
+        // FC code does Item.itemsList[stack.itemID] without null checks, so
+        // an unmapped item would NPE (e.g., FCBlockCampfire.onBlockActivated).
+        if (legacyId <= 0) return null;
+        boolean hasItem = legacyId < btw.modern.Item.itemsList.length
+                && btw.modern.Item.itemsList[legacyId] != null;
+        boolean hasBlock = legacyId < btw.modern.Block.blocksList.length
+                && btw.modern.Block.blocksList[legacyId] != null;
+        if (!hasItem && !hasBlock) return null;
+
         int damage = modern.getDamageValue();
         int count = modern.getCount();
         return new btw.modern.ItemStack(legacyId, count, damage);

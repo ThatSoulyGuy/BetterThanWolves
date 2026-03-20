@@ -121,6 +121,15 @@ public class WorldBridge extends btw.modern.World {
         BlockPos pos = new BlockPos(x, y, z);
         BlockEntity be = level.getBlockEntity(pos);
         if (be == null) return null;
+
+        // If this is a ProxyBlockEntity, return the FC tile entity directly
+        // so that FC code can cast it to the expected subclass (e.g.
+        // FCTileEntityCampfire, FCTileEntityHopper).
+        if (be instanceof ProxyBlockEntity proxy) {
+            return proxy.getFcTileEntity();
+        }
+
+        // For vanilla BlockEntities, wrap via TileEntityBridge
         return TileEntityBridge.getOrCreate(be, this);
     }
 
@@ -171,11 +180,25 @@ public class WorldBridge extends btw.modern.World {
             // Re-use the real BlockEntity wrapped by the bridge
             level.setBlockEntity(bridge.getBlockEntity());
         } else if (tileEntity != null) {
-            // FC code created a pure FC TileEntity (not backed by a real
-            // BlockEntity).  We cannot place it directly into the modern
-            // world since MC requires a real BlockEntity.  Log and skip.
-            LOGGER.debug("setBlockTileEntity: cannot place pure FC TileEntity {} at {}",
-                    tileEntity.getClass().getSimpleName(), pos);
+            // FC code created a pure FC TileEntity. Check if a
+            // ProxyBlockEntity already exists at this position and
+            // inject the FC tile entity into it.
+            BlockEntity existing = level.getBlockEntity(pos);
+            if (existing instanceof ProxyBlockEntity proxy) {
+                proxy.setFcTileEntity(tileEntity);
+            } else {
+                // No ProxyBlockEntity exists yet. If the block at this
+                // position is a ProxyBlock, create a new ProxyBlockEntity.
+                BlockState state = level.getBlockState(pos);
+                if (state.getBlock() instanceof ProxyBlock pb && pb.hasFcTileEntity()) {
+                    ProxyBlockEntity newProxy = new ProxyBlockEntity(
+                            pos, state, tileEntity, pb.getLegacyId());
+                    level.setBlockEntity(newProxy);
+                } else {
+                    LOGGER.debug("setBlockTileEntity: cannot place pure FC TileEntity {} at {}",
+                            tileEntity.getClass().getSimpleName(), pos);
+                }
+            }
         }
     }
 
@@ -184,7 +207,9 @@ public class WorldBridge extends btw.modern.World {
         BlockPos pos = new BlockPos(x, y, z);
         BlockEntity be = level.getBlockEntity(pos);
         if (be != null) {
-            TileEntityBridge.uncache(be);
+            if (!(be instanceof ProxyBlockEntity)) {
+                TileEntityBridge.uncache(be);
+            }
             level.removeBlockEntity(pos);
         }
     }
@@ -971,7 +996,14 @@ public class WorldBridge extends btw.modern.World {
                 for (int z = minZ; z < maxZ; z++) {
                     BlockEntity be = level.getBlockEntity(new BlockPos(x, y, z));
                     if (be != null) {
-                        result.add(TileEntityBridge.getOrCreate(be, this));
+                        if (be instanceof ProxyBlockEntity proxy) {
+                            TileEntity fcTe = proxy.getFcTileEntity();
+                            if (fcTe != null) {
+                                result.add(fcTe);
+                            }
+                        } else {
+                            result.add(TileEntityBridge.getOrCreate(be, this));
+                        }
                     }
                 }
             }

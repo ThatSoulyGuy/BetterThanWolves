@@ -180,6 +180,21 @@ public class Item {
     public Icon itemIcon;
 
     protected int maxDamage;
+    protected CreativeTabs creativeTab;
+
+    // --- BTW backing fields ---
+    private float m_fBuoyancy = -1.0F;
+    private int m_iBellowsBlowDistance = 0;
+    private int m_iInfernalMaxNumEnchants = 0;
+    private int m_iInfernalMaxEnchantmentCost = 0;
+    private int m_iHerbivoreFoodValue = 0;
+    private int m_iBirdFoodValue = 0;
+    private int m_iPigFoodValue = 0;
+
+    // --- BTW food value constants ---
+    public static final int m_iBaseHerbivoreItemFoodValue = ( EntityAnimal.m_iBaseGrazeFoodValue * 4 );
+    public static final int m_iBasePigItemFoodValue = ( EntityAnimal.m_iBaseGrazeFoodValue * 4 );
+    public static final int m_iBaseChickenItemFoodValue = ( EntityAnimal.m_iBaseGrazeFoodValue * 8 );
 
     public Item(int id) {
         this.itemID = 256 + id;
@@ -219,6 +234,7 @@ public class Item {
     }
 
     public Item setCreativeTab(CreativeTabs tab) {
+        this.creativeTab = tab;
         return this;
     }
 
@@ -277,7 +293,7 @@ public class Item {
     }
 
     public String getUnlocalizedName() {
-        return unlocalizedName;
+        return "item." + unlocalizedName;
     }
 
     // --- Item use methods ---
@@ -288,6 +304,10 @@ public class Item {
 
     public float getStrVsBlock(ItemStack stack, Block block) {
         return 1.0F;
+    }
+
+    public float getStrVsBlock(ItemStack stack, Block block, int metadata) {
+        return getStrVsBlock(stack, block);
     }
 
     public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
@@ -401,25 +421,25 @@ public class Item {
 
     // --- BTW-added: Food values ---
 
-    public int GetHerbivoreFoodValue(int iItemDamage) { return 0; }
-    public Item SetHerbivoreFoodValue(int iFoodValue) { return this; }
-    public Item SetAsBasicHerbivoreFood() { return this; }
-    public int GetChickenFoodValue(int iItemDamage) { return 0; }
-    public Item SetChickenFoodValue(int iFoodValue) { return this; }
-    public Item SetAsBasicChickenFood() { return this; }
-    public int GetPigFoodValue(int iItemDamage) { return 0; }
-    public Item SetPigFoodValue(int iFoodValue) { return this; }
-    public Item SetAsBasicPigFood() { return this; }
+    public int GetHerbivoreFoodValue(int iItemDamage) { return m_iHerbivoreFoodValue; }
+    public Item SetHerbivoreFoodValue(int iFoodValue) { this.m_iHerbivoreFoodValue = iFoodValue; return this; }
+    public Item SetAsBasicHerbivoreFood() { return SetHerbivoreFoodValue(m_iBaseHerbivoreItemFoodValue); }
+    public int GetChickenFoodValue(int iItemDamage) { return m_iBirdFoodValue; }
+    public Item SetChickenFoodValue(int iFoodValue) { this.m_iBirdFoodValue = iFoodValue; return this; }
+    public Item SetAsBasicChickenFood() { return SetChickenFoodValue(m_iBaseChickenItemFoodValue); }
+    public int GetPigFoodValue(int iItemDamage) { return m_iPigFoodValue; }
+    public Item SetPigFoodValue(int iFoodValue) { this.m_iPigFoodValue = iFoodValue; return this; }
+    public Item SetAsBasicPigFood() { return SetPigFoodValue(m_iBasePigItemFoodValue); }
     public boolean IsWolfFood() { return false; }
     public int GetWolfHealAmount() { return 0; }
 
     // --- BTW-added: Buoyancy ---
 
-    public Item SetBuoyancy(float fBuoyancy) { return this; }
+    public Item SetBuoyancy(float fBuoyancy) { this.m_fBuoyancy = fBuoyancy; return this; }
     public Item SetBuoyant() { return SetBuoyancy(1F); }
     public Item SetNonBuoyant() { return SetBuoyancy(-1F); }
     public Item SetNeutralBuoyant() { return SetBuoyancy(0F); }
-    public float GetBuoyancy(int iItemDamage) { return 0; }
+    public float GetBuoyancy(int iItemDamage) { return m_fBuoyancy; }
 
     // --- BTW-added: Weight ---
 
@@ -427,15 +447,15 @@ public class Item {
 
     // --- BTW-added: Bellows ---
 
-    public Item SetBellowsBlowDistance(int iDistance) { return this; }
-    public int GetBellowsBlowDistance(int iItemDamage) { return 0; }
+    public Item SetBellowsBlowDistance(int iDistance) { this.m_iBellowsBlowDistance = iDistance; return this; }
+    public int GetBellowsBlowDistance(int iItemDamage) { return m_iBellowsBlowDistance; }
 
     // --- BTW-added: Enchanting ---
 
-    public Item SetInfernalMaxNumEnchants(int iMaxNumEnchants) { return this; }
-    public int GetInfernalMaxNumEnchants() { return 0; }
-    public Item SetInfernalMaxEnchantmentCost(int iMaxEnchantmentCost) { return this; }
-    public int GetInfernalMaxEnchantmentCost() { return 0; }
+    public Item SetInfernalMaxNumEnchants(int iMaxNumEnchants) { this.m_iInfernalMaxNumEnchants = iMaxNumEnchants; return this; }
+    public int GetInfernalMaxNumEnchants() { return m_iInfernalMaxNumEnchants; }
+    public Item SetInfernalMaxEnchantmentCost(int iMaxEnchantmentCost) { this.m_iInfernalMaxEnchantmentCost = iMaxEnchantmentCost; return this; }
+    public int GetInfernalMaxEnchantmentCost() { return m_iInfernalMaxEnchantmentCost; }
     // --- BTW-added: Crafting ---
 
     public boolean IsConsumedInCrafting() { return true; }
@@ -497,7 +517,7 @@ public class Item {
     public static boolean m_bSuppressConflictWarnings = false;
 
     public Item SetFurnaceBurnTime(FCEnumFurnaceBurnTime burnTimeEnum) {
-        return this;
+        return SetFurnaceBurnTime(burnTimeEnum.m_iBurnTime);
     }
 
     // --- BTW-added: Damage setter ---
@@ -545,7 +565,7 @@ public class Item {
     public void updateMapData(World world, Entity entity, MapData mapData) {}
     public int getMaxItemUseDuration(ItemStack stack) { return 0; }
     public EnumAction getItemUseAction(ItemStack stack) { return null; }
-    public String getUnlocalizedName(ItemStack stack) { return ""; }
+    public String getUnlocalizedName(ItemStack stack) { return getUnlocalizedName(); }
     public String getLocalizedName(ItemStack stack) { return ""; }
     public Item setContainerItem(Item item) { return this; }
 
@@ -558,7 +578,7 @@ public class Item {
     }
 
     public boolean isFull3D() {
-        return false;
+        return this.bFull3D;
     }
 
     public boolean hasEffect(ItemStack itemStack) {

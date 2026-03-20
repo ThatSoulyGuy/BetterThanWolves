@@ -184,7 +184,7 @@ public class EntityBridge extends btw.modern.Entity {
 
     @Override
     public void playSound(String sound, float volume, float pitch) {
-        // Sound system differs significantly, skip for now
+        SoundMapping.playAtEntity(realEntity, sound, volume, pitch);
     }
 
     @Override

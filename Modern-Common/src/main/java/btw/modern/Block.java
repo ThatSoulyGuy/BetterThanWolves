@@ -193,6 +193,25 @@ public abstract class Block {
     public float blockParticleGravity;
     public Material blockMaterial;
     public float slipperiness;
+    protected CreativeTabs displayOnCreativeTab;
+
+    // --- BTW backing fields for builder-pattern Set*() methods ---
+    private boolean shovelsEffective;
+    private boolean picksEffective;
+    private boolean axesEffective;
+    private boolean hoesEffective;
+    private boolean chiselsEffective;
+    private boolean chiselsCanHarvest;
+    private int fireEncouragement;
+    private int flammability;
+    private float buoyancy = -1.0F;
+    private int furnaceBurnTime;
+    private int herbivoreItemFoodValue;
+    private int chickenItemFoodValue;
+    private int pigItemFoodValue;
+    private boolean canBeCookedByKiln;
+    private int kilnDropItemIndex = -1;
+    private int kilnDropItemDamage;
 
     // --- Client-side rendering fields ---
     public Icon blockIcon;
@@ -249,13 +268,36 @@ public abstract class Block {
     }
 
     private String unlocalizedName = "";
+    protected String textureName;
 
     public Block setUnlocalizedName(String name) {
         this.unlocalizedName = name;
         return this;
     }
 
+    /**
+     * Sets the texture name used by the default registerIcons.
+     * In MC 1.5.2 this was a separate field from unlocalizedName.
+     * FC blocks that construct icon names like getTextureName() + "_on"
+     * rely on this returning a non-null base name.
+     */
+    public Block setTextureName(String name) {
+        this.textureName = name;
+        return this;
+    }
+
+    /**
+     * Returns the base texture name for this block.
+     * Falls back to unlocalizedName if textureName was never set.
+     */
+    public String getTextureName() {
+        if (this.textureName != null) return this.textureName;
+        if (this.unlocalizedName != null && !this.unlocalizedName.isEmpty()) return this.unlocalizedName;
+        return "MISSING_ICON_BLOCK_" + this.blockID + "_" + this.unlocalizedName;
+    }
+
     public Block setCreativeTab(CreativeTabs tab) {
+        this.displayOnCreativeTab = tab;
         return this;
     }
 
@@ -339,7 +381,7 @@ public abstract class Block {
 
     public String getLocalizedName() { return getUnlocalizedName(); }
     public String getUnlocalizedName() { return unlocalizedName; }
-    public CreativeTabs getCreativeTabToDisplayOn() { return null; }
+    public CreativeTabs getCreativeTabToDisplayOn() { return this.displayOnCreativeTab; }
 
     // --- Drops ---
 
@@ -419,14 +461,44 @@ public abstract class Block {
 
     // --- Collision/rendering ---
 
-    public void addCollisionBoxesToList(World world, int x, int y, int z, AxisAlignedBB aabb, List list, Entity entity) {}
+    public void addCollisionBoxesToList(World world, int x, int y, int z, AxisAlignedBB mask, List list, Entity entity) {
+        AxisAlignedBB blockBB = this.getCollisionBoundingBoxFromPool(world, x, y, z);
 
-    public AxisAlignedBB getCollisionBoundingBoxFromPool(World world, int x, int y, int z) { return null; }
+        if (blockBB != null && mask.intersectsWith(blockBB)) {
+            list.add(blockBB);
+        }
+    }
 
-    public MovingObjectPosition collisionRayTrace(World world, int x, int y, int z, Vec3 startVec, Vec3 endVec) { return null; }
+    public AxisAlignedBB getCollisionBoundingBoxFromPool(World world, int x, int y, int z) {
+        return AxisAlignedBB.getBoundingBox(
+            (double)x + this.minX, (double)y + this.minY, (double)z + this.minZ,
+            (double)x + this.maxX, (double)y + this.maxY, (double)z + this.maxZ);
+    }
+
+    public MovingObjectPosition collisionRayTrace(World world, int x, int y, int z, Vec3 startVec, Vec3 endVec) {
+        this.setBlockBoundsBasedOnState(world, x, y, z);
+
+        Vec3 adjustedStart = startVec.addVector((double)(-x), (double)(-y), (double)(-z));
+        Vec3 adjustedEnd = endVec.addVector((double)(-x), (double)(-y), (double)(-z));
+
+        AxisAlignedBB blockBB = AxisAlignedBB.getBoundingBox(this.minX, this.minY, this.minZ, this.maxX, this.maxY, this.maxZ);
+        MovingObjectPosition hit = blockBB.calculateIntercept(adjustedStart, adjustedEnd);
+
+        if (hit != null) {
+            hit.blockX = x;
+            hit.blockY = y;
+            hit.blockZ = z;
+            hit.hitVec = hit.hitVec.addVector((double)x, (double)y, (double)z);
+            return hit;
+        }
+
+        return null;
+    }
 
     public void setBlockBoundsBasedOnState(IBlockAccess blockAccess, int x, int y, int z) {}
-    public void setBlockBoundsForItemRender() {}
+    public void setBlockBoundsForItemRender() {
+        this.setBlockBounds(0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F);
+    }
     public void velocityToAddToEntity(World world, int x, int y, int z, Entity entity, Vec3 vec3) {}
 
     // --- Redstone ---
@@ -523,9 +595,13 @@ public abstract class Block {
 
     // --- BTW-added: Facing methods ---
 
-    public int GetFacing(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
+    public int GetFacing(IBlockAccess blockAccess, int i, int j, int k) { return GetFacing(blockAccess.getBlockMetadata(i, j, k)); }
     public int GetFacing(int iMetadata) { return 0; }
-    public void SetFacing(World world, int i, int j, int k, int iFacing) {}
+    public void SetFacing(World world, int i, int j, int k, int iFacing) {
+        int metadata = world.getBlockMetadata(i, j, k);
+        int newMetadata = SetFacing(metadata, iFacing);
+        world.setBlockMetadataWithClient(i, j, k, newMetadata);
+    }
     public int SetFacing(int iMetadata, int iFacing) { return iMetadata; }
     public boolean ToggleFacing(World world, int i, int j, int k, boolean bReverse) { return false; }
 
@@ -542,7 +618,15 @@ public abstract class Block {
     public int GetItemIDCraftedOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
     public int GetItemCountCraftedOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
     public int GetItemDamageCraftedOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
-    public boolean RotateAroundJAxis(World world, int i, int j, int k, boolean bReverse) { return false; }
+    public boolean RotateAroundJAxis(World world, int i, int j, int k, boolean bReverse) {
+        int oldMeta = world.getBlockMetadata(i, j, k);
+        int newMeta = RotateMetadataAroundJAxis(oldMeta, bReverse);
+        if (newMeta != oldMeta) {
+            world.setBlockMetadataWithClient(i, j, k, newMeta);
+            return true;
+        }
+        return false;
+    }
     public int RotateMetadataAroundJAxis(int iMetadata, boolean bReverse) { return iMetadata; }
     protected void OnRotatedOnTurntable(World world, int i, int j, int k) {}
     protected int TurntableCraftingRotation(World world, int i, int j, int k, boolean bReverse, int iCraftingCounter) { return 0; }
@@ -610,12 +694,12 @@ public abstract class Block {
 
     // --- BTW-added: Food values ---
 
-    public int GetHerbivoreItemFoodValue(int iItemDamage) { return 0; }
-    public void SetHerbivoreItemFoodValue(int iFoodValue) {}
-    public int GetChickenItemFoodValue(int iItemDamage) { return 0; }
-    public void SetChickenItemFoodValue(int iFoodValue) {}
-    public int GetPigItemFoodValue(int iItemDamage) { return 0; }
-    public void SetPigItemFoodValue(int iFoodValue) {}
+    public int GetHerbivoreItemFoodValue(int iItemDamage) { return herbivoreItemFoodValue; }
+    public void SetHerbivoreItemFoodValue(int iFoodValue) { this.herbivoreItemFoodValue = iFoodValue; }
+    public int GetChickenItemFoodValue(int iItemDamage) { return chickenItemFoodValue; }
+    public void SetChickenItemFoodValue(int iFoodValue) { this.chickenItemFoodValue = iFoodValue; }
+    public int GetPigItemFoodValue(int iItemDamage) { return pigItemFoodValue; }
+    public void SetPigItemFoodValue(int iFoodValue) { this.pigItemFoodValue = iFoodValue; }
 
     // --- BTW-added: Plant growth ---
 
@@ -646,31 +730,31 @@ public abstract class Block {
 
     // --- BTW-added: Tool effectiveness ---
 
-    public boolean AreAxesEffectiveOn() { return false; }
-    public boolean AreChiselsEffectiveOn() { return false; }
+    public boolean AreAxesEffectiveOn() { return axesEffective; }
+    public boolean AreChiselsEffectiveOn() { return chiselsEffective; }
     public boolean AreChiselsEffectiveOn(World world, int i, int j, int k) { return AreChiselsEffectiveOn(); }
-    public boolean AreHoesEffectiveOn() { return false; }
-    public boolean ArePicksEffectiveOn() { return false; }
-    public boolean AreShovelsEffectiveOn() { return false; }
-    public boolean CanChiselsHarvest() { return false; }
+    public boolean AreHoesEffectiveOn() { return hoesEffective; }
+    public boolean ArePicksEffectiveOn() { return picksEffective; }
+    public boolean AreShovelsEffectiveOn() { return shovelsEffective; }
+    public boolean CanChiselsHarvest() { return chiselsCanHarvest; }
     public int GetEfficientToolLevel() { return 0; }
     public int GetEfficientToolLevel(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
     public int GetHarvestToolLevel() { return 0; }
     public int GetHarvestToolLevel(IBlockAccess blockAccess, int i, int j, int k) { return GetEfficientToolLevel(blockAccess, i, j, k); }
     public int GetCurrentGrindingType() { return 0; }
 
-    public Block SetShovelsEffectiveOn() { return this; }
-    public Block SetShovelsEffectiveOn(boolean bEffective) { return this; }
-    public Block SetPicksEffectiveOn() { return this; }
-    public Block SetPicksEffectiveOn(boolean bEffective) { return this; }
-    public Block SetAxesEffectiveOn() { return this; }
-    public Block SetAxesEffectiveOn(boolean bEffective) { return this; }
-    public Block SetHoesEffectiveOn() { return this; }
-    public Block SetHoesEffectiveOn(boolean bEffective) { return this; }
-    public Block SetChiselsEffectiveOn() { return this; }
-    public Block SetChiselsEffectiveOn(boolean bEffective) { return this; }
-    public Block SetChiselsCanHarvest() { return this; }
-    public Block SetChiselsCanHarvest(boolean bCanHarvest) { return this; }
+    public Block SetShovelsEffectiveOn() { this.shovelsEffective = true; return this; }
+    public Block SetShovelsEffectiveOn(boolean bEffective) { this.shovelsEffective = bEffective; return this; }
+    public Block SetPicksEffectiveOn() { this.picksEffective = true; return this; }
+    public Block SetPicksEffectiveOn(boolean bEffective) { this.picksEffective = bEffective; return this; }
+    public Block SetAxesEffectiveOn() { this.axesEffective = true; return this; }
+    public Block SetAxesEffectiveOn(boolean bEffective) { this.axesEffective = bEffective; return this; }
+    public Block SetHoesEffectiveOn() { this.hoesEffective = true; return this; }
+    public Block SetHoesEffectiveOn(boolean bEffective) { this.hoesEffective = bEffective; return this; }
+    public Block SetChiselsEffectiveOn() { this.chiselsEffective = true; return this; }
+    public Block SetChiselsEffectiveOn(boolean bEffective) { this.chiselsEffective = bEffective; return this; }
+    public Block SetChiselsCanHarvest() { this.chiselsCanHarvest = true; return this; }
+    public Block SetChiselsCanHarvest(boolean bCanHarvest) { this.chiselsCanHarvest = bCanHarvest; return this; }
 
     // --- BTW-added: Block material setter ---
 
@@ -741,7 +825,8 @@ public abstract class Block {
     }
 
     public int getMixedBrightnessForBlock(IBlockAccess blockAccess, int x, int y, int z) {
-        return 0;
+        // Full brightness default (sky light 15 | block light 15 packed as 0xF000F0)
+        return 0xF000F0;
     }
 
     public int colorMultiplier(IBlockAccess blockAccess, int x, int y, int z) {
@@ -757,6 +842,14 @@ public abstract class Block {
     }
 
     public void registerIcons(IconRegister register) {
+        // Default implementation: register the block's texture using
+        // getTextureName() (matches MC 1.5.2 behavior).
+        // FC block subclasses override this to register their own textures,
+        // but many call super.registerIcons() expecting blockIcon to be set.
+        String name = this.getTextureName();
+        if (name != null && !name.isEmpty() && !name.startsWith("MISSING_ICON_BLOCK_")) {
+            this.blockIcon = register.registerIcon(name);
+        }
     }
 
     public void randomDisplayTick(World world, int x, int y, int z, Random random) {
@@ -815,6 +908,7 @@ public abstract class Block {
     }
 
     public void RenderBlockAsItem(RenderBlocks renderBlocks, int iItemDamage, float fBrightness) {
+        renderBlocks.renderBlockAsItem(this, iItemDamage, fBrightness);
     }
 
     public void RenderFallingBlock(RenderBlocks renderBlocks, int i, int j, int k, int iMetadata) {
@@ -861,6 +955,7 @@ public abstract class Block {
     }
 
     public void getSubBlocks(int blockID, CreativeTabs creativeTabs, List list) {
+        list.add(new ItemStack(blockID, 1, 0));
     }
 
     public int idPicked(World world, int i, int j, int k) {
@@ -1001,17 +1096,17 @@ public abstract class Block {
 
     // --- BTW-added: Furnace burn time ---
 
-    public int GetFurnaceBurnTime(int iItemDamage) { return 0; }
-    public void SetFurnaceBurnTime(int iBurnTime) {}
-    public void SetFurnaceBurnTime(FCEnumFurnaceBurnTime burnTimeEnum) {}
+    public int GetFurnaceBurnTime(int iItemDamage) { return furnaceBurnTime; }
+    public void SetFurnaceBurnTime(int iBurnTime) { this.furnaceBurnTime = iBurnTime; }
+    public void SetFurnaceBurnTime(FCEnumFurnaceBurnTime burnTimeEnum) { this.furnaceBurnTime = burnTimeEnum.m_iBurnTime; }
 
     // --- BTW-added: Fire ---
 
     public boolean DoesInfiniteBurnToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return false; }
     public boolean DoesExtinguishFireAbove(World world, int i, int j, int k) { return false; }
     public void OnDestroyedByFire(World world, int i, int j, int k, int iFireAge, boolean bForcedFireSpread) {}
-    public Block SetFireProperties(int iChanceToEncourageFire, int iAbilityToCatchFire) { return this; }
-    public Block SetFireProperties(FCEnumFlammability flammabilityEnum) { return this; }
+    public Block SetFireProperties(int iChanceToEncourageFire, int iAbilityToCatchFire) { this.fireEncouragement = iChanceToEncourageFire; this.flammability = iAbilityToCatchFire; return this; }
+    public Block SetFireProperties(FCEnumFlammability flammabilityEnum) { return SetFireProperties(flammabilityEnum.m_iChanceToEncourageFire, flammabilityEnum.m_iAbilityToCatchFire); }
     public boolean GetCanBeSetOnFireDirectly(IBlockAccess blockAccess, int i, int j, int k) { return false; }
     public boolean GetCanBeSetOnFireDirectlyByItem(IBlockAccess blockAccess, int i, int j, int k) { return false; }
     public boolean SetOnFireDirectly(World world, int i, int j, int k) { return false; }
@@ -1032,13 +1127,13 @@ public abstract class Block {
 
     // --- BTW-added: Kiln ---
 
-    public Block SetCanBeCookedByKiln(boolean bCanBeCooked) { return this; }
-    public boolean GetCanBeCookedByKiln(IBlockAccess blockAccess, int i, int j, int k) { return false; }
+    public Block SetCanBeCookedByKiln(boolean bCanBeCooked) { this.canBeCookedByKiln = bCanBeCooked; return this; }
+    public boolean GetCanBeCookedByKiln(IBlockAccess blockAccess, int i, int j, int k) { return canBeCookedByKiln; }
     public int GetCookTimeMultiplierInKiln(IBlockAccess blockAccess, int i, int j, int k) { return 1; }
-    public Block SetItemIndexDroppedWhenCookedByKiln(int iItemIndex) { return this; }
-    public int GetItemIndexDroppedWhenCookedByKiln(IBlockAccess blockAccess, int i, int j, int k) { return -1; }
-    public Block SetItemDamageDroppedWhenCookedByKiln(int iItemDamage) { return this; }
-    public int GetItemDamageDroppedWhenCookedByKiln(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
+    public Block SetItemIndexDroppedWhenCookedByKiln(int iItemIndex) { this.kilnDropItemIndex = iItemIndex; return this; }
+    public int GetItemIndexDroppedWhenCookedByKiln(IBlockAccess blockAccess, int i, int j, int k) { return kilnDropItemIndex; }
+    public Block SetItemDamageDroppedWhenCookedByKiln(int iItemDamage) { this.kilnDropItemDamage = iItemDamage; return this; }
+    public int GetItemDamageDroppedWhenCookedByKiln(IBlockAccess blockAccess, int i, int j, int k) { return kilnDropItemDamage; }
     public void OnCookedByKiln(World world, int i, int j, int k) {}
 
     // --- BTW-added: Saw ---
@@ -1071,11 +1166,11 @@ public abstract class Block {
 
     // --- BTW-added: Buoyancy ---
 
-    public Block SetBuoyancy(float fBuoyancy) { return this; }
-    public Block SetBuoyant() { return this; }
-    public Block SetNonBuoyant() { return this; }
-    public Block SetNeutralBuoyant() { return this; }
-    public float GetBuoyancy(int iMetadata) { return -1.0F; }
+    public Block SetBuoyancy(float fBuoyancy) { this.buoyancy = fBuoyancy; return this; }
+    public Block SetBuoyant() { this.buoyancy = 1.0F; return this; }
+    public Block SetNonBuoyant() { this.buoyancy = -1.0F; return this; }
+    public Block SetNeutralBuoyant() { this.buoyancy = 0.0F; return this; }
+    public float GetBuoyancy(int iMetadata) { return buoyancy; }
 
     // --- BTW-added: Ground cover ---
 
@@ -1159,7 +1254,18 @@ public abstract class Block {
     public void CheckForScrollDrop() {}
 
     public static boolean InstallationIntegrityTest() { return true; }
-    public static int determineOrientation(World world, int x, int y, int z, EntityLiving entity) { return 0; }
+    public static int determineOrientation(World world, int x, int y, int z, EntityLiving entity) {
+        if (entity != null) {
+            if (Math.abs(entity.posX - (double)x - 0.5) < 2.0 && Math.abs(entity.posZ - (double)z - 0.5) < 2.0) {
+                double eyeHeight = entity.posY + 1.82;
+                if (eyeHeight - (double)y > 2.0) return 1;
+                if ((double)y - eyeHeight > 0.0) return 0;
+            }
+            int facing = MathHelper.floor_double((double)(entity.rotationYaw * 4.0F / 360.0F) + 0.5) & 3;
+            return facing == 0 ? 2 : facing == 1 ? 5 : facing == 2 ? 3 : 4;
+        }
+        return 0;
+    }
 
     public boolean tryToCreatePortal(World world, int x, int y, int z) { return false; }
     public boolean graphicsLevel;

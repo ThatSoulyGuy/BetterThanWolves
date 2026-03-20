@@ -221,18 +221,32 @@ public abstract class BlockBehaviorMixin {
 
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
+            PlayerBridge fcPlayer = PlayerBridge.getOrCreate(player);
+            fcPlayer.syncFromReal();
             int side = hit.getDirection().get3DDataValue();
             Vec3 hitLoc = hit.getLocation();
-            // Player wrapping not yet implemented — pass null
+            float hitX = (float) (hitLoc.x - pos.getX());
+            float hitY = (float) (hitLoc.y - pos.getY());
+            float hitZ = (float) (hitLoc.z - pos.getZ());
+
+            // Stage 1: FC block activation (e.g., opening chests, adding spit to campfire)
             boolean result = fcBlock.onBlockActivated(world, pos.getX(), pos.getY(), pos.getZ(),
-                    null, side,
-                    (float) (hitLoc.x - pos.getX()),
-                    (float) (hitLoc.y - pos.getY()),
-                    (float) (hitLoc.z - pos.getZ()));
+                    fcPlayer, side, hitX, hitY, hitZ);
+
+            if (!result) {
+                // Stage 2: FC item use on block (e.g., flint & steel igniting campfire)
+                // This mirrors FC's ItemInWorldManager.activateBlockOrUseItem pipeline
+                btw.modern.ItemStack fcHeld = fcPlayer.getCurrentEquippedItem();
+                if (fcHeld != null) {
+                    result = fcHeld.tryPlaceItemIntoWorld(
+                            fcPlayer, world, pos.getX(), pos.getY(), pos.getZ(),
+                            side, hitX, hitY, hitZ);
+                }
+            }
+
             if (result) {
                 cir.setReturnValue(InteractionResult.SUCCESS);
             }
-            // If FC returned false, let vanilla handle it (don't cancel)
         }
     }
 

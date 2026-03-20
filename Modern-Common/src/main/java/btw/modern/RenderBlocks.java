@@ -140,7 +140,21 @@ public class RenderBlocks {
     // --- Standard block rendering ---
 
     public boolean renderStandardBlock(Block block, int x, int y, int z) {
-        return false;
+        setRenderBoundsFromBlock(block);
+        Icon icon;
+        icon = getBlockIconFromSideAndMetadata(block, 0, 0);
+        renderFaceYNeg(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 1, 0);
+        renderFaceYPos(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 2, 0);
+        renderFaceZNeg(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 3, 0);
+        renderFaceZPos(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 4, 0);
+        renderFaceXNeg(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 5, 0);
+        renderFaceXPos(block, x, y, z, icon);
+        return true;
     }
 
     public boolean renderStandardBlockWithAmbientOcclusion(Block block, int x, int y, int z, float r, float g, float b) {
@@ -158,7 +172,21 @@ public class RenderBlocks {
     // --- FC additions: standard full block rendering ---
 
     public boolean RenderStandardFullBlock(Block block, int x, int y, int z) {
-        return false;
+        setRenderBoundsFromBlock(block);
+        Icon icon;
+        icon = getBlockIconFromSideAndMetadata(block, 0, 0);
+        renderFaceYNeg(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 1, 0);
+        renderFaceYPos(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 2, 0);
+        renderFaceZNeg(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 3, 0);
+        renderFaceZPos(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 4, 0);
+        renderFaceXNeg(block, x, y, z, icon);
+        icon = getBlockIconFromSideAndMetadata(block, 5, 0);
+        renderFaceXPos(block, x, y, z, icon);
+        return true;
     }
 
     public boolean RenderStandardFullBlockWithAmbientOcclusion(Block block, int x, int y, int z) {
@@ -235,26 +263,249 @@ public class RenderBlocks {
 
     // --- Face rendering ---
 
-    public void renderFaceYNeg(Block block, double x, double y, double z, Icon icon) {}
-    public void renderFaceYPos(Block block, double x, double y, double z, Icon icon) {}
-    public void renderFaceZNeg(Block block, double x, double y, double z, Icon icon) {}
-    public void renderFaceZPos(Block block, double x, double y, double z, Icon icon) {}
-    public void renderFaceXNeg(Block block, double x, double y, double z, Icon icon) {}
-    public void renderFaceXPos(Block block, double x, double y, double z, Icon icon) {}
+    // Face methods interpolate UVs based on render bounds, matching MC 1.5.2.
+    // For a face spanning renderMinX..renderMaxX, the U coordinate maps from
+    // icon pixel (renderMin*16) to icon pixel (renderMax*16). With NamedIcon
+    // (getInterpolatedU returns d/16 for 0-1 normalized), the captured UVs
+    // stay in 0-1 range and convertCapturedQuad maps via sprite.getU(v.u*16).
+
+    public void renderFaceYNeg(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double u0 = icon != null ? icon.getInterpolatedU(renderMinX * 16.0) : 0;
+        double u1 = icon != null ? icon.getInterpolatedU(renderMaxX * 16.0) : 1;
+        double v0 = icon != null ? icon.getInterpolatedV(renderMinZ * 16.0) : 0;
+        double v1 = icon != null ? icon.getInterpolatedV(renderMaxZ * 16.0) : 1;
+        t.setNormal(0, -1, 0);
+        t.addVertexWithUV(x + renderMinX, y + renderMinY, z + renderMaxZ, u0, v1);
+        t.addVertexWithUV(x + renderMinX, y + renderMinY, z + renderMinZ, u0, v0);
+        t.addVertexWithUV(x + renderMaxX, y + renderMinY, z + renderMinZ, u1, v0);
+        t.addVertexWithUV(x + renderMaxX, y + renderMinY, z + renderMaxZ, u1, v1);
+    }
+
+    public void renderFaceYPos(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double u0 = icon != null ? icon.getInterpolatedU(renderMinX * 16.0) : 0;
+        double u1 = icon != null ? icon.getInterpolatedU(renderMaxX * 16.0) : 1;
+        double v0 = icon != null ? icon.getInterpolatedV(renderMinZ * 16.0) : 0;
+        double v1 = icon != null ? icon.getInterpolatedV(renderMaxZ * 16.0) : 1;
+        t.setNormal(0, 1, 0);
+        t.addVertexWithUV(x + renderMaxX, y + renderMaxY, z + renderMaxZ, u1, v1);
+        t.addVertexWithUV(x + renderMaxX, y + renderMaxY, z + renderMinZ, u1, v0);
+        t.addVertexWithUV(x + renderMinX, y + renderMaxY, z + renderMinZ, u0, v0);
+        t.addVertexWithUV(x + renderMinX, y + renderMaxY, z + renderMaxZ, u0, v1);
+    }
+
+    public void renderFaceZNeg(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double u0 = icon != null ? icon.getInterpolatedU(renderMinX * 16.0) : 0;
+        double u1 = icon != null ? icon.getInterpolatedU(renderMaxX * 16.0) : 1;
+        double v0 = icon != null ? icon.getInterpolatedV((1.0 - renderMaxY) * 16.0) : 0;
+        double v1 = icon != null ? icon.getInterpolatedV((1.0 - renderMinY) * 16.0) : 1;
+        t.setNormal(0, 0, -1);
+        t.addVertexWithUV(x + renderMinX, y + renderMaxY, z + renderMinZ, u1, v0);
+        t.addVertexWithUV(x + renderMaxX, y + renderMaxY, z + renderMinZ, u0, v0);
+        t.addVertexWithUV(x + renderMaxX, y + renderMinY, z + renderMinZ, u0, v1);
+        t.addVertexWithUV(x + renderMinX, y + renderMinY, z + renderMinZ, u1, v1);
+    }
+
+    public void renderFaceZPos(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double u0 = icon != null ? icon.getInterpolatedU(renderMinX * 16.0) : 0;
+        double u1 = icon != null ? icon.getInterpolatedU(renderMaxX * 16.0) : 1;
+        double v0 = icon != null ? icon.getInterpolatedV((1.0 - renderMaxY) * 16.0) : 0;
+        double v1 = icon != null ? icon.getInterpolatedV((1.0 - renderMinY) * 16.0) : 1;
+        t.setNormal(0, 0, 1);
+        t.addVertexWithUV(x + renderMinX, y + renderMaxY, z + renderMaxZ, u0, v0);
+        t.addVertexWithUV(x + renderMinX, y + renderMinY, z + renderMaxZ, u0, v1);
+        t.addVertexWithUV(x + renderMaxX, y + renderMinY, z + renderMaxZ, u1, v1);
+        t.addVertexWithUV(x + renderMaxX, y + renderMaxY, z + renderMaxZ, u1, v0);
+    }
+
+    public void renderFaceXNeg(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double u0 = icon != null ? icon.getInterpolatedU(renderMinZ * 16.0) : 0;
+        double u1 = icon != null ? icon.getInterpolatedU(renderMaxZ * 16.0) : 1;
+        double v0 = icon != null ? icon.getInterpolatedV((1.0 - renderMaxY) * 16.0) : 0;
+        double v1 = icon != null ? icon.getInterpolatedV((1.0 - renderMinY) * 16.0) : 1;
+        t.setNormal(-1, 0, 0);
+        t.addVertexWithUV(x + renderMinX, y + renderMaxY, z + renderMaxZ, u1, v0);
+        t.addVertexWithUV(x + renderMinX, y + renderMaxY, z + renderMinZ, u0, v0);
+        t.addVertexWithUV(x + renderMinX, y + renderMinY, z + renderMinZ, u0, v1);
+        t.addVertexWithUV(x + renderMinX, y + renderMinY, z + renderMaxZ, u1, v1);
+    }
+
+    public void renderFaceXPos(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double u0 = icon != null ? icon.getInterpolatedU((1.0 - renderMaxZ) * 16.0) : 0;
+        double u1 = icon != null ? icon.getInterpolatedU((1.0 - renderMinZ) * 16.0) : 1;
+        double v0 = icon != null ? icon.getInterpolatedV((1.0 - renderMaxY) * 16.0) : 0;
+        double v1 = icon != null ? icon.getInterpolatedV((1.0 - renderMinY) * 16.0) : 1;
+        t.setNormal(1, 0, 0);
+        t.addVertexWithUV(x + renderMaxX, y + renderMinY, z + renderMaxZ, u0, v1);
+        t.addVertexWithUV(x + renderMaxX, y + renderMinY, z + renderMinZ, u1, v1);
+        t.addVertexWithUV(x + renderMaxX, y + renderMaxY, z + renderMinZ, u1, v0);
+        t.addVertexWithUV(x + renderMaxX, y + renderMaxY, z + renderMaxZ, u0, v0);
+    }
 
     // --- FC additions: full face rendering ---
 
-    public void RenderFullBottomFace(Block block, double x, double y, double z, Icon icon) {}
-    public void RenderFullTopFace(Block block, double x, double y, double z, Icon icon) {}
-    public void RenderFullEastFace(Block block, double x, double y, double z, Icon icon) {}
-    public void RenderFullWestFace(Block block, double x, double y, double z, Icon icon) {}
-    public void RenderFullNorthFace(Block block, double x, double y, double z, Icon icon) {}
-    public void RenderFullSouthFace(Block block, double x, double y, double z, Icon icon) {}
+    public void RenderFullBottomFace(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        t.setNormal(0, -1, 0);
+        t.addVertexWithUV(x + 0, y + 0, z + 1, minU, maxV);
+        t.addVertexWithUV(x + 0, y + 0, z + 0, minU, minV);
+        t.addVertexWithUV(x + 1, y + 0, z + 0, maxU, minV);
+        t.addVertexWithUV(x + 1, y + 0, z + 1, maxU, maxV);
+    }
+
+    public void RenderFullTopFace(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        t.setNormal(0, 1, 0);
+        t.addVertexWithUV(x + 1, y + 1, z + 1, maxU, maxV);
+        t.addVertexWithUV(x + 1, y + 1, z + 0, maxU, minV);
+        t.addVertexWithUV(x + 0, y + 1, z + 0, minU, minV);
+        t.addVertexWithUV(x + 0, y + 1, z + 1, minU, maxV);
+    }
+
+    public void RenderFullEastFace(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        t.setNormal(1, 0, 0);
+        t.addVertexWithUV(x + 1, y + 0, z + 1, minU, maxV);
+        t.addVertexWithUV(x + 1, y + 0, z + 0, maxU, maxV);
+        t.addVertexWithUV(x + 1, y + 1, z + 0, maxU, minV);
+        t.addVertexWithUV(x + 1, y + 1, z + 1, minU, minV);
+    }
+
+    public void RenderFullWestFace(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        t.setNormal(-1, 0, 0);
+        t.addVertexWithUV(x + 0, y + 1, z + 1, maxU, minV);
+        t.addVertexWithUV(x + 0, y + 1, z + 0, minU, minV);
+        t.addVertexWithUV(x + 0, y + 0, z + 0, minU, maxV);
+        t.addVertexWithUV(x + 0, y + 0, z + 1, maxU, maxV);
+    }
+
+    public void RenderFullNorthFace(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        t.setNormal(0, 0, -1);
+        t.addVertexWithUV(x + 0, y + 1, z + 0, maxU, minV);
+        t.addVertexWithUV(x + 1, y + 1, z + 0, minU, minV);
+        t.addVertexWithUV(x + 1, y + 0, z + 0, minU, maxV);
+        t.addVertexWithUV(x + 0, y + 0, z + 0, maxU, maxV);
+    }
+
+    public void RenderFullSouthFace(Block block, double x, double y, double z, Icon icon) {
+        Tessellator t = Tessellator.instance;
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        t.setNormal(0, 0, 1);
+        t.addVertexWithUV(x + 0, y + 1, z + 1, minU, minV);
+        t.addVertexWithUV(x + 0, y + 0, z + 1, minU, maxV);
+        t.addVertexWithUV(x + 1, y + 0, z + 1, maxU, maxV);
+        t.addVertexWithUV(x + 1, y + 1, z + 1, maxU, minV);
+    }
 
     // --- Block as item rendering ---
 
-    public void renderBlockAsItem(Block block, int metadata, float brightness) {}
-    public void renderBlockAsItemVanilla(Block block, int metadata, float brightness) {}
+    public void renderBlockAsItem(Block block, int metadata, float brightness) {
+        block.setBlockBoundsForItemRender();
+        setRenderBoundsFromBlock(block);
+
+        Tessellator t = Tessellator.instance;
+        Icon icon;
+
+        t.startDrawingQuads();
+        t.setNormal(0, -1, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 0, metadata);
+        renderFaceYNeg(block, 0, 0, 0, icon);
+
+        t.setNormal(0, 1, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 1, metadata);
+        renderFaceYPos(block, 0, 0, 0, icon);
+
+        t.setNormal(0, 0, -1);
+        icon = getBlockIconFromSideAndMetadata(block, 2, metadata);
+        renderFaceZNeg(block, 0, 0, 0, icon);
+
+        t.setNormal(0, 0, 1);
+        icon = getBlockIconFromSideAndMetadata(block, 3, metadata);
+        renderFaceZPos(block, 0, 0, 0, icon);
+
+        t.setNormal(-1, 0, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 4, metadata);
+        renderFaceXNeg(block, 0, 0, 0, icon);
+
+        t.setNormal(1, 0, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 5, metadata);
+        renderFaceXPos(block, 0, 0, 0, icon);
+    }
+
+    public void renderBlockAsItemVanilla(Block block, int metadata, float brightness) {
+        block.setBlockBoundsForItemRender();
+        setRenderBoundsFromBlock(block);
+
+        Tessellator t = Tessellator.instance;
+        Icon icon;
+
+        t.startDrawingQuads();
+        t.setNormal(0, -1, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 0, metadata);
+        renderFaceYNeg(block, 0, 0, 0, icon);
+
+        t.setNormal(0, 1, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 1, metadata);
+        renderFaceYPos(block, 0, 0, 0, icon);
+
+        t.setNormal(0, 0, -1);
+        icon = getBlockIconFromSideAndMetadata(block, 2, metadata);
+        renderFaceZNeg(block, 0, 0, 0, icon);
+
+        t.setNormal(0, 0, 1);
+        icon = getBlockIconFromSideAndMetadata(block, 3, metadata);
+        renderFaceZPos(block, 0, 0, 0, icon);
+
+        t.setNormal(-1, 0, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 4, metadata);
+        renderFaceXNeg(block, 0, 0, 0, icon);
+
+        t.setNormal(1, 0, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 5, metadata);
+        renderFaceXPos(block, 0, 0, 0, icon);
+    }
 
     // --- Falling block rendering ---
 
@@ -263,19 +514,19 @@ public class RenderBlocks {
     // --- Icon helpers ---
 
     public Icon getBlockIcon(Block block, IBlockAccess blockAccess, int x, int y, int z, int side) {
-        return null;
+        return this.overrideBlockTexture != null ? this.overrideBlockTexture : block.getBlockTexture(blockAccess, x, y, z, side);
     }
 
     public Icon getBlockIconFromSideAndMetadata(Block block, int side, int metadata) {
-        return null;
+        return this.overrideBlockTexture != null ? this.overrideBlockTexture : block.getIcon(side, metadata);
     }
 
     public Icon getBlockIconFromSide(Block block, int side) {
-        return null;
+        return this.overrideBlockTexture != null ? this.overrideBlockTexture : block.getIcon(side, 0);
     }
 
     public Icon getBlockIcon(Block block) {
-        return null;
+        return this.overrideBlockTexture != null ? this.overrideBlockTexture : block.getIcon(0, 0);
     }
 
     public Icon getIconSafe(Icon icon) {

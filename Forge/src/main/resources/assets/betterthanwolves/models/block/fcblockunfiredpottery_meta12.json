@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "betterthanwolves:block/fcblockpastryuncooked",
+    "up": "betterthanwolves:block/fcblockuncookedpumpkinpie_top",
+    "north": "betterthanwolves:block/fcblockpastryuncooked",
+    "south": "betterthanwolves:block/fcblockpastryuncooked",
+    "west": "betterthanwolves:block/fcblockpastryuncooked",
+    "east": "betterthanwolves:block/fcblockpastryuncooked",
+    "particle": "betterthanwolves:block/fcblockpastryuncooked"
+  }
+}

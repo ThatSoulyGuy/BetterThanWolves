@@ -70,8 +70,17 @@ public class BTWNetwork {
         CHANNEL.registerMessage(nextMessageId++, PenaltySync.class,
                 PenaltySync::encode, PenaltySync::decode, PenaltySync::handle);
 
-        // TODO: Register additional BTW packet types
-        // CHANNEL.registerMessage(nextMessageId++, StartBlockHarvestPacket.class, ...);
+        // StartBlockHarvest packet (FC's Packet166):
+        // In legacy FC, the client sends FCPacket166StartBlockHarvest to the server
+        // when beginning to mine a block. It carries the block position, hit face,
+        // and the client's computed mining speed modifier (penalties applied).
+        // In the Forge 1.20.1 port, mining speed modifiers are applied server-side
+        // via PlayerEvent.BreakSpeed (see BTWLifecycle), so this packet is not
+        // currently needed. If client-authoritative mining speed is required later,
+        // register a StartBlockHarvest message here:
+        // CHANNEL.registerMessage(nextMessageId++, StartBlockHarvestPacket.class,
+        //         StartBlockHarvestPacket::encode, StartBlockHarvestPacket::decode,
+        //         StartBlockHarvestPacket::handle);
 
         LOGGER.info("BTW network channel registered.");
     }

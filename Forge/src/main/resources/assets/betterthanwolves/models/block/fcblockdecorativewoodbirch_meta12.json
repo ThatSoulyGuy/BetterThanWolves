@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {"end": "betterthanwolves:block/fcblockdecorativewoodbirch", "side": "betterthanwolves:block/fcblockcolumnwoodbirch_side"}
+}

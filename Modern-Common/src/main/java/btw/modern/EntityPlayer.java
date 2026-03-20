@@ -10,6 +10,9 @@ public abstract class EntityPlayer extends EntityLiving {
     public Container inventoryContainer;
     public float cameraYaw;
     public float prevCameraYaw;
+
+    /** Boolean value indicating whether a player is sleeping or not */
+    public boolean sleeping;
     public double chasingPosX;
     public double chasingPosY;
     public double chasingPosZ;
@@ -49,8 +52,11 @@ public abstract class EntityPlayer extends EntityLiving {
         super(world);
     }
 
+    private ItemStack itemInUse;
+    private int itemInUseCount;
+
     public boolean isUsingItem() {
-        return false;
+        return itemInUse != null && itemInUseCount > 0;
     }
 
     public ItemStack getCurrentEquippedItem() {
@@ -65,21 +71,49 @@ public abstract class EntityPlayer extends EntityLiving {
     public void addChatMessage(String message) {}
 
     public boolean canEat(boolean alwaysEdible) {
-        return false;
+        // FC: Prevent eating while having the hunger potion effect
+        if (isPotionActive(Potion.hunger)) {
+            return false;
+        }
+        return (alwaysEdible || this.foodStats.needFood()) && !this.capabilities.disableDamage;
     }
 
     public void displayGUIChest(IInventory inventory) {}
 
-    public void addExhaustion(float exhaustion) {}
+    public void addExhaustion(float exhaustion) {
+        if (!this.capabilities.disableDamage) {
+            if (!this.worldObj.isRemote) {
+                // FC: Apply armor weight exhaustion modifier
+                exhaustion *= GetArmorExhaustionModifier();
+                this.foodStats.addExhaustion(exhaustion);
+            }
+        }
+    }
 
-    public void setItemInUse(ItemStack stack, int duration) {}
+    public void setItemInUse(ItemStack stack, int duration) {
+        this.itemInUse = stack;
+        this.itemInUseCount = duration;
+    }
+
+    public ItemStack getItemInUse() {
+        return this.itemInUse;
+    }
+
+    public int getItemInUseCount() {
+        return this.itemInUseCount;
+    }
+
+    public void clearItemInUse() {
+        this.itemInUse = null;
+        this.itemInUseCount = 0;
+    }
 
     public FoodStats getFoodStats() {
         return foodStats;
     }
 
     public boolean isPlayerSleeping() {
-        return false;
+        return this.sleeping;
     }
 
     public void triggerAchievement(StatBase stat) {}
@@ -93,7 +127,7 @@ public abstract class EntityPlayer extends EntityLiving {
     }
 
     public boolean isInCreativeMode() {
-        return false;
+        return this.capabilities != null && this.capabilities.isCreativeMode;
     }
 
     public void addExperience(int amount) {}
@@ -104,46 +138,47 @@ public abstract class EntityPlayer extends EntityLiving {
     }
 
     public float getCurrentPlayerStrVsBlock(Block block, int i, int j, int k) {
-        // FC implementation from patched EntityPlayer.java
+        // FC position-aware tool speed calculation
         float str = 1.0F;
 
-        // Get tool speed from inventory
         if (this.inventory != null) {
-            str = this.inventory.getStrVsBlock(block);
+            str = this.inventory.getStrVsBlock(worldObj, block, i, j, k);
         }
 
-        // Apply efficiency enchantment if tool speed > 1 and has current item
+        // Apply efficiency enchantment
         if (str > 1.0F) {
+            int efficiency = EnchantmentHelper.getEfficiencyModifier(this);
             ItemStack currentItem = getCurrentEquippedItem();
-            if (currentItem != null) {
-                int efficiency = EnchantmentHelper.getEfficiencyModifier(this);
-                if (efficiency > 0) {
-                    float bonus = (float)(efficiency * efficiency + 1);
+
+            if (efficiency > 0 && currentItem != null) {
+                float bonus = (float)(efficiency * efficiency + 1);
+
+                if (!currentItem.canHarvestBlock(worldObj, block, i, j, k) && str <= 1.0F) {
+                    str += bonus * 0.08F;
+                } else {
                     str += bonus;
                 }
             }
         }
 
-        // Apply FC mining speed modifier (health/hunger/gloom penalties)
-        str *= GetMiningSpeedModifier();
+        // Apply dig speed (haste) potion buff
+        if (isPotionActive(Potion.digSpeed)) {
+            PotionEffect hasteEffect = getActivePotionEffect(Potion.digSpeed);
+            if (hasteEffect != null) {
+                str *= 1.0F + (float)(hasteEffect.getAmplifier() + 1) * 0.2F;
+            }
+        }
 
-        // Apply dig slowdown potion effect
+        // Apply dig slowdown (mining fatigue) potion debuff
         if (isPotionActive(Potion.digSlowdown)) {
-            PotionEffect effect = getActivePotionEffect(Potion.digSlowdown);
-            if (effect != null) {
-                float slowdown = 1.0F;
-                switch (effect.getAmplifier()) {
-                    case 0: slowdown = 0.3F; break;
-                    case 1: slowdown = 0.09F; break;
-                    case 2: slowdown = 0.0027F; break;
-                    default: slowdown = 8.1E-4F; break;
-                }
-                str *= slowdown;
+            PotionEffect fatigueEffect = getActivePotionEffect(Potion.digSlowdown);
+            if (fatigueEffect != null) {
+                str *= 1.0F - (float)(fatigueEffect.getAmplifier() + 1) * 0.2F;
             }
         }
 
         // Penalty for mining underwater without aqua affinity
-        if (isInsideOfMaterial(Material.water)) {
+        if (isInsideOfMaterial(Material.water) && !EnchantmentHelper.getAquaAffinityModifier(this)) {
             str /= 5.0F;
         }
 
@@ -151,6 +186,9 @@ public abstract class EntityPlayer extends EntityLiving {
         if (!onGround) {
             str /= 5.0F;
         }
+
+        // FC: Apply mining speed modifier (health/hunger/gloom penalties)
+        str *= GetMiningSpeedModifier();
 
         return str;
     }
@@ -186,22 +224,69 @@ public abstract class EntityPlayer extends EntityLiving {
     public boolean isSpawnForced() { return false; }
     public void func_71012_a(ItemStack stack) {}
     public Object getGameProfile() { return null; }
-    public String getCommandSenderName() { return ""; }
+    public String getCommandSenderName() { return this.username; }
     public void addToPlayerScore(Entity entity, int amount) {}
-    public EnumStatus sleepInBedAt(int x, int y, int z) { return null; }
+    public EnumStatus sleepInBedAt(int x, int y, int z) {
+        // FC: Sleeping is removed
+        return EnumStatus.OTHER_PROBLEM;
+    }
     public void wakeUpPlayer(boolean immediately, boolean updateWorldFlag, boolean setSpawn) {}
 
-    public boolean canPlayerEdit(int x, int y, int z, int side, ItemStack stack) { return true; }
+    public boolean canPlayerEdit(int x, int y, int z, int side, ItemStack stack) {
+        // FC: Prevent placing blocks while in mid air (unless creative, on ground, in water, on ladder, riding, or in lava)
+        if (this.capabilities != null && !this.capabilities.isCreativeMode
+                && !onGround && !inWater && !isOnLadder() && ridingEntity == null && !handleLavaMovement()) {
+            return false;
+        }
+        return this.capabilities != null && this.capabilities.allowEdit;
+    }
     public EntityItem dropPlayerItem(ItemStack stack) { return null; }
     public InventoryEnderChest getInventoryEnderChest() { return theInventoryEnderChest; }
-    public int getItemInUseCount() { return 0; }
-    public void SetItemInUseCount(int count) {}
-    public ItemStack getCurrentArmor(int slot) { return null; }
+    public void SetItemInUseCount(int count) { this.itemInUseCount = count; }
+    public ItemStack getCurrentArmor(int slot) {
+        if (this.inventory != null && slot >= 0 && slot < this.inventory.armorInventory.length) {
+            return this.inventory.armorInventory[slot];
+        }
+        return null;
+    }
+
+    /**
+     * Returns the held item (slot 0) or armor piece (slots 1-4).
+     */
+    public ItemStack getEquipmentInSlot(int slot) {
+        if (this.inventory == null) return null;
+        return slot == 0 ? this.inventory.getCurrentItem() : this.inventory.armorInventory[slot - 1];
+    }
+
+    /**
+     * Returns the item the player is currently holding.
+     */
+    public ItemStack getHeldItem() {
+        return this.inventory != null ? this.inventory.getCurrentItem() : null;
+    }
+
+    /**
+     * Sets armor in the given slot. Slot 0-3 maps to armorInventory.
+     */
+    public void setCurrentItemOrArmor(int slot, ItemStack stack) {
+        if (this.inventory != null && slot >= 0 && slot < this.inventory.armorInventory.length) {
+            this.inventory.armorInventory[slot] = stack;
+        }
+    }
+
     public void addExperienceLevel(int levels) {}
     public void setLevelsServerSafe(int levels) {}
-    public int getFoodLevel() { return 20; }
-    public boolean isBlocking() { return false; }
-    public void heal(int amount) {}
+    public int getFoodLevel() {
+        return this.foodStats != null ? this.foodStats.getFoodLevel() : 0;
+    }
+    public boolean isBlocking() {
+        return this.isUsingItem() && this.getItemInUse() != null
+            && this.getItemInUse().getItem() != null
+            && this.getItemInUse().getItem().getItemUseAction(this.getItemInUse()) == EnumAction.block;
+    }
+    public void heal(int amount) {
+        super.heal(amount);
+    }
     public void displayGUIEditSign(TileEntity sign) {}
     public void addStats(int stat, float amount) {}
     public int IncrementAndGetWindowID() { return 0; }
@@ -213,7 +298,13 @@ public abstract class EntityPlayer extends EntityLiving {
     public void AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) {}
     public void AttemptToPossessCreaturesAroundBlock(World world, int x, int y, int z, int range, int dim) {}
     public void AddRawChatMessage(String message) {}
-    public boolean AddStackToCurrentHeldStackIfEmpty(ItemStack stack) { return false; }
+    public boolean AddStackToCurrentHeldStackIfEmpty(ItemStack stack) {
+        if (getCurrentEquippedItem() == null && this.inventory != null) {
+            this.inventory.setInventorySlotContents(this.inventory.currentItem, stack.copy());
+            return true;
+        }
+        return false;
+    }
     public static boolean InstallationIntegrityTestPlayer() { return true; }
 
     // =========================================================================
@@ -572,11 +663,23 @@ public abstract class EntityPlayer extends EntityLiving {
 
     /**
      * Adds exhaustion for harvesting a block, based on the tool used.
-     * TODO: Needs inventory bridge to access current item and Item.GetExhaustionOnUsedToHarvestBlock()
+     * FC: Queries Item.GetExhaustionOnUsedToHarvestBlock() for the held item, with a default of 0.025F.
      */
     public void AddHarvestBlockExhaustion(int iBlockID, int iBlockI, int iBlockJ, int iBlockK, int iBlockMetadata) {
-        // stub: real implementation requires access to inventory.mainInventory[inventory.currentItem]
-        // and currentItemStack.getItem().GetExhaustionOnUsedToHarvestBlock()
+        float fExhaustionConsumed = 0.025F; // default exhaustion amount
+
+        if (this.inventory != null) {
+            ItemStack currentItemStack = this.inventory.mainInventory[this.inventory.currentItem];
+
+            if (currentItemStack != null) {
+                fExhaustionConsumed = currentItemStack.getItem().GetExhaustionOnUsedToHarvestBlock(
+                    iBlockID, worldObj, iBlockI, iBlockJ, iBlockK, iBlockMetadata);
+            }
+        }
+
+        if (fExhaustionConsumed > 0F) {
+            addExhaustion(fExhaustionConsumed);
+        }
     }
 
     // =========================================================================
@@ -616,10 +719,15 @@ public abstract class EntityPlayer extends EntityLiving {
 
     /**
      * Called when the player blocks damage with an item.
-     * TODO: Needs inventory bridge to damage current held item
+     * FC: Damages the currently held item by 1 durability point.
      */
     public void OnBlockedDamage(DamageSource source, int iDamage) {
-        // stub: real implementation damages the current held item stack
+        if (this.inventory != null) {
+            ItemStack currentItemStack = this.inventory.mainInventory[this.inventory.currentItem];
+            if (currentItemStack != null) {
+                currentItemStack.damageItem(1, this);
+            }
+        }
     }
 
     /**

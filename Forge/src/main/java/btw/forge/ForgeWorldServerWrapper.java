@@ -46,15 +46,16 @@ public class ForgeWorldServerWrapper extends WorldServer {
     @Override
     public int getBlockId(int x, int y, int z) {
         BlockState state = serverLevel.getBlockState(new BlockPos(x, y, z));
-        if (state.getBlock() instanceof ProxyBlock pb) {
-            return pb.getLegacyId();
-        }
-        return 0;
+        return ProxyRegistry.getBlockId(state.getBlock());
     }
 
     @Override
     public int getBlockMetadata(int x, int y, int z) {
-        // TODO: proper metadata extraction
+        BlockState state = serverLevel.getBlockState(new BlockPos(x, y, z));
+        if (state.hasProperty(ProxyBlock.META)) {
+            return state.getValue(ProxyBlock.META);
+        }
+        // For vanilla blocks, metadata is encoded differently in 1.20.1
         return 0;
     }
 
@@ -78,6 +79,17 @@ public class ForgeWorldServerWrapper extends WorldServer {
     public boolean setBlockToAir(int x, int y, int z) {
         return serverLevel.setBlock(new BlockPos(x, y, z),
             Blocks.AIR.defaultBlockState(), 3);
+    }
+
+    @Override
+    public boolean setBlockMetadata(int x, int y, int z, int metadata, int flags) {
+        BlockPos pos = new BlockPos(x, y, z);
+        BlockState current = serverLevel.getBlockState(pos);
+        if (current.hasProperty(ProxyBlock.META)) {
+            BlockState newState = current.setValue(ProxyBlock.META, Math.min(Math.max(metadata, 0), 15));
+            return serverLevel.setBlock(pos, newState, flags);
+        }
+        return false;
     }
 
     @Override

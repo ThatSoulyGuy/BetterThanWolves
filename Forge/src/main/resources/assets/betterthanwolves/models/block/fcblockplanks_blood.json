@@ -1,4 +1,5 @@
 {
+  "parent": "minecraft:block/block",
   "textures": {
     "side": "betterthanwolves:block/fcblockplanks_blood",
     "top": "betterthanwolves:block/fcblockplanks_blood",

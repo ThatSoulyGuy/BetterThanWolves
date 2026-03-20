@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "betterthanwolves:block/fcblockmyceliumslab_bottom",
+    "up": "betterthanwolves:block/fcblockmyceliumslab_top",
+    "north": "betterthanwolves:block/fcblockmyceliumslab_side",
+    "south": "betterthanwolves:block/fcblockmyceliumslab_side",
+    "west": "betterthanwolves:block/fcblockmyceliumslab_side",
+    "east": "betterthanwolves:block/fcblockmyceliumslab_side",
+    "particle": "betterthanwolves:block/fcblockmyceliumslab_bottom"
+  }
+}

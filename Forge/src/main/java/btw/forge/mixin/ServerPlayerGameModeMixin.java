@@ -1,5 +1,6 @@
 package btw.forge.mixin;
 
+import btw.forge.ItemStackHelper;
 import btw.forge.PlayerBridge;
 import btw.forge.ProxyRegistry;
 import btw.forge.WorldBridge;
@@ -7,6 +8,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerPlayerGameMode;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -59,5 +64,61 @@ public abstract class ServerPlayerGameModeMixin {
 
         // Tell vanilla we handled it — don't let vanilla do its own removal/drops
         cir.setReturnValue(true);
+    }
+
+    // ================================================================
+    // useItem → FC Item.onItemRightClick (right-click in air)
+    // This catches ALL items — vanilla items with FC replacements AND BTW items.
+    // ================================================================
+
+    @Inject(method = "useItem", at = @At("HEAD"), cancellable = true)
+    private void btw$useItem(ServerPlayer serverPlayer, Level world,
+                              ItemStack mcStack, InteractionHand hand,
+                              CallbackInfoReturnable<InteractionResult> cir) {
+        if (mcStack.isEmpty()) return;
+
+        // Look up the FC item for whatever the player is holding
+        int legacyId;
+        if (mcStack.getItem() instanceof net.minecraft.world.item.BlockItem bi) {
+            legacyId = ProxyRegistry.getBlockId(bi.getBlock());
+        } else {
+            legacyId = ProxyRegistry.getItemId(mcStack.getItem());
+        }
+
+        btw.modern.Item fcItem = null;
+        if (legacyId > 0 && legacyId < btw.modern.Item.itemsList.length) {
+            fcItem = btw.modern.Item.itemsList[legacyId];
+        }
+        if (fcItem == null) return; // No FC item — let vanilla handle it
+
+        PlayerBridge fcPlayer = PlayerBridge.getOrCreate(serverPlayer);
+        fcPlayer.syncFromReal();
+        btw.modern.World fcWorld = WorldBridge.getOrCreate(level);
+
+        btw.modern.ItemStack fcStack = fcPlayer.getCurrentEquippedItem();
+        if (fcStack == null) return;
+
+        // Call FC's onItemRightClick — FC decides what happens
+        btw.modern.ItemStack result = fcItem.onItemRightClick(fcStack, fcWorld, fcPlayer);
+
+        // If FC returned a different stack (consumed item, created new item), update
+        if (result != fcStack && result != null) {
+            // FC changed the held item — sync back
+            // The FC code may have modified stack size, damage, etc.
+        }
+
+        // Check if FC's item has a use duration (food, bow, etc.)
+        // If so, tell MC to start the "using item" animation
+        int useDuration = fcItem.getMaxItemUseDuration(fcStack);
+        if (useDuration > 0) {
+            // FC item wants a use duration — let vanilla handle the use() call
+            // which will start the using animation and eventually call
+            // finishUsingItem/releaseUsing. ProxyItem handles those for FC items.
+            // For vanilla items with FC replacements, we need to NOT cancel here.
+            return;
+        }
+
+        // For instant-use items (no duration), FC already handled the interaction
+        // Don't cancel — let vanilla also process if FC didn't consume
     }
 }

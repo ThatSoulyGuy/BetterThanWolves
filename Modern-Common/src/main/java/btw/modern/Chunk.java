@@ -32,11 +32,24 @@ public class Chunk {
         this(world, x, z);
     }
 
-    public int getBlockID(int x, int y, int z) { return 0; }
-    public int getBlockMetadata(int x, int y, int z) { return 0; }
-    public boolean setBlockIDWithMetadata(int x, int y, int z, int id, int meta) { return false; }
-    public int getBlockLightValue(int x, int y, int z, int skySubtracted) { return 0; }
-    public int getHeightValue(int x, int z) { return 0; }
+    public int getBlockID(int x, int y, int z) {
+        return worldObj.getBlockId(xPosition * 16 + x, y, zPosition * 16 + z);
+    }
+
+    public int getBlockMetadata(int x, int y, int z) {
+        return worldObj.getBlockMetadata(xPosition * 16 + x, y, zPosition * 16 + z);
+    }
+
+    public boolean setBlockIDWithMetadata(int x, int y, int z, int id, int meta) {
+        return worldObj.setBlock(xPosition * 16 + x, y, zPosition * 16 + z, id, meta, 3);
+    }
+
+    public int getBlockLightValue(int x, int y, int z, int skySubtracted) {
+        return 15;
+    }
+
+    public int getHeightValue(int x, int z) { return 256; }
+    public boolean canBlockSeeTheSky(int x, int y, int z) { return true; }
     public boolean isAtLocation(int x, int z) { return this.xPosition == x && this.zPosition == z; }
     public boolean needsSaving(boolean flag) { return this.isModified; }
     public void setChunkModified() { this.isModified = true; }
@@ -50,7 +63,7 @@ public class Chunk {
     public void onChunkUnload() {}
     public void generateHeightMap() {}
     public void generateSkylightMap() {}
-    public int getSavedLightValue(EnumSkyBlock type, int x, int y, int z) { return 0; }
+    public int getSavedLightValue(EnumSkyBlock type, int x, int y, int z) { return 15; }
     public void setLightValue(EnumSkyBlock type, int x, int y, int z, int value) {}
     public BiomeGenBase getBiomeGenForWorldCoords(int x, int z, WorldChunkManager manager) { return null; }
     public void getEntitiesWithinAABBForEntity(Entity excluded, AxisAlignedBB bb, List list, IEntitySelector selector) {}

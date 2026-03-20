@@ -1,23 +1,4 @@
 {
-  "textures": {
-    "side": "betterthanwolves:block/fcblockdecorativewoodbirch",
-    "top": "betterthanwolves:block/fcblockdecorativewoodbirch",
-    "bottom": "betterthanwolves:block/fcblockdecorativewoodbirch",
-    "front": "betterthanwolves:block/fcblockdecorativewoodbirch",
-    "particle": "betterthanwolves:block/fcblockdecorativewoodbirch"
-  },
-  "elements": [
-    {
-      "from": [4.0, 4.0, 0.0],
-      "to": [12.0, 12.0, 16.0],
-      "faces": {
-        "north": {"texture": "#front", "cullface": "north"},
-        "south": {"texture": "#side", "cullface": "south"},
-        "east": {"texture": "#side", "cullface": "east"},
-        "west": {"texture": "#side", "cullface": "west"},
-        "up": {"texture": "#top", "cullface": "up"},
-        "down": {"texture": "#bottom", "cullface": "down"}
-      }
-    }
-  ]
+  "parent": "minecraft:block/cube_all",
+  "textures": {"all": "betterthanwolves:block/fcblockdecorativewoodbirch"}
 }

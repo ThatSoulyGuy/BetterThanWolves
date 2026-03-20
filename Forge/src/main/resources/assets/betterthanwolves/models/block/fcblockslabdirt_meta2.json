@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "minecraft:block/dirt",
+    "up": "betterthanwolves:block/fcblockslabdirt_grass_top_item",
+    "north": "betterthanwolves:block/fcblockslabdirt_grass_side",
+    "south": "betterthanwolves:block/fcblockslabdirt_grass_side",
+    "west": "betterthanwolves:block/fcblockslabdirt_grass_side",
+    "east": "betterthanwolves:block/fcblockslabdirt_grass_side",
+    "particle": "minecraft:block/dirt"
+  }
+}

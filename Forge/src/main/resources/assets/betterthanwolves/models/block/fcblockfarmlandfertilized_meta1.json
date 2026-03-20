@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "minecraft:block/dirt",
+    "up": "betterthanwolves:block/fcblockfarmlandfertilized_wet",
+    "north": "minecraft:block/dirt",
+    "south": "minecraft:block/dirt",
+    "west": "minecraft:block/dirt",
+    "east": "minecraft:block/dirt",
+    "particle": "minecraft:block/dirt"
+  }
+}

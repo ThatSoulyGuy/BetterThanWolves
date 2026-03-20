@@ -8,4 +8,12 @@ public class NBTTagString extends NBTBase {
     public NBTTagString(String name, String data) {
         this.data = data;
     }
+
+    @Override
+    public byte getId() { return 8; }
+
+    @Override
+    public NBTBase copy() {
+        return new NBTTagString("", this.data);
+    }
 }

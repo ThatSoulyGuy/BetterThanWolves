@@ -130,21 +130,72 @@ public class Vec3 {
     }
 
     public Vec3 RotateAroundJToFacing(int facing) {
-        // BTW rotation around J (Y) axis to facing
-        return new Vec3(this.xCoord, this.yCoord, this.zCoord);
+        Vec3 result = new Vec3(this.xCoord, this.yCoord, this.zCoord);
+        result.RotateAsBlockPosAroundJToFacing(facing);
+        return result;
     }
 
     public void RotateAsBlockPosAroundJToFacing(int facing) {
+        if (facing > 2) {
+            if (facing == 5) { // i + 1
+                double tempZ = xCoord;
+                xCoord = 1D - zCoord;
+                zCoord = tempZ;
+            } else if (facing == 4) { // i - 1
+                double tempZ = 1D - xCoord;
+                xCoord = zCoord;
+                zCoord = tempZ;
+            } else { // facing == 3, k + 1
+                xCoord = 1D - xCoord;
+                zCoord = 1D - zCoord;
+            }
+        }
     }
 
     public void RotateAsVectorAroundJToFacing(int facing) {
+        if (facing > 2) {
+            if (facing == 5) { // i + 1
+                double tempZ = xCoord;
+                xCoord = -zCoord;
+                zCoord = tempZ;
+            } else if (facing == 4) { // i - 1
+                double tempZ = -xCoord;
+                xCoord = zCoord;
+                zCoord = tempZ;
+            } else { // facing == 3, k + 1
+                xCoord = -xCoord;
+                zCoord = -zCoord;
+            }
+        }
     }
 
     public void TiltAsBlockPosToFacingAlongJ(int facing) {
+        if (facing == 0) { // j - 1
+            yCoord = 1D - yCoord;
+            xCoord = 1D - xCoord;
+        } else if (facing == 2) { // k - 1
+            double tempZ = 1D - yCoord;
+            yCoord = zCoord;
+            zCoord = tempZ;
+        } else if (facing == 3) { // k + 1
+            double tempZ = yCoord;
+            yCoord = 1D - zCoord;
+            zCoord = tempZ;
+        } else if (facing == 4) { // i - 1
+            double tempY = xCoord;
+            xCoord = 1D - yCoord;
+            yCoord = tempY;
+        } else if (facing == 5) { // i + 1
+            double tempY = 1D - xCoord;
+            xCoord = yCoord;
+            yCoord = tempY;
+        }
     }
 
     public Vec3 TiltToFacingAlongJ(int facing) {
-        return new Vec3(this.xCoord, this.yCoord, this.zCoord);
+        Vec3 result = new Vec3(this.xCoord, this.yCoord, this.zCoord);
+        result.TiltAsBlockPosToFacingAlongJ(facing);
+        return result;
     }
 
     public static Vec3 getVecFromPool(double x, double y, double z) {

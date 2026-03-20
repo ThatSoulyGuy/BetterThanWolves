@@ -1,0 +1,38 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "down": "betterthanwolves:block/fcblockhamper_bottom",
+    "up": "betterthanwolves:block/fcblockhamper_top",
+    "north": "betterthanwolves:block/fcblockhamper",
+    "south": "betterthanwolves:block/fcblockhamper",
+    "west": "betterthanwolves:block/fcblockhamper",
+    "east": "betterthanwolves:block/fcblockhamper_front",
+    "particle": "betterthanwolves:block/fcblockhamper_bottom"
+  },
+  "elements": [
+    {
+      "from": [1.0, 2.0, 2.0],
+      "to": [15.0, 13.0, 14.0],
+      "faces": {
+        "down": {"texture": "#down"},
+        "up": {"texture": "#up"},
+        "north": {"texture": "#north"},
+        "south": {"texture": "#south"},
+        "west": {"texture": "#west"},
+        "east": {"texture": "#east"}
+      }
+    },
+    {
+      "from": [2.0, 0.0, 3.0],
+      "to": [14.0, 2.0, 13.0],
+      "faces": {
+        "down": {"texture": "#down"},
+        "up": {"texture": "#up"},
+        "north": {"texture": "#north"},
+        "south": {"texture": "#south"},
+        "west": {"texture": "#west"},
+        "east": {"texture": "#east"}
+      }
+    }
+  ]
+}
