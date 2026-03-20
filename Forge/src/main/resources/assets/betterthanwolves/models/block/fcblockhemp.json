@@ -1,0 +1,23 @@
+{
+  "textures": {
+    "side": "betterthanwolves:block/fcblockhemp_bottom_00",
+    "top": "betterthanwolves:block/fcblockhemp_top",
+    "bottom": "betterthanwolves:block/fcblockhemp_bottom_00",
+    "front": "betterthanwolves:block/fcblockhemp_bottom_00",
+    "particle": "betterthanwolves:block/fcblockhemp_bottom_00"
+  },
+  "elements": [
+    {
+      "from": [4.8, 0.0, 4.8],
+      "to": [11.2, 16.0, 11.2],
+      "faces": {
+        "north": {"texture": "#front", "cullface": "north"},
+        "south": {"texture": "#side", "cullface": "south"},
+        "east": {"texture": "#side", "cullface": "east"},
+        "west": {"texture": "#side", "cullface": "west"},
+        "up": {"texture": "#top", "cullface": "up"},
+        "down": {"texture": "#bottom", "cullface": "down"}
+      }
+    }
+  ]
+}

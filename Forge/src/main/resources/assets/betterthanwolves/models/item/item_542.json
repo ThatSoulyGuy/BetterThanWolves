@@ -1,1 +1,4 @@
-{"parent":"betterthanwolves:item/btw_placeholder_item"}
+{
+  "parent": "minecraft:item/generated",
+  "textures": {"layer0": "betterthanwolves:item/fcitemnethersludge"}
+}

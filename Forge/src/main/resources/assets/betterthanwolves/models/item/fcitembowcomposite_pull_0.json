@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {"layer0": "betterthanwolves:item/fcitembowcomposite_pull_0"}
+}

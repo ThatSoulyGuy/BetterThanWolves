@@ -107,10 +107,15 @@ public class BTWRegistration {
         }
 
         // --- Register standalone FC items (non-block items) ---
-        // FC items go up to 32000 (e.g., fcItemPileDirt = 22542)
-        for (int id = 256; id < btw.modern.Item.itemsList.length; id++) {
+        // FC items start at ParseID 222 (stored at index 478 due to +256 offset).
+        // Indices 256-477 are vanilla MC 1.5.2 items (replaced by FC subclasses) - skip those.
+        for (int id = 175; id < btw.modern.Item.itemsList.length; id++) {
             btw.modern.Item fcItem = btw.modern.Item.itemsList[id];
             if (fcItem == null) continue;
+
+            // Skip vanilla item range: indices 256-477 are vanilla items with FC subclasses.
+            // FC's own items start at index 478 (ParseID 222 + 256 offset).
+            if (id >= 256 && id < 478) continue;
 
             // Skip items that already have a modern item registered
             // (block items registered above, or vanilla items)

@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {"front": "betterthanwolves:block/fcblockscrewpump_front", "side": "betterthanwolves:block/fcblockscrewpump_side", "top": "betterthanwolves:block/fcblockscrewpump_top"}
+}

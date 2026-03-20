@@ -1,6 +1,12 @@
 package btw.forge.mixin;
 
+import btw.forge.EntityBridge;
+import btw.forge.PlayerBridge;
+import btw.forge.ProxyAnimal;
 import btw.forge.ProxyBlock;
+import btw.forge.ProxyEntity;
+import btw.forge.ProxyMob;
+import btw.forge.ProxyPathfinderMob;
 import btw.forge.ProxyRegistry;
 import btw.forge.WorldBridge;
 import net.minecraft.core.BlockPos;
@@ -54,6 +60,41 @@ public abstract class BlockBehaviorMixin {
             return ProxyRegistry.getFcBlock(block);
         }
         return null;
+    }
+
+    /**
+     * Wraps a Minecraft entity into an FC entity for use in FC block callbacks.
+     * Uses EntityBridge as a fallback for vanilla entities without dedicated proxies.
+     */
+    private btw.modern.Entity btw$wrapEntity(Entity entity) {
+        if (entity == null) return null;
+
+        // Player → PlayerBridge
+        if (entity instanceof net.minecraft.world.entity.player.Player player) {
+            PlayerBridge bridge = PlayerBridge.getOrCreate(player);
+            bridge.syncFromReal();
+            return bridge;
+        }
+        // ProxyMob → getFcEntity()
+        if (entity instanceof ProxyMob proxy) {
+            return proxy.getFcEntity();
+        }
+        // ProxyAnimal → getFcEntity()
+        if (entity instanceof ProxyAnimal proxy) {
+            return proxy.getFcEntity();
+        }
+        // ProxyPathfinderMob → getFcEntity()
+        if (entity instanceof ProxyPathfinderMob proxy) {
+            return proxy.getFcEntity();
+        }
+        // ProxyEntity → getFcEntity()
+        if (entity instanceof ProxyEntity proxy) {
+            return proxy.getFcEntity();
+        }
+        // Vanilla entities without FC proxy → use generic EntityBridge
+        EntityBridge bridge = EntityBridge.getOrCreate(entity);
+        bridge.syncFromReal();
+        return bridge;
     }
 
     // ================================================================
@@ -207,8 +248,8 @@ public abstract class BlockBehaviorMixin {
 
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
-            // Entity wrapping not yet implemented — pass null
-            fcBlock.onEntityCollidedWithBlock(world, pos.getX(), pos.getY(), pos.getZ(), null);
+            btw.modern.Entity fcEntity = btw$wrapEntity(entity);
+            fcBlock.onEntityCollidedWithBlock(world, pos.getX(), pos.getY(), pos.getZ(), fcEntity);
             ci.cancel();
         }
     }

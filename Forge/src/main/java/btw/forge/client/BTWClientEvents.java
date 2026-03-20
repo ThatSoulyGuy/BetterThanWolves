@@ -90,6 +90,12 @@ public class BTWClientEvents {
         int injectedBlockStates = 0;
         int injectedBlockItems = 0;
         int injectedStandaloneItems = 0;
+        int skippedRealModels = 0;
+
+        // The Forge "missing" model - used to detect slots with no real model
+        // Must use ModelResourceLocation (not plain ResourceLocation) to find it in the map
+        BakedModel missingModel = models.get(
+                new ModelResourceLocation(new ResourceLocation("minecraft", "builtin/missing"), "missing"));
 
         // --- Inject models for all ProxyBlocks ---
         for (Block block : ForgeRegistries.BLOCKS) {
@@ -99,20 +105,33 @@ public class BTWClientEvents {
             if (blockRegName == null) continue;
 
             // Inject model for every block state variant (meta=0 through meta=15)
+            // Only inject placeholder if no real model was baked from JSON
             for (BlockState state : block.getStateDefinition().getPossibleStates()) {
                 ModelResourceLocation mrl = BlockModelShaper.stateToModelLocation(state);
-                models.put(mrl, blockPlaceholder);
-                injectedBlockStates++;
+                BakedModel existing = models.get(mrl);
+                if (existing == null || existing == missingModel) {
+                    models.put(mrl, blockPlaceholder);
+                    injectedBlockStates++;
+                } else {
+                    skippedRealModels++;
+                }
             }
 
             // Inject the inventory item model for this block
+            // Only if no real model exists
             ModelResourceLocation itemMrl =
                     new ModelResourceLocation(blockRegName, "inventory");
-            models.put(itemMrl, blockPlaceholder);
-            injectedBlockItems++;
+            BakedModel existingItem = models.get(itemMrl);
+            if (existingItem == null || existingItem == missingModel) {
+                models.put(itemMrl, blockPlaceholder);
+                injectedBlockItems++;
+            } else {
+                skippedRealModels++;
+            }
         }
 
         // --- Inject models for standalone BTW items (item_<id>) ---
+        // Only inject placeholder if no real model was baked from JSON
         for (Item item : ForgeRegistries.ITEMS) {
             ResourceLocation itemRegName = ForgeRegistries.ITEMS.getKey(item);
             if (itemRegName == null) continue;
@@ -125,11 +144,16 @@ public class BTWClientEvents {
 
             ModelResourceLocation mrl =
                     new ModelResourceLocation(itemRegName, "inventory");
-            models.put(mrl, itemPlaceholder);
-            injectedStandaloneItems++;
+            BakedModel existing = models.get(mrl);
+            if (existing == null || existing == missingModel) {
+                models.put(mrl, itemPlaceholder);
+                injectedStandaloneItems++;
+            } else {
+                skippedRealModels++;
+            }
         }
 
-        LOGGER.info("BTW: Injected placeholder models - {} block states, {} block items, {} standalone items.",
-                injectedBlockStates, injectedBlockItems, injectedStandaloneItems);
+        LOGGER.info("BTW: Injected placeholder models - {} block states, {} block items, {} standalone items. Kept {} real models.",
+                injectedBlockStates, injectedBlockItems, injectedStandaloneItems, skippedRealModels);
     }
 }

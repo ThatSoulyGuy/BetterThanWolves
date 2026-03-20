@@ -1,0 +1,23 @@
+{
+  "textures": {
+    "side": "betterthanwolves:block/fcblockpressureplatesoulforgedsteel",
+    "top": "betterthanwolves:block/fcblockpressureplatesoulforgedsteel",
+    "bottom": "betterthanwolves:block/fcblockpressureplatesoulforgedsteel",
+    "front": "betterthanwolves:block/fcblockpressureplatesoulforgedsteel",
+    "particle": "betterthanwolves:block/fcblockpressureplatesoulforgedsteel"
+  },
+  "elements": [
+    {
+      "from": [1.0, 0.0, 1.0],
+      "to": [15.0, 0.5, 15.0],
+      "faces": {
+        "north": {"texture": "#front", "cullface": "north"},
+        "south": {"texture": "#side", "cullface": "south"},
+        "east": {"texture": "#side", "cullface": "east"},
+        "west": {"texture": "#side", "cullface": "west"},
+        "up": {"texture": "#top", "cullface": "up"},
+        "down": {"texture": "#bottom", "cullface": "down"}
+      }
+    }
+  ]
+}

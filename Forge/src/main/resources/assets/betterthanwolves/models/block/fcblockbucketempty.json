@@ -1,0 +1,23 @@
+{
+  "textures": {
+    "side": "betterthanwolves:block/fcblockbucketempty_top_side",
+    "top": "betterthanwolves:block/fcblockbucketempty_top",
+    "bottom": "betterthanwolves:block/fcblockbucketempty_top",
+    "front": "betterthanwolves:block/fcblockbucketempty_top_side",
+    "particle": "betterthanwolves:block/fcblockbucketempty"
+  },
+  "elements": [
+    {
+      "from": [4.5, 1.0, 4.5],
+      "to": [11.5, 8.0, 11.5],
+      "faces": {
+        "north": {"texture": "#front", "cullface": "north"},
+        "south": {"texture": "#side", "cullface": "south"},
+        "east": {"texture": "#side", "cullface": "east"},
+        "west": {"texture": "#side", "cullface": "west"},
+        "up": {"texture": "#top", "cullface": "up"},
+        "down": {"texture": "#bottom", "cullface": "down"}
+      }
+    }
+  ]
+}

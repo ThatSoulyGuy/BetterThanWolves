@@ -620,7 +620,8 @@ public class ProxyRegistry {
      * counterpart in 1.20.1's {@link Items} class.
      */
     private static void initVanillaItemMap() {
-        // Tools
+        // Complete MC 1.5.2 item ID mapping (display IDs = constructor arg + 256)
+        // Tools & weapons
         vanillaItemToLegacyId.put(Items.IRON_SHOVEL, 256);
         vanillaItemToLegacyId.put(Items.IRON_PICKAXE, 257);
         vanillaItemToLegacyId.put(Items.IRON_AXE, 258);
@@ -646,23 +647,154 @@ public class ProxyRegistry {
         vanillaItemToLegacyId.put(Items.DIAMOND_PICKAXE, 278);
         vanillaItemToLegacyId.put(Items.DIAMOND_AXE, 279);
         vanillaItemToLegacyId.put(Items.STICK, 280);
-        // ID 281: Bowl (not mapped -- no explicit request)
+        vanillaItemToLegacyId.put(Items.BOWL, 281);
+        vanillaItemToLegacyId.put(Items.MUSHROOM_STEW, 282);
         vanillaItemToLegacyId.put(Items.GOLDEN_SWORD, 283);
         vanillaItemToLegacyId.put(Items.GOLDEN_SHOVEL, 284);
         vanillaItemToLegacyId.put(Items.GOLDEN_PICKAXE, 285);
         vanillaItemToLegacyId.put(Items.GOLDEN_AXE, 286);
+        vanillaItemToLegacyId.put(Items.STRING, 287);
+        vanillaItemToLegacyId.put(Items.FEATHER, 288);
+        vanillaItemToLegacyId.put(Items.GUNPOWDER, 289);
         vanillaItemToLegacyId.put(Items.WOODEN_HOE, 290);
         vanillaItemToLegacyId.put(Items.STONE_HOE, 291);
         vanillaItemToLegacyId.put(Items.IRON_HOE, 292);
         vanillaItemToLegacyId.put(Items.DIAMOND_HOE, 293);
         vanillaItemToLegacyId.put(Items.GOLDEN_HOE, 294);
-
-        // Common non-tool items
+        vanillaItemToLegacyId.put(Items.WHEAT_SEEDS, 295);
+        vanillaItemToLegacyId.put(Items.WHEAT, 296);
         vanillaItemToLegacyId.put(Items.BREAD, 297);
+        // Armor
+        vanillaItemToLegacyId.put(Items.LEATHER_HELMET, 298);
+        vanillaItemToLegacyId.put(Items.LEATHER_CHESTPLATE, 299);
+        vanillaItemToLegacyId.put(Items.LEATHER_LEGGINGS, 300);
+        vanillaItemToLegacyId.put(Items.LEATHER_BOOTS, 301);
+        vanillaItemToLegacyId.put(Items.CHAINMAIL_HELMET, 302);
+        vanillaItemToLegacyId.put(Items.CHAINMAIL_CHESTPLATE, 303);
+        vanillaItemToLegacyId.put(Items.CHAINMAIL_LEGGINGS, 304);
+        vanillaItemToLegacyId.put(Items.CHAINMAIL_BOOTS, 305);
+        vanillaItemToLegacyId.put(Items.IRON_HELMET, 306);
+        vanillaItemToLegacyId.put(Items.IRON_CHESTPLATE, 307);
+        vanillaItemToLegacyId.put(Items.IRON_LEGGINGS, 308);
+        vanillaItemToLegacyId.put(Items.IRON_BOOTS, 309);
+        vanillaItemToLegacyId.put(Items.DIAMOND_HELMET, 310);
+        vanillaItemToLegacyId.put(Items.DIAMOND_CHESTPLATE, 311);
+        vanillaItemToLegacyId.put(Items.DIAMOND_LEGGINGS, 312);
+        vanillaItemToLegacyId.put(Items.DIAMOND_BOOTS, 313);
+        vanillaItemToLegacyId.put(Items.GOLDEN_HELMET, 314);
+        vanillaItemToLegacyId.put(Items.GOLDEN_CHESTPLATE, 315);
+        vanillaItemToLegacyId.put(Items.GOLDEN_LEGGINGS, 316);
+        vanillaItemToLegacyId.put(Items.GOLDEN_BOOTS, 317);
+        // Materials & food
+        vanillaItemToLegacyId.put(Items.FLINT, 318);
+        vanillaItemToLegacyId.put(Items.PORKCHOP, 319);
+        vanillaItemToLegacyId.put(Items.COOKED_PORKCHOP, 320);
+        vanillaItemToLegacyId.put(Items.PAINTING, 321);
+        vanillaItemToLegacyId.put(Items.GOLDEN_APPLE, 322);
+        vanillaItemToLegacyId.put(Items.OAK_SIGN, 323);
+        vanillaItemToLegacyId.put(Items.OAK_DOOR, 324);
         vanillaItemToLegacyId.put(Items.BUCKET, 325);
         vanillaItemToLegacyId.put(Items.WATER_BUCKET, 326);
         vanillaItemToLegacyId.put(Items.LAVA_BUCKET, 327);
+        vanillaItemToLegacyId.put(Items.MINECART, 328);
+        vanillaItemToLegacyId.put(Items.SADDLE, 329);
+        vanillaItemToLegacyId.put(Items.IRON_DOOR, 330);
+        vanillaItemToLegacyId.put(Items.REDSTONE, 331);
+        vanillaItemToLegacyId.put(Items.SNOWBALL, 332);
+        vanillaItemToLegacyId.put(Items.OAK_BOAT, 333);
+        vanillaItemToLegacyId.put(Items.LEATHER, 334);
+        vanillaItemToLegacyId.put(Items.MILK_BUCKET, 335);
+        vanillaItemToLegacyId.put(Items.BRICK, 336);
+        vanillaItemToLegacyId.put(Items.CLAY_BALL, 337);
+        vanillaItemToLegacyId.put(Items.SUGAR_CANE, 338);
+        vanillaItemToLegacyId.put(Items.PAPER, 339);
+        vanillaItemToLegacyId.put(Items.BOOK, 340);
+        vanillaItemToLegacyId.put(Items.SLIME_BALL, 341);
+        vanillaItemToLegacyId.put(Items.CHEST_MINECART, 342);
+        vanillaItemToLegacyId.put(Items.FURNACE_MINECART, 343);
+        vanillaItemToLegacyId.put(Items.EGG, 344);
+        vanillaItemToLegacyId.put(Items.COMPASS, 345);
+        vanillaItemToLegacyId.put(Items.FISHING_ROD, 346);
+        vanillaItemToLegacyId.put(Items.CLOCK, 347);
+        vanillaItemToLegacyId.put(Items.GLOWSTONE_DUST, 348);
+        vanillaItemToLegacyId.put(Items.COD, 349);
+        vanillaItemToLegacyId.put(Items.COOKED_COD, 350);
+        vanillaItemToLegacyId.put(Items.INK_SAC, 351);
+        vanillaItemToLegacyId.put(Items.BONE, 352);
+        vanillaItemToLegacyId.put(Items.SUGAR, 353);
+        vanillaItemToLegacyId.put(Items.CAKE, 354);
+        vanillaItemToLegacyId.put(Items.RED_BED, 355);
+        vanillaItemToLegacyId.put(Items.REPEATER, 356);
+        vanillaItemToLegacyId.put(Items.COOKIE, 357);
+        vanillaItemToLegacyId.put(Items.FILLED_MAP, 358);
         vanillaItemToLegacyId.put(Items.SHEARS, 359);
+        vanillaItemToLegacyId.put(Items.MELON_SLICE, 360);
+        vanillaItemToLegacyId.put(Items.PUMPKIN_SEEDS, 361);
+        vanillaItemToLegacyId.put(Items.MELON_SEEDS, 362);
+        vanillaItemToLegacyId.put(Items.BEEF, 363);
+        vanillaItemToLegacyId.put(Items.COOKED_BEEF, 364);
+        vanillaItemToLegacyId.put(Items.CHICKEN, 365);
+        vanillaItemToLegacyId.put(Items.COOKED_CHICKEN, 366);
+        vanillaItemToLegacyId.put(Items.ROTTEN_FLESH, 367);
+        vanillaItemToLegacyId.put(Items.ENDER_PEARL, 368);
+        vanillaItemToLegacyId.put(Items.BLAZE_ROD, 369);
+        vanillaItemToLegacyId.put(Items.GHAST_TEAR, 370);
+        vanillaItemToLegacyId.put(Items.GOLD_NUGGET, 371);
+        vanillaItemToLegacyId.put(Items.NETHER_WART, 372);
+        vanillaItemToLegacyId.put(Items.POTION, 373);
+        vanillaItemToLegacyId.put(Items.GLASS_BOTTLE, 374);
+        vanillaItemToLegacyId.put(Items.SPIDER_EYE, 375);
+        vanillaItemToLegacyId.put(Items.FERMENTED_SPIDER_EYE, 376);
+        vanillaItemToLegacyId.put(Items.BLAZE_POWDER, 377);
+        vanillaItemToLegacyId.put(Items.MAGMA_CREAM, 378);
+        vanillaItemToLegacyId.put(Items.BREWING_STAND, 379);
+        vanillaItemToLegacyId.put(Items.CAULDRON, 380);
+        vanillaItemToLegacyId.put(Items.ENDER_EYE, 381);
+        vanillaItemToLegacyId.put(Items.GLISTERING_MELON_SLICE, 382);
+        // 383: Spawn Egg (many variants in modern MC, skip)
+        vanillaItemToLegacyId.put(Items.EXPERIENCE_BOTTLE, 384);
+        vanillaItemToLegacyId.put(Items.FIRE_CHARGE, 385);
+        vanillaItemToLegacyId.put(Items.WRITABLE_BOOK, 386);
+        vanillaItemToLegacyId.put(Items.WRITTEN_BOOK, 387);
+        vanillaItemToLegacyId.put(Items.EMERALD, 388);
+        vanillaItemToLegacyId.put(Items.ITEM_FRAME, 389);
+        vanillaItemToLegacyId.put(Items.FLOWER_POT, 390);
+        vanillaItemToLegacyId.put(Items.CARROT, 391);
+        vanillaItemToLegacyId.put(Items.POTATO, 392);
+        vanillaItemToLegacyId.put(Items.BAKED_POTATO, 393);
+        vanillaItemToLegacyId.put(Items.POISONOUS_POTATO, 394);
+        vanillaItemToLegacyId.put(Items.MAP, 395);
+        vanillaItemToLegacyId.put(Items.GOLDEN_CARROT, 396);
+        vanillaItemToLegacyId.put(Items.SKELETON_SKULL, 397);
+        vanillaItemToLegacyId.put(Items.CARROT_ON_A_STICK, 398);
+        vanillaItemToLegacyId.put(Items.NETHER_STAR, 399);
+        vanillaItemToLegacyId.put(Items.PUMPKIN_PIE, 400);
+        vanillaItemToLegacyId.put(Items.FIREWORK_ROCKET, 401);
+        vanillaItemToLegacyId.put(Items.FIREWORK_STAR, 402);
+        vanillaItemToLegacyId.put(Items.ENCHANTED_BOOK, 403);
+        vanillaItemToLegacyId.put(Items.COMPARATOR, 404);
+        vanillaItemToLegacyId.put(Items.NETHER_BRICK, 405);
+        vanillaItemToLegacyId.put(Items.QUARTZ, 406);
+        vanillaItemToLegacyId.put(Items.TNT_MINECART, 407);
+        vanillaItemToLegacyId.put(Items.HOPPER_MINECART, 408);
+        vanillaItemToLegacyId.put(Items.IRON_HORSE_ARMOR, 417);
+        vanillaItemToLegacyId.put(Items.GOLDEN_HORSE_ARMOR, 418);
+        vanillaItemToLegacyId.put(Items.DIAMOND_HORSE_ARMOR, 419);
+        vanillaItemToLegacyId.put(Items.LEAD, 420);
+        vanillaItemToLegacyId.put(Items.NAME_TAG, 421);
+        // Music discs
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_13, 2256);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_CAT, 2257);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_BLOCKS, 2258);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_CHIRP, 2259);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_FAR, 2260);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_MALL, 2261);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_MELLOHI, 2262);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_STAL, 2263);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_STRAD, 2264);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_WARD, 2265);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_11, 2266);
+        vanillaItemToLegacyId.put(Items.MUSIC_DISC_WAIT, 2267);
 
         // Build reverse mapping: legacy ID → modern Item
         for (var entry : vanillaItemToLegacyId.entrySet()) {

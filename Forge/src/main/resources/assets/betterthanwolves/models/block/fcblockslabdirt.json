@@ -1,0 +1,23 @@
+{
+  "textures": {
+    "side": "betterthanwolves:block/fcblockslabdirt_grass_side",
+    "top": "betterthanwolves:block/fcblockslabdirt_grass_top_item",
+    "bottom": "betterthanwolves:block/fcblockslabdirt_grass_top_item",
+    "front": "betterthanwolves:block/fcblockslabdirt_grass_side",
+    "particle": "betterthanwolves:block/fcblockslabdirt_grass_side"
+  },
+  "elements": [
+    {
+      "from": [0.0, 0.0, 0.0],
+      "to": [16.0, 8.0, 16.0],
+      "faces": {
+        "north": {"texture": "#front", "cullface": "north"},
+        "south": {"texture": "#side", "cullface": "south"},
+        "east": {"texture": "#side", "cullface": "east"},
+        "west": {"texture": "#side", "cullface": "west"},
+        "up": {"texture": "#top", "cullface": "up"},
+        "down": {"texture": "#bottom", "cullface": "down"}
+      }
+    }
+  ]
+}

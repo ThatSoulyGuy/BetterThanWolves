@@ -1,0 +1,23 @@
+{
+  "textures": {
+    "side": "betterthanwolves:block/fcblockvase_c00",
+    "top": "betterthanwolves:block/fcblockvase_c00",
+    "bottom": "betterthanwolves:block/fcblockvase_c00",
+    "front": "betterthanwolves:block/fcblockvase_c00",
+    "particle": "betterthanwolves:block/fcblockvase_c00"
+  },
+  "elements": [
+    {
+      "from": [3.0, 0.0, 3.0],
+      "to": [13.0, 16.0, 13.0],
+      "faces": {
+        "north": {"texture": "#front", "cullface": "north"},
+        "south": {"texture": "#side", "cullface": "south"},
+        "east": {"texture": "#side", "cullface": "east"},
+        "west": {"texture": "#side", "cullface": "west"},
+        "up": {"texture": "#top", "cullface": "up"},
+        "down": {"texture": "#bottom", "cullface": "down"}
+      }
+    }
+  ]
+}

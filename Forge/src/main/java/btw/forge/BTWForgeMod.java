@@ -21,10 +21,15 @@ public class BTWForgeMod {
     public BTWForgeMod() {
         LOGGER.info("Better Than Wolves Forge module loading...");
 
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onRegister);
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::commonSetup);
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onAttributeCreation);
+        var modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+
+        modEventBus.addListener(this::onRegister);
+        modEventBus.addListener(this::commonSetup);
+        modEventBus.addListener(this::onAttributeCreation);
         MinecraftForge.EVENT_BUS.register(this);
+
+        // Register creative tab
+        BTWCreativeTab.CREATIVE_MODE_TABS.register(modEventBus);
 
         // Register network channel early so both sides agree on the protocol
         // before any packets are sent. Must happen during mod construction
@@ -44,6 +49,19 @@ public class BTWForgeMod {
         if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCKS)) {
             LOGGER.info("Better Than Wolves: Initializing legacy systems (during RegisterEvent/BLOCKS)...");
             BTWLifecycle.initialize();
+
+            // Generate proper block models from FC block bounds (before model loading)
+            try {
+                java.nio.file.Path resourcesRoot = findResourcesRoot();
+                if (resourcesRoot != null) {
+                    java.nio.file.Path modelsBlock = resourcesRoot.resolve("assets/betterthanwolves/models/block");
+                    java.nio.file.Path texturesBlock = resourcesRoot.resolve("assets/betterthanwolves/textures/block");
+                    BlockModelBridge.generateBlockModels(modelsBlock, texturesBlock);
+                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to generate block models from FC bounds", e);
+            }
+
             LOGGER.info("Better Than Wolves: Registering proxy blocks...");
             BTWRegistration.registerAllBTWContent(event);
             LOGGER.info("Better Than Wolves: Block registration complete.");
@@ -81,5 +99,32 @@ public class BTWForgeMod {
         } catch (Exception e) {
             LOGGER.error("Failed to register BTW entity attributes", e);
         }
+    }
+
+    /**
+     * Finds the resources root directory (build/resources/main) by scanning
+     * the classpath for our pack.mcmeta file.
+     */
+    private java.nio.file.Path findResourcesRoot() {
+        try {
+            // Look for our pack.mcmeta on the classpath
+            java.net.URL url = getClass().getClassLoader().getResource("pack.mcmeta");
+            if (url != null && "file".equals(url.getProtocol())) {
+                java.nio.file.Path packPath = java.nio.file.Paths.get(url.toURI());
+                return packPath.getParent(); // The directory containing pack.mcmeta
+            }
+            // Fallback: try known dev paths
+            java.nio.file.Path devPath = java.nio.file.Paths.get("../../src/main/resources");
+            if (java.nio.file.Files.exists(devPath.resolve("pack.mcmeta"))) {
+                return devPath;
+            }
+            java.nio.file.Path buildPath = java.nio.file.Paths.get("../../build/resources/main");
+            if (java.nio.file.Files.exists(buildPath.resolve("pack.mcmeta"))) {
+                return buildPath;
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Could not find resources root: {}", e.getMessage());
+        }
+        return null;
     }
 }

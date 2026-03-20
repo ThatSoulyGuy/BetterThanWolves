@@ -1,0 +1,23 @@
+{
+  "textures": {
+    "side": "betterthanwolves:block/fcblockhandcrank_side",
+    "top": "betterthanwolves:block/fcblockhandcrank_top",
+    "bottom": "betterthanwolves:block/fcblockhandcrank_bottom",
+    "front": "betterthanwolves:block/fcblockhandcrank_side",
+    "particle": "betterthanwolves:block/fcblockhandcrank_bottom"
+  },
+  "elements": [
+    {
+      "from": [0.0, 0.0, 0.0],
+      "to": [16.0, 16.0, 16.0],
+      "faces": {
+        "north": {"texture": "#front", "cullface": "north"},
+        "south": {"texture": "#side", "cullface": "south"},
+        "east": {"texture": "#side", "cullface": "east"},
+        "west": {"texture": "#side", "cullface": "west"},
+        "up": {"texture": "#top", "cullface": "up"},
+        "down": {"texture": "#bottom", "cullface": "down"}
+      }
+    }
+  ]
+}

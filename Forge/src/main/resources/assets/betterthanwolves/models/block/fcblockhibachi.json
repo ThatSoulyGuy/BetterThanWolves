@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {"end": "betterthanwolves:block/fcblockhibachi_top", "side": "betterthanwolves:block/fcblockhibachi_side"}
+}
