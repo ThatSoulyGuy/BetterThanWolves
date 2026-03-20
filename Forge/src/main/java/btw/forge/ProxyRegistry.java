@@ -72,8 +72,12 @@ public class ProxyRegistry {
 
     // ---- items ----
 
+    /** Reverse map: MC Item → FC legacy ID for ProxyItems. */
+    private static final Map<net.minecraft.world.item.Item, Integer> proxyItemToLegacyId = new java.util.HashMap<>();
+
     public static void registerItem(int legacyId, net.minecraft.world.item.Item item) {
         itemsByLegacyId.put(legacyId, item);
+        proxyItemToLegacyId.put(item, legacyId);
     }
 
     /**
@@ -591,6 +595,10 @@ public class ProxyRegistry {
      * </ul>
      */
     public static int getItemId(Item item) {
+        // Check ProxyItem reverse map first (FC-specific items)
+        Integer proxyId = proxyItemToLegacyId.get(item);
+        if (proxyId != null) return proxyId;
+        // Check vanilla item map
         ensureVanillaItemMapInitialized();
         Integer id = vanillaItemToLegacyId.get(item);
         return id != null ? id : Item.getId(item);

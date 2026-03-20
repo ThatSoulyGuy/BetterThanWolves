@@ -165,13 +165,18 @@ public class BTWRegistration {
     private static String formatFcName(String fcName, String fallback) {
         if (fcName == null || fcName.isEmpty()) return fallback;
 
-        // Strip common prefixes
+        // Strip ALL matching prefixes (e.g., "item.fcItemStone" → "Stone")
         String name = fcName;
-        for (String prefix : new String[]{
-                "tile.", "item.", "fcBlock", "fcItem", "fc_", "FC"}) {
-            if (name.startsWith(prefix)) {
-                name = name.substring(prefix.length());
-                break;
+        boolean stripped = true;
+        while (stripped) {
+            stripped = false;
+            for (String prefix : new String[]{
+                    "tile.", "item.", "fcBlock", "fcItem", "fc_", "FC"}) {
+                if (name.startsWith(prefix)) {
+                    name = name.substring(prefix.length());
+                    stripped = true;
+                    break;
+                }
             }
         }
         if (name.isEmpty()) return fallback;

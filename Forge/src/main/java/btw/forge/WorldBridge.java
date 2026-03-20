@@ -18,6 +18,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -34,6 +35,15 @@ import java.util.WeakHashMap;
 public class WorldBridge extends btw.modern.World {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-WorldBridge");
+
+    /**
+     * Metadata storage for vanilla blocks that don't have ProxyBlock.META.
+     * FC code sets metadata on vanilla blocks (e.g., cracked flag on stone),
+     * but vanilla MC blocks have no META property. This map stores the FC
+     * metadata keyed by block position so getBlockMetadata can return it.
+     * Entries are removed when the block at that position changes.
+     */
+    private final Map<BlockPos, Integer> vanillaMetaOverrides = new HashMap<>();
 
     private static final Map<ServerLevel, WorldBridge> cache = new WeakHashMap<>();
 
@@ -86,11 +96,14 @@ public class WorldBridge extends btw.modern.World {
 
     
     public int getBlockMetadata(int x, int y, int z) {
-        BlockState state = level.getBlockState(new BlockPos(x, y, z));
+        BlockPos pos = new BlockPos(x, y, z);
+        BlockState state = level.getBlockState(pos);
         if (state.hasProperty(ProxyBlock.META)) {
             return state.getValue(ProxyBlock.META);
         }
-        return 0;
+        // Check side map for vanilla blocks with FC metadata overrides
+        Integer override = vanillaMetaOverrides.get(pos);
+        return override != null ? override : 0;
     }
 
     
@@ -139,18 +152,31 @@ public class WorldBridge extends btw.modern.World {
 
     
     public boolean setBlock(int x, int y, int z, int blockID, int metadata, int flags) {
+        BlockPos pos = new BlockPos(x, y, z);
+        vanillaMetaOverrides.remove(pos); // clear metadata override on block change
         ProxyBlock proxy = ProxyRegistry.getProxy(blockID);
         if (proxy != null) {
             BlockState state = proxy.defaultBlockState()
                     .setValue(ProxyBlock.META, Math.min(Math.max(metadata, 0), 15));
-            return level.setBlock(new BlockPos(x, y, z), state, flags);
+            return level.setBlock(pos, state, flags);
+        }
+        // For vanilla block IDs without a ProxyBlock, try mapping to the MC block
+        net.minecraft.world.level.block.Block mcBlock = ProxyRegistry.getModernBlock(blockID);
+        if (mcBlock != null) {
+            level.setBlock(pos, mcBlock.defaultBlockState(), flags);
+            if (metadata != 0) {
+                vanillaMetaOverrides.put(pos.immutable(), metadata);
+            }
+            return true;
         }
         return false;
     }
 
     
     public boolean setBlockToAir(int x, int y, int z) {
-        return level.setBlock(new BlockPos(x, y, z), Blocks.AIR.defaultBlockState(), 3);
+        BlockPos pos = new BlockPos(x, y, z);
+        vanillaMetaOverrides.remove(pos);
+        return level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
     }
 
     
@@ -159,9 +185,14 @@ public class WorldBridge extends btw.modern.World {
         BlockState current = level.getBlockState(pos);
         if (current.hasProperty(ProxyBlock.META)) {
             BlockState newState = current.setValue(ProxyBlock.META, Math.min(Math.max(metadata, 0), 15));
+            vanillaMetaOverrides.remove(pos); // clear any override
             return level.setBlock(pos, newState, flags);
         }
-        return false;
+        // Vanilla block without META — store FC metadata in side map
+        vanillaMetaOverrides.put(pos.immutable(), metadata);
+        // Trigger block update so neighbors react
+        level.sendBlockUpdated(pos, current, current, flags);
+        return true;
     }
 
     

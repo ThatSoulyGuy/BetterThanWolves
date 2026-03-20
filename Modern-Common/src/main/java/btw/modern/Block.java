@@ -809,7 +809,11 @@ public abstract class Block {
     // --- Client-side rendering methods ---
 
     public Icon getIcon(int side, int metadata) {
-        return this.blockIcon;
+        Icon icon = this.blockIcon;
+        if (icon != null && Tessellator.instance.isCapturing()) {
+            Tessellator.instance.setCurrentTextureName(icon.getIconName());
+        }
+        return icon;
     }
 
     public Icon getBlockTexture(IBlockAccess blockAccess, int x, int y, int z, int side) {
@@ -866,7 +870,10 @@ public abstract class Block {
     }
 
     public String getUnlocalizedName2() {
-        return "";
+        // In MC 1.5.2: getUnlocalizedName() returned "tile.<name>",
+        // getUnlocalizedName2() returned just "<name>".
+        // FC uses this as the base texture name in registerIcons.
+        return unlocalizedName != null ? unlocalizedName : "";
     }
 
     public Icon func_94438_c(int index) {
@@ -894,7 +901,14 @@ public abstract class Block {
     }
 
     public Icon GetIconByIndex(int index) {
-        return this.blockIcon;
+        Icon icon = this.blockIcon;
+        // Auto-set texture name on Tessellator so FC code that calls
+        // GetIconByIndex then addVertexWithUV (without going through
+        // RenderBlocks face methods) still gets the right texture.
+        if (icon != null) {
+            Tessellator.instance.setCurrentTextureName(icon.getIconName());
+        }
+        return icon;
     }
 
     public Icon GetHopperFilterIcon() {
@@ -904,7 +918,8 @@ public abstract class Block {
     // --- Client-side: Block rendering methods (overridden by subclasses) ---
 
     public boolean RenderBlock(RenderBlocks renderBlocks, int i, int j, int k) {
-        return false;
+        renderBlocks.setRenderBoundsFromBlock(this);
+        return renderBlocks.renderBlockByRenderType(this, i, j, k);
     }
 
     public void RenderBlockAsItem(RenderBlocks renderBlocks, int iItemDamage, float fBrightness) {

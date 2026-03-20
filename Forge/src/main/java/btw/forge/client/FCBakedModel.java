@@ -118,11 +118,23 @@ public class FCBakedModel implements BakedModel {
             LOGGER.debug("BTW: registerIcons failed for block {}: {}", legacyBlockId, e.getMessage());
         }
 
-        // Step 2: For each meta, capture vertices by calling FC's RenderBlockAsItem
+        // Step 2: For each meta, capture vertices from FC's rendering code.
+        // We use RenderBlock (in-world rendering) which uses FC's FCModelBlock
+        // system for correct shapes. RenderBlockAsItem produces standard cubes
+        // for many blocks (via RenderInvBlockWithMetadata) which is wrong for
+        // in-world display. A MetadataBlockAccess provides the metadata to FC.
         btw.modern.RenderBlocks renderer = new btw.modern.RenderBlocks();
         Map<Integer, List<BakedQuad>> result = new HashMap<>();
         int totalQuads = 0;
         Set<String> allTexNames = new HashSet<>();
+
+        // Fallback texture for quads that don't set a texture name
+        String fallbackTex = "";
+        try {
+            if (block.blockIcon != null && block.blockIcon.getIconName() != null) {
+                fallbackTex = block.blockIcon.getIconName().toLowerCase();
+            }
+        } catch (Exception ignored) {}
 
         for (int meta = 0; meta < 16; meta++) {
             btw.modern.Tessellator tess = btw.modern.Tessellator.instance;
@@ -135,14 +147,57 @@ public class FCBakedModel implements BakedModel {
             try {
                 renderer.setRenderBounds(0, 0, 0, 1, 1, 1);
                 renderer.unlockBlockBounds();
-                // Call FC's block-level RenderBlockAsItem which handles custom
-                // shapes (campfire, anvil, etc.) and per-face textures.
-                // GL11 calls in FC code are remapped to btw.modern.GL11 (no-ops)
-                // by the shadow plugin, so they won't crash.
-                block.RenderBlockAsItem(renderer, meta, 1.0f);
+
+                // Set up a fake IBlockAccess that returns this block and metadata
+                // at position (0,0,0) so FC's RenderBlock can query block state.
+                final int capturedMeta = meta;
+                final btw.modern.Block capturedBlock = block;
+                renderer.blockAccess = new btw.modern.IBlockAccess() {
+                    @Override public int getBlockId(int x, int y, int z) {
+                        if (x == 0 && y == 0 && z == 0) return capturedBlock.blockID;
+                        return 0; // air for all other positions
+                    }
+                    @Override public int getBlockMetadata(int x, int y, int z) {
+                        return capturedMeta;
+                    }
+                    @Override public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {
+                        // Create a default tile entity if the block type supports one
+                        try {
+                            return capturedBlock.createNewTileEntity(null);
+                        } catch (Exception e) {
+                            return null;
+                        }
+                    }
+                    @Override public int getLightBrightnessForSkyBlocks(int x, int y, int z, int light) {
+                        return 0xF000F0;
+                    }
+                    @Override public boolean isBlockOpaqueCube(int x, int y, int z) {
+                        return false;
+                    }
+                    @Override public boolean isBlockNormalCube(int x, int y, int z) {
+                        return false;
+                    }
+                    @Override public btw.modern.Material getBlockMaterial(int x, int y, int z) {
+                        if (x == 0 && y == 0 && z == 0) return capturedBlock.blockMaterial;
+                        return btw.modern.Material.air;
+                    }
+                    @Override public boolean isAirBlock(int x, int y, int z) {
+                        return !(x == 0 && y == 0 && z == 0);
+                    }
+                    @Override public btw.modern.BiomeGenBase getBiomeGenForCoords(int x, int z) {
+                        return btw.modern.BiomeGenBase.plains;
+                    }
+                    @Override public float getLightBrightness(int x, int y, int z) {
+                        return 1.0f;
+                    }
+                };
+
+                // Call FC's in-world RenderBlock which uses FCModelBlock for
+                // correct shapes. GL11 calls are no-ops via btw.modern.GL11.
+                block.RenderBlock(renderer, 0, 0, 0);
             } catch (Throwable e) {
-                LOGGER.warn("BTW: RenderBlockAsItem threw for block {} meta {}: {}",
-                        legacyBlockId, meta, e.toString(), e);
+                LOGGER.warn("BTW: RenderBlock threw for block {} meta {}: {}",
+                        legacyBlockId, meta, e.toString());
             }
 
             List<btw.modern.Tessellator.CapturedQuad> captured = tess.stopCapturing();
@@ -173,7 +228,7 @@ public class FCBakedModel implements BakedModel {
 
                 List<BakedQuad> bakedQuads = new ArrayList<>();
                 for (btw.modern.Tessellator.CapturedQuad cq : captured) {
-                    BakedQuad bq = convertCapturedQuad(cq);
+                    BakedQuad bq = convertCapturedQuad(cq, fallbackTex);
                     if (bq != null) {
                         bakedQuads.add(bq);
                     }
@@ -223,14 +278,17 @@ public class FCBakedModel implements BakedModel {
     // Captured quad → BakedQuad conversion
     // ================================================================
 
-    private static BakedQuad convertCapturedQuad(btw.modern.Tessellator.CapturedQuad cq) {
+    private static BakedQuad convertCapturedQuad(btw.modern.Tessellator.CapturedQuad cq,
+                                                  String fallbackTexture) {
         if (cq.vertices[0] == null) return null;
 
         btw.modern.Tessellator.CapturedVertex v0 = cq.vertices[0];
         Direction dir = directionFromNormal(v0.nx, v0.ny, v0.nz);
 
-        TextureAtlasSprite sprite = lookupSprite(
-                cq.textureName != null ? cq.textureName : "");
+        // Use the quad's texture name, or fall back to the block's icon
+        String texName = cq.textureName;
+        if (texName == null || texName.isEmpty()) texName = fallbackTexture;
+        TextureAtlasSprite sprite = lookupSprite(texName != null ? texName : "");
         if (sprite == null) return null;
 
         int[] vertexData = new int[32];
@@ -308,6 +366,53 @@ public class FCBakedModel implements BakedModel {
     @Override public boolean isGui3d() { return true; }
     @Override public boolean usesBlockLight() { return true; }
     @Override public boolean isCustomRenderer() { return false; }
+
+    /** Standard block display transforms from minecraft:block/block.json */
+    private static final net.minecraft.client.renderer.block.model.ItemTransforms BLOCK_TRANSFORMS =
+            new net.minecraft.client.renderer.block.model.ItemTransforms(
+                    // thirdperson_lefthand
+                    new net.minecraft.client.renderer.block.model.ItemTransform(
+                            new org.joml.Vector3f(75, 45, 0),
+                            new org.joml.Vector3f(0, 2.5f / 16f, 0),
+                            new org.joml.Vector3f(0.375f, 0.375f, 0.375f)),
+                    // thirdperson_righthand
+                    new net.minecraft.client.renderer.block.model.ItemTransform(
+                            new org.joml.Vector3f(75, 45, 0),
+                            new org.joml.Vector3f(0, 2.5f / 16f, 0),
+                            new org.joml.Vector3f(0.375f, 0.375f, 0.375f)),
+                    // firstperson_lefthand
+                    new net.minecraft.client.renderer.block.model.ItemTransform(
+                            new org.joml.Vector3f(0, 225, 0),
+                            new org.joml.Vector3f(0, 0, 0),
+                            new org.joml.Vector3f(0.4f, 0.4f, 0.4f)),
+                    // firstperson_righthand
+                    new net.minecraft.client.renderer.block.model.ItemTransform(
+                            new org.joml.Vector3f(0, 45, 0),
+                            new org.joml.Vector3f(0, 0, 0),
+                            new org.joml.Vector3f(0.4f, 0.4f, 0.4f)),
+                    // head
+                    net.minecraft.client.renderer.block.model.ItemTransform.NO_TRANSFORM,
+                    // gui
+                    new net.minecraft.client.renderer.block.model.ItemTransform(
+                            new org.joml.Vector3f(30, 225, 0),
+                            new org.joml.Vector3f(0, 0, 0),
+                            new org.joml.Vector3f(0.625f, 0.625f, 0.625f)),
+                    // ground
+                    new net.minecraft.client.renderer.block.model.ItemTransform(
+                            new org.joml.Vector3f(0, 0, 0),
+                            new org.joml.Vector3f(0, 3f / 16f, 0),
+                            new org.joml.Vector3f(0.25f, 0.25f, 0.25f)),
+                    // fixed (item frame)
+                    new net.minecraft.client.renderer.block.model.ItemTransform(
+                            new org.joml.Vector3f(0, 0, 0),
+                            new org.joml.Vector3f(0, 0, 0),
+                            new org.joml.Vector3f(0.5f, 0.5f, 0.5f))
+            );
+
+    @Override
+    public net.minecraft.client.renderer.block.model.ItemTransforms getTransforms() {
+        return BLOCK_TRANSFORMS;
+    }
 
     @Override
     public TextureAtlasSprite getParticleIcon() {
@@ -524,7 +629,7 @@ public class FCBakedModel implements BakedModel {
         }
 
         if (sprite == null) {
-            LOGGER.debug("BTW: Texture not found: '{}' (mapped: {})",
+            LOGGER.warn("BTW: Texture not found: '{}' (mapped: {})",
                     textureName, VANILLA_TEXTURE_MAP.get(textureName));
             sprite = getMissingSprite();
         }

@@ -134,25 +134,37 @@ public class RenderBlocks {
     public void renderBlockAllFaces(Block block, int x, int y, int z) {}
 
     public boolean renderBlockByRenderType(Block block, int x, int y, int z) {
-        return false;
+        int renderType = block.getRenderType();
+        switch (renderType) {
+            case 0: return renderStandardBlock(block, x, y, z);
+            case 1: return renderCrossedSquares(block, x, y, z);
+            case 2: return renderBlockTorch(block, x, y, z);
+            case 4: return renderBlockFluids(block, x, y, z);
+            case 6: return renderBlockCrops(block, x, y, z);
+            case 20: return renderBlockVine(block, x, y, z);
+            default: return renderStandardBlock(block, x, y, z);
+        }
     }
 
     // --- Standard block rendering ---
 
     public boolean renderStandardBlock(Block block, int x, int y, int z) {
-        setRenderBoundsFromBlock(block);
+        // Do NOT call setRenderBoundsFromBlock here — the caller (e.g.,
+        // FCBlockAxle.RenderBlock) may have already set custom render bounds.
+        // In MC 1.5.2, renderStandardBlock also did not override bounds.
+        int meta = blockAccess != null ? blockAccess.getBlockMetadata(x, y, z) : 0;
         Icon icon;
-        icon = getBlockIconFromSideAndMetadata(block, 0, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 0, meta);
         renderFaceYNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 1, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 1, meta);
         renderFaceYPos(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 2, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 2, meta);
         renderFaceZNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 3, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 3, meta);
         renderFaceZPos(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 4, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 4, meta);
         renderFaceXNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 5, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 5, meta);
         renderFaceXPos(block, x, y, z, icon);
         return true;
     }
@@ -172,19 +184,19 @@ public class RenderBlocks {
     // --- FC additions: standard full block rendering ---
 
     public boolean RenderStandardFullBlock(Block block, int x, int y, int z) {
-        setRenderBoundsFromBlock(block);
+        int meta = blockAccess != null ? blockAccess.getBlockMetadata(x, y, z) : 0;
         Icon icon;
-        icon = getBlockIconFromSideAndMetadata(block, 0, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 0, meta);
         renderFaceYNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 1, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 1, meta);
         renderFaceYPos(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 2, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 2, meta);
         renderFaceZNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 3, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 3, meta);
         renderFaceZPos(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 4, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 4, meta);
         renderFaceXNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 5, 0);
+        icon = getBlockIconFromSideAndMetadata(block, 5, meta);
         renderFaceXPos(block, x, y, z, icon);
         return true;
     }
@@ -219,16 +231,109 @@ public class RenderBlocks {
     public boolean renderBlockStairs(BlockStairs block, int x, int y, int z) { return false; }
     public boolean renderBlockDoor(Block block, int x, int y, int z) { return false; }
     public boolean renderBlockFluids(Block block, int x, int y, int z) { return false; }
-    public boolean renderBlockTorch(Block block, int x, int y, int z) { return false; }
+    public boolean renderBlockTorch(Block block, int x, int y, int z) {
+        int meta = blockAccess != null ? blockAccess.getBlockMetadata(x, y, z) : 0;
+        Tessellator t = Tessellator.instance;
+        Icon icon = getBlockIconFromSideAndMetadata(block, 0, meta);
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        // Render as crossed squares (simplified torch — actual torch has angle)
+        double w = 0.0625; // 1 pixel width
+        double cx = x + 0.5, cz = z + 0.5;
+        // Two crossed planes for the torch stick
+        t.setNormal(0, 1, 0);
+        t.addVertexWithUV(cx - w, y + 0, cz, minU, maxV);
+        t.addVertexWithUV(cx - w, y + 0.625, cz, minU, minV);
+        t.addVertexWithUV(cx + w, y + 0.625, cz, maxU, minV);
+        t.addVertexWithUV(cx + w, y + 0, cz, maxU, maxV);
+        t.addVertexWithUV(cx + w, y + 0, cz, minU, maxV);
+        t.addVertexWithUV(cx + w, y + 0.625, cz, minU, minV);
+        t.addVertexWithUV(cx - w, y + 0.625, cz, maxU, minV);
+        t.addVertexWithUV(cx - w, y + 0, cz, maxU, maxV);
+        t.addVertexWithUV(cx, y + 0, cz - w, minU, maxV);
+        t.addVertexWithUV(cx, y + 0.625, cz - w, minU, minV);
+        t.addVertexWithUV(cx, y + 0.625, cz + w, maxU, minV);
+        t.addVertexWithUV(cx, y + 0, cz + w, maxU, maxV);
+        t.addVertexWithUV(cx, y + 0, cz + w, minU, maxV);
+        t.addVertexWithUV(cx, y + 0.625, cz + w, minU, minV);
+        t.addVertexWithUV(cx, y + 0.625, cz - w, maxU, minV);
+        t.addVertexWithUV(cx, y + 0, cz - w, maxU, maxV);
+        return true;
+    }
     public boolean renderBlockRepeater(BlockRedstoneRepeater block, int x, int y, int z) { return false; }
     public boolean renderBlockRedstoneWire(Block block, int x, int y, int z) { return false; }
     public boolean renderBlockMinecartTrack(BlockRailBase block, int x, int y, int z) { return false; }
     public boolean renderBlockLadder(Block block, int x, int y, int z) { return false; }
     public boolean renderBlockVine(Block block, int x, int y, int z) { return false; }
     public boolean renderBlockPane(BlockPane block, int x, int y, int z) { return false; }
-    public boolean renderCrossedSquares(Block block, int x, int y, int z) { return false; }
+    public boolean renderCrossedSquares(Block block, int x, int y, int z) {
+        int meta = blockAccess != null ? blockAccess.getBlockMetadata(x, y, z) : 0;
+        Tessellator t = Tessellator.instance;
+        Icon icon = getBlockIconFromSideAndMetadata(block, 0, meta);
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        double d = 0.45D;
+        // Diagonal plane 1: SW to NE
+        t.setNormal(0, 1, 0);
+        t.addVertexWithUV(x + 0.5 - d, y + 0, z + 0.5 - d, minU, maxV);
+        t.addVertexWithUV(x + 0.5 - d, y + 1, z + 0.5 - d, minU, minV);
+        t.addVertexWithUV(x + 0.5 + d, y + 1, z + 0.5 + d, maxU, minV);
+        t.addVertexWithUV(x + 0.5 + d, y + 0, z + 0.5 + d, maxU, maxV);
+        // Back face
+        t.addVertexWithUV(x + 0.5 + d, y + 0, z + 0.5 + d, minU, maxV);
+        t.addVertexWithUV(x + 0.5 + d, y + 1, z + 0.5 + d, minU, minV);
+        t.addVertexWithUV(x + 0.5 - d, y + 1, z + 0.5 - d, maxU, minV);
+        t.addVertexWithUV(x + 0.5 - d, y + 0, z + 0.5 - d, maxU, maxV);
+        // Diagonal plane 2: NW to SE
+        t.addVertexWithUV(x + 0.5 - d, y + 0, z + 0.5 + d, minU, maxV);
+        t.addVertexWithUV(x + 0.5 - d, y + 1, z + 0.5 + d, minU, minV);
+        t.addVertexWithUV(x + 0.5 + d, y + 1, z + 0.5 - d, maxU, minV);
+        t.addVertexWithUV(x + 0.5 + d, y + 0, z + 0.5 - d, maxU, maxV);
+        // Back face
+        t.addVertexWithUV(x + 0.5 + d, y + 0, z + 0.5 - d, minU, maxV);
+        t.addVertexWithUV(x + 0.5 + d, y + 1, z + 0.5 - d, minU, minV);
+        t.addVertexWithUV(x + 0.5 - d, y + 1, z + 0.5 + d, maxU, minV);
+        t.addVertexWithUV(x + 0.5 - d, y + 0, z + 0.5 + d, maxU, maxV);
+        return true;
+    }
     public boolean renderBlockStem(Block block, int x, int y, int z) { return false; }
-    public boolean renderBlockCrops(Block block, int x, int y, int z) { return false; }
+    public boolean renderBlockCrops(Block block, int x, int y, int z) {
+        // Crops use 4 planes arranged in a # pattern (not crossed)
+        int meta = blockAccess != null ? blockAccess.getBlockMetadata(x, y, z) : 0;
+        Tessellator t = Tessellator.instance;
+        Icon icon = getBlockIconFromSideAndMetadata(block, 0, meta);
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        double o = 0.25; // offset from center
+        t.setNormal(0, 1, 0);
+        // 4 planes in # pattern
+        for (int dir = 0; dir < 2; dir++) {
+            double px = dir == 0 ? x + o : x + 0.5;
+            double pz = dir == 0 ? z + 0.5 : z + o;
+            double dx = dir == 0 ? 0 : 1;
+            double dz = dir == 0 ? 1 : 0;
+            // Front
+            t.addVertexWithUV(px, y + 0, pz, minU, maxV);
+            t.addVertexWithUV(px, y + 1, pz, minU, minV);
+            t.addVertexWithUV(px + dx * 0.5, y + 1, pz + dz * 0.5, maxU, minV);
+            t.addVertexWithUV(px + dx * 0.5, y + 0, pz + dz * 0.5, maxU, maxV);
+            // Back
+            t.addVertexWithUV(px + dx * 0.5, y + 0, pz + dz * 0.5, minU, maxV);
+            t.addVertexWithUV(px + dx * 0.5, y + 1, pz + dz * 0.5, minU, minV);
+            t.addVertexWithUV(px, y + 1, pz, maxU, minV);
+            t.addVertexWithUV(px, y + 0, pz, maxU, maxV);
+        }
+        return true;
+    }
     public boolean renderBlockLilyPad(Block block, int x, int y, int z) { return false; }
     public boolean renderBlockFire(BlockFire block, int x, int y, int z) { return false; }
     public boolean renderBlockLever(Block block, int x, int y, int z) { return false; }

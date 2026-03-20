@@ -1,4 +1,4 @@
 {
   "parent": "minecraft:block/cube_all",
-  "textures": {"all": "minecraft:block/_2"}
+  "textures": {"all": "betterthanwolves:block/fcblockstonerough_2"}
 }
