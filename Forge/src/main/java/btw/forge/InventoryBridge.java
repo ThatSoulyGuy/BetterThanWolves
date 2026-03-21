@@ -57,6 +57,54 @@ public class InventoryBridge extends btw.modern.InventoryPlayer {
     }
 
     @Override
+    public void setInventorySlotContents(int slot, btw.modern.ItemStack stack) {
+        // Write through to the REAL MC inventory so changes persist
+        net.minecraft.world.item.ItemStack mcStack = ItemStackHelper.toMcStack(stack);
+        if (slot >= 0 && slot < inventory.items.size()) {
+            inventory.items.set(slot, mcStack);
+        } else {
+            int armorSlot = slot - mainInventory.length;
+            if (armorSlot >= 0 && armorSlot < inventory.armor.size()) {
+                inventory.armor.set(armorSlot, mcStack);
+            }
+        }
+        // Also update FC snapshot
+        super.setInventorySlotContents(slot, stack);
+    }
+
+    @Override
+    public btw.modern.ItemStack decrStackSize(int slot, int count) {
+        // Decrement in the REAL MC inventory
+        net.minecraft.world.item.ItemStack mcStack;
+        if (slot >= 0 && slot < inventory.items.size()) {
+            mcStack = inventory.items.get(slot);
+        } else {
+            int armorSlot = slot - mainInventory.length;
+            if (armorSlot >= 0 && armorSlot < inventory.armor.size()) {
+                mcStack = inventory.armor.get(armorSlot);
+            } else {
+                return null;
+            }
+        }
+        if (mcStack.isEmpty()) return null;
+
+        net.minecraft.world.item.ItemStack removed;
+        if (mcStack.getCount() <= count) {
+            removed = mcStack.copy();
+            if (slot >= 0 && slot < inventory.items.size()) {
+                inventory.items.set(slot, net.minecraft.world.item.ItemStack.EMPTY);
+            } else {
+                inventory.armor.set(slot - mainInventory.length, net.minecraft.world.item.ItemStack.EMPTY);
+            }
+        } else {
+            removed = mcStack.split(count);
+        }
+        // Sync FC snapshot
+        sync();
+        return ItemStackHelper.toFcStack(removed);
+    }
+
+    @Override
     public int getSizeInventory() {
         return mainInventory.length + armorInventory.length;
     }
@@ -88,7 +136,82 @@ public class InventoryBridge extends btw.modern.InventoryPlayer {
 
         int damage = modern.getDamageValue();
         int count = modern.getCount();
-        return new btw.modern.ItemStack(legacyId, count, damage);
+        btw.modern.ItemStack fcStack = new btw.modern.ItemStack(legacyId, count, damage);
+
+        // Copy NBT from MC stack to FC stack so accumulated data (fire chance,
+        // last use time, custom names, etc.) persists across interactions.
+        net.minecraft.nbt.CompoundTag mcTag = modern.getTag();
+        if (mcTag != null && !mcTag.isEmpty()) {
+            fcStack.setTagCompound(new btw.forge.ForgeNBTCompound(mcTag.copy()));
+        }
+
+        return fcStack;
+    }
+
+    /**
+     * Writes FC ItemStack state back to the real MC inventory slot.
+     * Call after FC code that may modify items (damageItem, stackSize changes).
+     *
+     * @param fcStack the FC ItemStack that was modified (from getCurrentItem etc.)
+     * @param slot the inventory slot index, or -1 for current held item
+     */
+    public void writeBack(btw.modern.ItemStack fcStack, int slot) {
+        if (slot < 0) slot = inventory.selected;
+        if (slot < 0 || slot >= inventory.items.size()) return;
+
+        net.minecraft.world.item.ItemStack mcStack = inventory.items.get(slot);
+        if (mcStack == null || mcStack.isEmpty()) return;
+
+        if (fcStack == null || fcStack.stackSize <= 0) {
+            // Item consumed or broken — remove from MC inventory
+            inventory.items.set(slot, net.minecraft.world.item.ItemStack.EMPTY);
+            return;
+        }
+
+        // Sync NBT tag data FIRST (FC stores accumulated chance, time of last use,
+        // custom names, enchantments, etc. in the tag compound)
+        if (fcStack.hasTagCompound()) {
+            btw.modern.NBTTagCompound fcTag = fcStack.getTagCompound();
+            if (fcTag instanceof btw.forge.ForgeNBTCompound forgeTag) {
+                mcStack.setTag(forgeTag.getTag().copy());
+            } else {
+                try {
+                    net.minecraft.nbt.CompoundTag mcTag = ItemStackHelper.toMcTag(fcTag);
+                    if (mcTag != null) mcStack.setTag(mcTag);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // Sync damage and count AFTER NBT (so setDamageValue wins over any
+        // stale "Damage" key that was in the copied NBT)
+        mcStack.setDamageValue(fcStack.getItemDamage());
+        mcStack.setCount(fcStack.stackSize);
+    }
+
+    /**
+     * Writes the current held item's FC state back to MC inventory.
+     */
+    public void writeBackCurrentItem(btw.modern.ItemStack fcStack) {
+        writeBack(fcStack, inventory.selected);
+    }
+
+    /**
+     * Flushes the entire FC inventory snapshot back to the real MC inventory.
+     *
+     * <p>FC code may mutate ItemStack objects in mainInventory[] directly
+     * (e.g., {@code slotStack.stackSize += placeCount} during merge), which
+     * bypasses the write-through in setInventorySlotContents/decrStackSize.
+     * Call this after any FC operation that may have modified player inventory.</p>
+     */
+    public void writeBackAll() {
+        for (int i = 0; i < mainInventory.length && i < inventory.items.size(); i++) {
+            net.minecraft.world.item.ItemStack mcStack = ItemStackHelper.toMcStack(mainInventory[i]);
+            inventory.items.set(i, mcStack);
+        }
+        for (int i = 0; i < armorInventory.length && i < inventory.armor.size(); i++) {
+            net.minecraft.world.item.ItemStack mcStack = ItemStackHelper.toMcStack(armorInventory[i]);
+            inventory.armor.set(i, mcStack);
+        }
     }
 
     /** Returns the underlying Forge inventory. */

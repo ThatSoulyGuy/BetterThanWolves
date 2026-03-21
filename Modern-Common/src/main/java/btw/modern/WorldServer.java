@@ -22,25 +22,31 @@ public class WorldServer extends World {
     public void notifyBlockChange(int x, int y, int z, int blockID) {}
     public void markBlockRangeForRenderUpdate(int x1, int y1, int z1, int x2, int y2, int z2) {}
     public boolean canBlockSeeTheSky(int x, int y, int z) { return false; }
-    public int getFullBlockLightValue(int x, int y, int z) { return 0; }
-    public int getSavedLightValue(EnumSkyBlock enumSkyBlock, int x, int y, int z) { return 0; }
-    public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) { return false; }
+    public int getFullBlockLightValue(int x, int y, int z) { return 15; }
+    public int getSavedLightValue(EnumSkyBlock enumSkyBlock, int x, int y, int z) { return 15; }
+    public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) { return true; }
     public BiomeGenBase getBiomeGenForCoords(int x, int z) { return null; }
     public WorldChunkManager getWorldChunkManager() { return null; }
     public boolean spawnEntityInWorld(Entity entity) { return false; }
     public List getEntitiesWithinAABB(Class entityClass, AxisAlignedBB aabb) { return new ArrayList(); }
     public List getEntitiesWithinAABBExcludingEntity(Entity entity, AxisAlignedBB aabb) { return new ArrayList(); }
-    public boolean checkNoEntityCollision(AxisAlignedBB aabb) { return false; }
+    public boolean checkNoEntityCollision(AxisAlignedBB aabb) { return true; }
     public boolean canPlaceEntityOnSide(int blockID, int x, int y, int z, boolean skipEntities, int side, Entity entity, ItemStack stack) { return false; }
     public void playSoundEffect(double x, double y, double z, String sound, float volume, float pitch) {}
     public void playSoundAtEntity(Entity entity, String sound, float volume, float pitch) {}
     public void spawnParticle(String particle, double x, double y, double z, double velocityX, double velocityY, double velocityZ) {}
     public void playAuxSFX(int effectID, int x, int y, int z, int data) {}
-    public boolean isRaining() { return false; }
+    public boolean isRaining() { return worldInfo != null && worldInfo.isRaining(); }
     public boolean isBlockGettingPowered(int i, int j, int k) { return false; }
     public boolean isBlockIndirectlyGettingPowered(int x, int y, int z) { return false; }
-    public boolean doesBlockHaveSolidTopSurface(int i, int j, int k) { return false; }
-    public boolean canMineBlock(EntityPlayer player, int x, int y, int z) { return false; }
+    public boolean doesBlockHaveSolidTopSurface(int i, int j, int k) {
+        Block block = getBlock(i, j, k);
+        if (block != null) {
+            return block.blockMaterial.isSolid();
+        }
+        return false;
+    }
+    public boolean canMineBlock(EntityPlayer player, int x, int y, int z) { return true; }
 
     public EntityTracker getEntityTracker() { return null; }
 }

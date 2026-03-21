@@ -9,7 +9,9 @@ import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.inventory.InventoryMenu;
@@ -41,15 +43,26 @@ public class FCBakedModel implements BakedModel {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-FCBakedModel");
 
+    // --- ModelData properties for live rendering ---
+
+    /** ModelData property: the BlockGetter (chunk cache) for real neighbor access. */
+    public static final net.minecraftforge.client.model.data.ModelProperty<net.minecraft.world.level.BlockGetter> BLOCK_GETTER =
+            new net.minecraftforge.client.model.data.ModelProperty<>();
+    /** ModelData property: the block position in the world. */
+    public static final net.minecraftforge.client.model.data.ModelProperty<BlockPos> BLOCK_POS =
+            new net.minecraftforge.client.model.data.ModelProperty<>();
+
     // --- Instance state ---
 
-    /** The FC block to capture rendering from. Null after capture completes. */
+    /** The FC block to capture rendering from. */
     private btw.modern.Block fcBlock;
     private int legacyBlockId;
 
-    /** Built quads indexed by metadata. Null until first getQuads(). */
-    private volatile Map<Integer, List<BakedQuad>> allQuadsByMeta;
+    /** Static quads for item rendering (no world context). Null until first item getQuads(). */
+    private volatile Map<Integer, List<BakedQuad>> itemQuadsByMeta;
     private volatile TextureAtlasSprite particleSprite;
+    /** Whether icons have been registered for this block. */
+    private volatile boolean iconsRegistered = false;
 
     // ================================================================
     // Factory
@@ -80,10 +93,28 @@ public class FCBakedModel implements BakedModel {
      */
     private static final Object CAPTURE_LOCK = new Object();
 
-    private void ensureCaptured() {
-        if (allQuadsByMeta != null) return;
+    /** Ensure icons are registered (once, thread-safe). */
+    private void ensureIconsRegistered() {
+        if (iconsRegistered) return;
         synchronized (CAPTURE_LOCK) {
-            if (allQuadsByMeta != null) return;
+            if (iconsRegistered) return;
+            if (fcBlock != null) {
+                btw.modern.IconRegister capturer = new btw.modern.IconRegister() {
+                    @Override public btw.modern.Icon registerIcon(String name) { return new NamedIcon(name); }
+                    @Override public btw.modern.Icon registerIcon(String name, btw.modern.TextureStitched tex) { return new NamedIcon(name); }
+                };
+                try { fcBlock.registerIcons(capturer); } catch (Exception ignored) {}
+            }
+            iconsRegistered = true;
+        }
+    }
+
+    /** Ensure static item quads are built (for item rendering without world context). */
+    private void ensureItemQuadsBuilt() {
+        if (itemQuadsByMeta != null) return;
+        synchronized (CAPTURE_LOCK) {
+            if (itemQuadsByMeta != null) return;
+            ensureIconsRegistered();
             doCaptureAndBuild();
         }
     }
@@ -96,26 +127,9 @@ public class FCBakedModel implements BakedModel {
                 lookupSprite("stone") != null ? lookupSprite("stone").contents().name() : "NULL");
         btw.modern.Block block = this.fcBlock;
         if (block == null) {
-            allQuadsByMeta = Collections.emptyMap();
+            itemQuadsByMeta = Collections.emptyMap();
             particleSprite = getMissingSprite();
             return;
-        }
-
-        // Step 1: Register icons (populates icon fields with NamedIcons)
-        btw.modern.IconRegister capturer = new btw.modern.IconRegister() {
-            @Override
-            public btw.modern.Icon registerIcon(String name) {
-                return new NamedIcon(name);
-            }
-            @Override
-            public btw.modern.Icon registerIcon(String name, btw.modern.TextureStitched tex) {
-                return new NamedIcon(name);
-            }
-        };
-        try {
-            block.registerIcons(capturer);
-        } catch (Exception e) {
-            LOGGER.debug("BTW: registerIcons failed for block {}: {}", legacyBlockId, e.getMessage());
         }
 
         // Step 2: For each meta, capture vertices from FC's rendering code.
@@ -195,6 +209,8 @@ public class FCBakedModel implements BakedModel {
                 // Call FC's in-world RenderBlock which uses FCModelBlock for
                 // correct shapes. GL11 calls are no-ops via btw.modern.GL11.
                 block.RenderBlock(renderer, 0, 0, 0);
+                // Second pass: overlays (cook speckles, etc.)
+                block.RenderBlockSecondPass(renderer, 0, 0, 0, true);
             } catch (Throwable e) {
                 LOGGER.warn("BTW: RenderBlock threw for block {} meta {}: {}",
                         legacyBlockId, meta, e.toString());
@@ -269,9 +285,114 @@ public class FCBakedModel implements BakedModel {
         } catch (Exception ignored) {}
         this.particleSprite = lookupSprite(particleTexName);
 
-        this.allQuadsByMeta = result;
-        // Release FC block reference — capture is done
-        this.fcBlock = null;
+        this.itemQuadsByMeta = result;
+    }
+
+    // ================================================================
+    // Live capture — runs FC's RenderBlock with real world data
+    // ================================================================
+
+    /**
+     * Captures FC's RenderBlock output for a specific block position with
+     * real neighbor data. Called during chunk rebuilds — exactly like
+     * MC 1.5.2's rendering pipeline.
+     */
+    private List<BakedQuad> captureLive(BlockGetter blockGetter, BlockPos pos) {
+        btw.modern.Block block = this.fcBlock;
+        if (block == null) return Collections.emptyList();
+
+        // Create an IBlockAccess backed by the real chunk data
+        btw.modern.IBlockAccess realAccess = new btw.modern.IBlockAccess() {
+            @Override public int getBlockId(int x, int y, int z) {
+                BlockState state = blockGetter.getBlockState(new BlockPos(x, y, z));
+                return btw.forge.ProxyRegistry.getBlockId(state.getBlock());
+            }
+            @Override public int getBlockMetadata(int x, int y, int z) {
+                BlockState state = blockGetter.getBlockState(new BlockPos(x, y, z));
+                if (state.hasProperty(ProxyBlock.META)) return state.getValue(ProxyBlock.META);
+                return 0;
+            }
+            @Override public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {
+                return null;
+            }
+            @Override public int getLightBrightnessForSkyBlocks(int x, int y, int z, int light) {
+                return 0xF000F0;
+            }
+            @Override public boolean isBlockOpaqueCube(int x, int y, int z) {
+                return blockGetter.getBlockState(new BlockPos(x, y, z)).canOcclude();
+            }
+            @Override public boolean isBlockNormalCube(int x, int y, int z) {
+                return blockGetter.getBlockState(new BlockPos(x, y, z)).isCollisionShapeFullBlock(blockGetter, new BlockPos(x, y, z));
+            }
+            @Override public btw.modern.Material getBlockMaterial(int x, int y, int z) {
+                int id = getBlockId(x, y, z);
+                if (id > 0 && id < btw.modern.Block.blocksList.length) {
+                    btw.modern.Block b = btw.modern.Block.blocksList[id];
+                    if (b != null) return b.blockMaterial;
+                }
+                return btw.modern.Material.air;
+            }
+            @Override public boolean isAirBlock(int x, int y, int z) {
+                return blockGetter.getBlockState(new BlockPos(x, y, z)).isAir();
+            }
+            @Override public btw.modern.BiomeGenBase getBiomeGenForCoords(int x, int z) {
+                return btw.modern.BiomeGenBase.plains;
+            }
+            @Override public float getLightBrightness(int x, int y, int z) {
+                return 1.0f;
+            }
+        };
+
+        String fallbackTex = "";
+        try {
+            if (block.blockIcon != null) fallbackTex = block.blockIcon.getIconName().toLowerCase();
+        } catch (Exception ignored) {}
+
+        synchronized (CAPTURE_LOCK) {
+            btw.modern.Tessellator tess = btw.modern.Tessellator.instance;
+            btw.modern.RenderBlocks renderer = new btw.modern.RenderBlocks();
+            renderer.blockAccess = realAccess;
+
+            tess.setTranslation(0, 0, 0);
+            tess.setNormal(0, 1, 0);
+            tess.setColorOpaque_F(1, 1, 1);
+            tess.setTextureUV(0, 0);
+            tess.startCapturing();
+
+            boolean firstPassResult = false;
+            try {
+                renderer.setRenderBounds(0, 0, 0, 1, 1, 1);
+                renderer.unlockBlockBounds();
+                firstPassResult = block.RenderBlock(renderer, pos.getX(), pos.getY(), pos.getZ());
+            } catch (Throwable e) {
+                // Silently handle render failures
+            }
+
+            // Second pass: overlays (cook speckles on unfired bricks, etc.)
+            try {
+                block.RenderBlockSecondPass(renderer, pos.getX(), pos.getY(), pos.getZ(), firstPassResult);
+            } catch (Throwable ignored) {}
+
+            List<btw.modern.Tessellator.CapturedQuad> captured = tess.stopCapturing();
+
+            if (captured.isEmpty()) return Collections.emptyList();
+
+            List<BakedQuad> result = new ArrayList<>();
+            for (btw.modern.Tessellator.CapturedQuad cq : captured) {
+                // Subtract block position from vertex positions to get block-local coords
+                for (int vi = 0; vi < 4; vi++) {
+                    if (cq.vertices[vi] != null) {
+                        btw.modern.Tessellator.CapturedVertex v = cq.vertices[vi];
+                        cq.vertices[vi] = new btw.modern.Tessellator.CapturedVertex(
+                                v.x - pos.getX(), v.y - pos.getY(), v.z - pos.getZ(),
+                                v.u, v.v, v.r, v.g, v.b, v.a, v.nx, v.ny, v.nz, v.brightness);
+                    }
+                }
+                BakedQuad bq = convertCapturedQuad(cq, fallbackTex);
+                if (bq != null) result.add(bq);
+            }
+            return result;
+        }
     }
 
     // ================================================================
@@ -347,19 +468,31 @@ public class FCBakedModel implements BakedModel {
     public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource rand,
                                      net.minecraftforge.client.model.data.ModelData extraData,
                                      @Nullable net.minecraft.client.renderer.RenderType renderType) {
+        if (side != null) return Collections.emptyList();
+        ensureIconsRegistered();
+
+        // If we have real world data, run FC's RenderBlock LIVE with real neighbors.
+        // This is exactly what MC 1.5.2 did during chunk rebuilds.
+        BlockGetter blockGetter = extraData.get(BLOCK_GETTER);
+        BlockPos pos = extraData.get(BLOCK_POS);
+        if (blockGetter != null && pos != null && fcBlock != null) {
+            return captureLive(blockGetter, pos);
+        }
+
+        // Fallback: item rendering (no world context) — use static per-meta cache
         return getQuads(state, side, rand);
     }
 
     @Override
     public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource rand) {
-        ensureCaptured();
-        if (side != null) return Collections.emptyList(); // all quads are unculled
+        if (side != null) return Collections.emptyList();
+        ensureItemQuadsBuilt();
 
         int meta = 0;
         if (state != null && state.hasProperty(ProxyBlock.META)) {
             meta = state.getValue(ProxyBlock.META);
         }
-        return allQuadsByMeta.getOrDefault(meta, Collections.emptyList());
+        return itemQuadsByMeta.getOrDefault(meta, Collections.emptyList());
     }
 
     @Override public boolean useAmbientOcclusion() { return true; }
@@ -416,7 +549,7 @@ public class FCBakedModel implements BakedModel {
 
     @Override
     public TextureAtlasSprite getParticleIcon() {
-        ensureCaptured();
+        ensureItemQuadsBuilt();
         return particleSprite != null ? particleSprite : getMissingSprite();
     }
 

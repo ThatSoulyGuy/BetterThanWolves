@@ -141,8 +141,13 @@ public class RenderBlocks {
             case 2: return renderBlockTorch(block, x, y, z);
             case 4: return renderBlockFluids(block, x, y, z);
             case 6: return renderBlockCrops(block, x, y, z);
+            case 8: return renderBlockLadder(block, x, y, z);
             case 20: return renderBlockVine(block, x, y, z);
-            default: return renderStandardBlock(block, x, y, z);
+            default:
+                // For any unhandled render type, use standard block rendering
+                // with the block's own bounds (slabs, buttons, pressure plates, etc.
+                // set their bounds in constructor/setBlockBoundsBasedOnState)
+                return renderStandardBlock(block, x, y, z);
         }
     }
 
@@ -266,7 +271,50 @@ public class RenderBlocks {
     public boolean renderBlockRepeater(BlockRedstoneRepeater block, int x, int y, int z) { return false; }
     public boolean renderBlockRedstoneWire(Block block, int x, int y, int z) { return false; }
     public boolean renderBlockMinecartTrack(BlockRailBase block, int x, int y, int z) { return false; }
-    public boolean renderBlockLadder(Block block, int x, int y, int z) { return false; }
+    public boolean renderBlockLadder(Block block, int x, int y, int z) {
+        // Ladder renders as a flat plane on one face based on metadata
+        int meta = blockAccess != null ? blockAccess.getBlockMetadata(x, y, z) : 0;
+        Tessellator t = Tessellator.instance;
+        Icon icon = getBlockIconFromSideAndMetadata(block, 0, meta);
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? icon.getMinU() : 0;
+        double maxU = icon != null ? icon.getMaxU() : 1;
+        double minV = icon != null ? icon.getMinV() : 0;
+        double maxV = icon != null ? icon.getMaxV() : 1;
+        float d = 0.0625F; // 1 pixel offset from wall
+
+        // meta: 2=north, 3=south, 4=west, 5=east
+        t.setNormal(0, 0, 1);
+        switch (meta) {
+            case 2: // north face
+                t.addVertexWithUV(x + 1, y + 1, z + d, minU, minV);
+                t.addVertexWithUV(x + 1, y + 0, z + d, minU, maxV);
+                t.addVertexWithUV(x + 0, y + 0, z + d, maxU, maxV);
+                t.addVertexWithUV(x + 0, y + 1, z + d, maxU, minV);
+                break;
+            case 3: // south face
+                t.addVertexWithUV(x + 0, y + 1, z + 1 - d, minU, minV);
+                t.addVertexWithUV(x + 0, y + 0, z + 1 - d, minU, maxV);
+                t.addVertexWithUV(x + 1, y + 0, z + 1 - d, maxU, maxV);
+                t.addVertexWithUV(x + 1, y + 1, z + 1 - d, maxU, minV);
+                break;
+            case 4: // west face
+                t.addVertexWithUV(x + d, y + 1, z + 0, minU, minV);
+                t.addVertexWithUV(x + d, y + 0, z + 0, minU, maxV);
+                t.addVertexWithUV(x + d, y + 0, z + 1, maxU, maxV);
+                t.addVertexWithUV(x + d, y + 1, z + 1, maxU, minV);
+                break;
+            case 5: // east face
+                t.addVertexWithUV(x + 1 - d, y + 1, z + 1, minU, minV);
+                t.addVertexWithUV(x + 1 - d, y + 0, z + 1, minU, maxV);
+                t.addVertexWithUV(x + 1 - d, y + 0, z + 0, maxU, maxV);
+                t.addVertexWithUV(x + 1 - d, y + 1, z + 0, maxU, minV);
+                break;
+            default:
+                return renderStandardBlock(block, x, y, z);
+        }
+        return true;
+    }
     public boolean renderBlockVine(Block block, int x, int y, int z) { return false; }
     public boolean renderBlockPane(BlockPane block, int x, int y, int z) { return false; }
     public boolean renderCrossedSquares(Block block, int x, int y, int z) {

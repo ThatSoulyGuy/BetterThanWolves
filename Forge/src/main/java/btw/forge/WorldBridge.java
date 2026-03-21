@@ -103,10 +103,134 @@ public class WorldBridge extends btw.modern.World {
         }
         // Check side map for vanilla blocks with FC metadata overrides
         Integer override = vanillaMetaOverrides.get(pos);
-        return override != null ? override : 0;
+        if (override != null) return override;
+
+        // Derive metadata from MC 1.20.1 BlockState properties for vanilla blocks
+        return deriveVanillaMetadata(state, pos);
     }
 
-    
+    /**
+     * Derives legacy MC 1.5.2 metadata from MC 1.20.1 BlockState properties.
+     * For logs: axis → orientation bits, and bottom-of-tree → stump flag.
+     */
+    private int deriveVanillaMetadata(BlockState state, BlockPos pos) {
+        net.minecraft.world.level.block.Block block = state.getBlock();
+
+        // Logs: axis property → orientation, bottom log → stump
+        if (block instanceof net.minecraft.world.level.block.RotatedPillarBlock) {
+            int legacyId = ProxyRegistry.getBlockId(block);
+            if (legacyId == 17) { // Block.wood (log)
+                int meta = 0; // wood type defaults to 0 (oak)
+                // Axis → orientation: Y=0, X(east-west)=1<<2=4, Z(north-south)=2<<2=8
+                if (state.hasProperty(net.minecraft.world.level.block.RotatedPillarBlock.AXIS)) {
+                    net.minecraft.core.Direction.Axis axis = state.getValue(
+                            net.minecraft.world.level.block.RotatedPillarBlock.AXIS);
+                    if (axis == net.minecraft.core.Direction.Axis.X) meta |= 4;      // east-west
+                    else if (axis == net.minecraft.core.Direction.Axis.Z) meta |= 8;  // north-south
+                    // Y = 0 (default, vertical)
+                }
+
+                // Stump detection: vertical log with solid non-log block below
+                if ((meta & 12) == 0) { // only for vertical logs
+                    BlockPos below = pos.below();
+                    BlockState belowState = level.getBlockState(below);
+                    boolean logBelow = belowState.getBlock() instanceof net.minecraft.world.level.block.RotatedPillarBlock
+                            && ProxyRegistry.getBlockId(belowState.getBlock()) == 17;
+                    if (!logBelow && !belowState.isAir() && belowState.isSolidRender(level, below)) {
+                        meta = 12; // stump: both orientation bits set (3 << 2)
+                    }
+                }
+
+                // Wood type from block type
+                if (block == net.minecraft.world.level.block.Blocks.SPRUCE_LOG) meta = (meta & 12) | 1;
+                else if (block == net.minecraft.world.level.block.Blocks.BIRCH_LOG) meta = (meta & 12) | 2;
+                else if (block == net.minecraft.world.level.block.Blocks.JUNGLE_LOG) meta = (meta & 12) | 3;
+
+                return meta;
+            }
+        }
+
+        // Blocks with FACING property (furnace, dispenser, dropper, piston, chest, etc.)
+        // MC 1.5.2 metadata: 0=down, 1=up, 2=north, 3=south, 4=west, 5=east
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING)) {
+            net.minecraft.core.Direction dir = state.getValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING);
+            int meta = directionToLegacyFacing(dir);
+            // Piston: bit 3 = extended
+            if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.EXTENDED)) {
+                if (state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.EXTENDED)) {
+                    meta |= 8;
+                }
+            }
+            // Dispenser/dropper: bit 3 = triggered
+            if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.TRIGGERED)) {
+                if (state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.TRIGGERED)) {
+                    meta |= 8;
+                }
+            }
+            return meta;
+        }
+
+        // Blocks with HORIZONTAL_FACING (furnace, chest, ladder, wall signs, etc.)
+        // MC 1.5.2: 2=north, 3=south, 4=west, 5=east
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+            net.minecraft.core.Direction dir = state.getValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+            int meta = directionToLegacyFacing(dir);
+            // Furnace: bit 3 = lit (for burning furnace)
+            if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT)) {
+                // Lit furnace was a separate block in 1.5.2, not a metadata flag
+                // but some FC code checks it
+            }
+            return meta;
+        }
+
+        // Stairs: bits 0-1 = facing, bit 2 = upside-down
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)
+                && state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HALF)) {
+            net.minecraft.core.Direction dir = state.getValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+            int meta;
+            switch (dir) {
+                case EAST: meta = 0; break;
+                case WEST: meta = 1; break;
+                case SOUTH: meta = 2; break;
+                case NORTH: meta = 3; break;
+                default: meta = 0;
+            }
+            if (state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HALF)
+                    == net.minecraft.world.level.block.state.properties.Half.TOP) {
+                meta |= 4;
+            }
+            return meta;
+        }
+
+        // Lever/button: powered state
+        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED)) {
+            int meta = 0;
+            if (state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED)) {
+                meta |= 8;
+            }
+            return meta;
+        }
+
+        return 0;
+    }
+
+    /** Converts MC 1.20.1 Direction to MC 1.5.2 facing metadata value. */
+    private static int directionToLegacyFacing(net.minecraft.core.Direction dir) {
+        switch (dir) {
+            case DOWN: return 0;
+            case UP: return 1;
+            case NORTH: return 2;
+            case SOUTH: return 3;
+            case WEST: return 4;
+            case EAST: return 5;
+            default: return 0;
+        }
+    }
+
+
     public Material getBlockMaterial(int x, int y, int z) {
         int id = getBlockId(x, y, z);
         if (id > 0 && id < btw.modern.Block.blocksList.length) {
@@ -154,11 +278,47 @@ public class WorldBridge extends btw.modern.World {
     public boolean setBlock(int x, int y, int z, int blockID, int metadata, int flags) {
         BlockPos pos = new BlockPos(x, y, z);
         vanillaMetaOverrides.remove(pos); // clear metadata override on block change
+
+        // Preserve tile entity data across block changes when FC says to keep it.
+        // (e.g., campfire fire level changes: block type changes but tile entity stays)
+        net.minecraft.nbt.CompoundTag savedTileData = null;
+        int oldBlockId = getBlockId(x, y, z);
+        if (oldBlockId > 0 && oldBlockId != blockID) {
+            btw.modern.Block oldFcBlock = btw.modern.Block.blocksList[oldBlockId];
+            if (oldFcBlock != null && !oldFcBlock.ShouldDeleteTileEntityOnBlockChange(blockID)) {
+                BlockEntity oldBe = level.getBlockEntity(pos);
+                if (oldBe instanceof ProxyBlockEntity oldProxy) {
+                    btw.modern.TileEntity fcTe = oldProxy.getFcTileEntity();
+                    if (fcTe != null) {
+                        savedTileData = new net.minecraft.nbt.CompoundTag();
+                        ForgeNBTCompound wrapper = new ForgeNBTCompound(savedTileData);
+                        try { fcTe.writeToNBT(wrapper); } catch (Exception ignored) {}
+                    }
+                }
+            }
+        }
+
         ProxyBlock proxy = ProxyRegistry.getProxy(blockID);
         if (proxy != null) {
             BlockState state = proxy.defaultBlockState()
                     .setValue(ProxyBlock.META, Math.min(Math.max(metadata, 0), 15));
-            return level.setBlock(pos, state, flags);
+            boolean result = level.setBlock(pos, state, flags);
+
+            // Restore saved tile entity data
+            if (result && savedTileData != null && !savedTileData.isEmpty()) {
+                BlockEntity newBe = level.getBlockEntity(pos);
+                if (newBe instanceof ProxyBlockEntity newProxy) {
+                    btw.modern.TileEntity fcTe = newProxy.getFcTileEntity();
+                    if (fcTe != null) {
+                        ForgeNBTCompound wrapper = new ForgeNBTCompound(savedTileData);
+                        try { fcTe.readFromNBT(wrapper); } catch (Exception ignored) {}
+                        fcTe.xCoord = x;
+                        fcTe.yCoord = y;
+                        fcTe.zCoord = z;
+                    }
+                }
+            }
+            return result;
         }
         // For vanilla block IDs without a ProxyBlock, try mapping to the MC block
         net.minecraft.world.level.block.Block mcBlock = ProxyRegistry.getModernBlock(blockID);
@@ -694,7 +854,90 @@ public class WorldBridge extends btw.modern.World {
 
     
     public void playAuxSFX(int effectID, int x, int y, int z, int data) {
+        // FC custom effect IDs (2222+) need special handling — MC 1.20.1's
+        // levelEvent only knows vanilla IDs. Map FC effects to sound playback.
+        if (effectID >= 2222) {
+            playFcAuxSFX(effectID, x, y, z, data);
+            return;
+        }
         level.levelEvent(effectID, new BlockPos(x, y, z), data);
+    }
+
+    /** Handles FC-custom AuxSFX IDs by playing the corresponding sounds. */
+    private void playFcAuxSFX(int effectID, int x, int y, int z, int data) {
+        double px = x + 0.5, py = y + 0.5, pz = z + 0.5;
+        java.util.Random rand = new java.util.Random();
+        // Map FC effect IDs to their sound equivalents (from FC's client handler)
+        switch (effectID) {
+            case 2226: // burp
+                playSoundEffect(px, py, pz, "random.burp", 0.5F, rand.nextFloat() * 0.1F + 0.9F);
+                break;
+            case 2227: // fire fizz
+                playSoundEffect(px, py, pz, "random.fizz", 0.5F, 2.6F + (rand.nextFloat() - rand.nextFloat()) * 0.8F);
+                break;
+            case 2231: // item collection pop
+            case 2232: // XP eject pop
+                playSoundEffect(px, py, pz, "random.pop", 0.2F, ((rand.nextFloat() - rand.nextFloat()) * 0.7F + 1F) * 2F);
+                break;
+            case 2233: // hopper close
+                playSoundEffect(px, py, pz, "random.chestclosed", 0.1F, rand.nextFloat() * 0.1F + 0.9F);
+                break;
+            case 2234: // redstone power click
+                playSoundEffect(px, py, pz, "random.click", 0.3F, 0.6F);
+                break;
+            case 2236: // block place
+                playSoundEffect(px, py, pz, "dig.stone", 1F, 0.8F);
+                break;
+            case 2237: // dynamite fuse
+                playSoundEffect(px, py, pz, "random.fuse", 1F, 1F);
+                break;
+            case 2238: // click low pitch
+                playSoundEffect(px, py, pz, "random.click", 0.3F, 0.5F);
+                break;
+            case 2267: // stump removed
+                playSoundEffect(px, py, pz, "mob.slime.attack", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 0.6F);
+                break;
+            case 2268: // shaft ripped off log
+            case 2271: // wood block destroyed
+                playSoundEffect(px, py, pz, "mob.zombie.woodbreak", 0.25F, 1F + rand.nextFloat() * 0.25F);
+                break;
+            case 2269: // stone ripped off
+                playSoundEffect(px, py, pz, "random.anvil_land", 0.5F, rand.nextFloat() * 0.25F + 1.75F);
+                break;
+            case 2270: // gravel ripped off stone
+                playSoundEffect(px, py, pz, "random.anvil_land", 0.25F, rand.nextFloat() * 0.25F + 1.5F);
+                playSoundEffect(px, py, pz, "step.gravel", 1F, rand.nextFloat() * 0.25F + 1F);
+                break;
+            case 2274: // mortar applied
+                playSoundEffect(px, py, pz, "mob.slime.attack", 0.7F + rand.nextFloat() * 0.1F, 0.85F + rand.nextFloat() * 0.1F);
+                break;
+            case 2275: // loose block on mortar
+                playSoundEffect(px, py, pz, "mob.slime.attack", 0.15F + rand.nextFloat() * 0.1F, 0.6F + rand.nextFloat() * 0.1F);
+                break;
+            case 2276: // log smouldering fall
+                playSoundEffect(px, py, pz, "mob.zombie.woodbreak", 1.25F, 0.5F + rand.nextFloat() * 0.1F);
+                playSoundEffect(px, py, pz, "mob.ghast.fireball", 1F, 0.5F + rand.nextFloat() * 0.1F);
+                break;
+            case 2278: // water evaporate
+                playSoundEffect(px, py, pz, "random.fizz", 0.5F, 2.6F + (rand.nextFloat() - rand.nextFloat()) * 0.8F);
+                break;
+            case 2280: // lightning strike
+                playSoundEffect(px, py, pz, "ambient.weather.thunder", 10000F, 0.8F + rand.nextFloat() * 0.2F);
+                break;
+            case 2283: // animal eat
+            case 2284: // wolf eat
+                playSoundEffect(px, py, pz, "random.eat", 0.5F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                break;
+            case 2285: // eat fail
+                playSoundEffect(px, py, pz, "random.eat", 0.25F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 0.5F);
+                break;
+            default:
+                // Unknown FC effect — try vanilla levelEvent as fallback
+                try {
+                    level.levelEvent(effectID, new BlockPos(x, y, z), data);
+                } catch (Exception ignored) {}
+                break;
+        }
     }
 
     
@@ -1105,14 +1348,16 @@ public class WorldBridge extends btw.modern.World {
      */
     private static SoundEvent resolveSoundEvent(String fcSoundName) {
         if (fcSoundName == null || fcSoundName.isEmpty()) return null;
+        // Use the centralized SoundMapping which maps 1.5.2 names → 1.20.1 SoundEvents
+        SoundEvent mapped = SoundMapping.get(fcSoundName);
+        if (mapped != null) return mapped;
+        // Fallback: try creating a SoundEvent from the raw name (for sounds
+        // that happen to have the same name in 1.20.1, or custom registered sounds)
         try {
-            // FC uses dot-separated names like "random.drink", "mob.zombie.say".
-            // Modern MC uses slash-separated ResourceLocation paths.
-            String path = fcSoundName.replace('.', '/');
+            String path = fcSoundName.replace('.', '_');
             ResourceLocation loc = new ResourceLocation("minecraft", path);
             return SoundEvent.createVariableRangeEvent(loc);
         } catch (Exception e) {
-            // Invalid resource location or other issue — silently ignore
             return null;
         }
     }

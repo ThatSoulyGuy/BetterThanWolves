@@ -1,7 +1,7 @@
 package btw.modern;
 
 public class Slot {
-    private final int slotIndex;
+    public final int slotIndex;
     public final IInventory inventory;
     public int slotNumber;
     public int xDisplayPosition;

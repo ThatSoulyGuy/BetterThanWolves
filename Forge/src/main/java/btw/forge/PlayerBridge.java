@@ -17,7 +17,7 @@ import java.util.WeakHashMap;
  *
  * Instances are cached per-Player via {@link #getOrCreate(Player)}.
  */
-public class PlayerBridge extends btw.modern.EntityPlayer {
+public class PlayerBridge extends btw.modern.EntityPlayerMP {
     private final Player realPlayer;
     private static final WeakHashMap<Player, PlayerBridge> cache = new WeakHashMap<>();
 
@@ -56,6 +56,8 @@ public class PlayerBridge extends btw.modern.EntityPlayer {
         this.capabilities = this.capBridge;
         this.inventory = this.invBridge;
         this.foodStats = new btw.modern.FoodStats();
+        // NetServerHandler bridge — translates FC packets to MC 1.20.1 packets
+        this.playerNetServerHandler = new ForgeNetServerHandler(player);
         // World bridge — use ServerLevel if available, otherwise null (client uses it read-only)
         if (player.level() instanceof ServerLevel sl) {
             this.worldObj = WorldBridge.getOrCreate(sl);
@@ -183,6 +185,16 @@ public class PlayerBridge extends btw.modern.EntityPlayer {
     @Override
     public void addExperience(int amount) {
         realPlayer.giveExperiencePoints(amount);
+    }
+
+    /**
+     * Legacy method name for dropPlayerItem.
+     * FC's Container.slotClick() calls this when dropping items outside
+     * the inventory window (clicking outside with a held stack).
+     */
+    @Override
+    public void func_71012_a(btw.modern.ItemStack stack) {
+        dropPlayerItem(stack);
     }
 
     /**
@@ -539,17 +551,11 @@ public class PlayerBridge extends btw.modern.EntityPlayer {
 
     /**
      * FC calls this to open a GUI for a chest/inventory.
-     * Delegates to MC's container system.
+     * Delegates to the container bridge which wraps the FC IInventory
+     * in an MC 1.20.1 menu and opens it on the real ServerPlayer.
      */
     @Override
     public void displayGUIChest(btw.modern.IInventory inventory) {
-        // TODO: Container bridge needed for full GUI support.
-        // Implementation requires:
-        //   1. An IInventory-to-Container adapter that wraps btw.modern.IInventory
-        //      as a MC MenuProvider / AbstractContainerMenu.
-        //   2. Calling ServerPlayer.openMenu(MenuProvider) with the adapted inventory.
-        //   3. Handling slot synchronization between the FC IInventory and MC Container.
-        // This is a significant piece of infrastructure — see FCBlockEnderChest and
-        // FCContainerSoulforge for the FC callers that exercise this path.
+        ContainerBridge.openChestGUI(this, inventory);
     }
 }

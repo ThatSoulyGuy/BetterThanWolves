@@ -495,7 +495,20 @@ public abstract class Block {
         return null;
     }
 
-    public void setBlockBoundsBasedOnState(IBlockAccess blockAccess, int x, int y, int z) {}
+    public void setBlockBoundsBasedOnState(IBlockAccess blockAccess, int x, int y, int z) {
+        // FC blocks override GetBlockBoundsFromPoolBasedOnState for state-dependent
+        // shapes (unfired brick orientation, slab flip, etc.). Use it to set
+        // the rendering bounds so renderStandardBlock uses the correct shape.
+        AxisAlignedBB bounds = GetBlockBoundsFromPoolBasedOnState(blockAccess, x, y, z);
+        if (bounds != null) {
+            this.minX = bounds.minX;
+            this.minY = bounds.minY;
+            this.minZ = bounds.minZ;
+            this.maxX = bounds.maxX;
+            this.maxY = bounds.maxY;
+            this.maxZ = bounds.maxZ;
+        }
+    }
     public void setBlockBoundsForItemRender() {
         this.setBlockBounds(0.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F);
     }
@@ -918,6 +931,9 @@ public abstract class Block {
     // --- Client-side: Block rendering methods (overridden by subclasses) ---
 
     public boolean RenderBlock(RenderBlocks renderBlocks, int i, int j, int k) {
+        if (renderBlocks.blockAccess != null) {
+            setBlockBoundsBasedOnState(renderBlocks.blockAccess, i, j, k);
+        }
         renderBlocks.setRenderBoundsFromBlock(this);
         return renderBlocks.renderBlockByRenderType(this, i, j, k);
     }
@@ -933,7 +949,12 @@ public abstract class Block {
     }
 
     public boolean RenderBlockWithTexture(RenderBlocks renderBlocks, int i, int j, int k, Icon texture) {
-        return false;
+        // Render the block with an override texture (used for overlays like cook speckles)
+        renderBlocks.setOverrideBlockTexture(texture);
+        renderBlocks.setRenderBoundsFromBlock(this);
+        boolean result = renderBlocks.renderStandardBlock(this, i, j, k);
+        renderBlocks.clearOverrideBlockTexture();
+        return result;
     }
 
     public void RenderCookingByKilnOverlay(RenderBlocks renderBlocks, int i, int j, int k, boolean bCooking) {
@@ -1078,12 +1099,24 @@ public abstract class Block {
 
     // --- BTW-added: Hard points ---
 
-    public boolean HasSmallCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency) { return false; }
-    public boolean HasSmallCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return false; }
-    public boolean HasCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency) { return false; }
-    public boolean HasCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return false; }
-    public boolean HasLargeCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency) { return false; }
-    public boolean HasLargeCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return false; }
+    public boolean HasSmallCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency) {
+        return HasCenterHardPointToFacing(blockAccess, i, j, k, iFacing, bIgnoreTransparency);
+    }
+    public boolean HasSmallCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing) {
+        return HasSmallCenterHardPointToFacing(blockAccess, i, j, k, iFacing, false);
+    }
+    public boolean HasCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency) {
+        return HasLargeCenterHardPointToFacing(blockAccess, i, j, k, iFacing, bIgnoreTransparency);
+    }
+    public boolean HasCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing) {
+        return HasCenterHardPointToFacing(blockAccess, i, j, k, iFacing, false);
+    }
+    public boolean HasLargeCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency) {
+        return blockAccess.isBlockNormalCube(i, j, k);
+    }
+    public boolean HasLargeCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing) {
+        return HasLargeCenterHardPointToFacing(blockAccess, i, j, k, iFacing, false);
+    }
 
     // --- BTW-added: Block resting/attachment ---
 
@@ -1123,7 +1156,9 @@ public abstract class Block {
     public Block SetFireProperties(int iChanceToEncourageFire, int iAbilityToCatchFire) { this.fireEncouragement = iChanceToEncourageFire; this.flammability = iAbilityToCatchFire; return this; }
     public Block SetFireProperties(FCEnumFlammability flammabilityEnum) { return SetFireProperties(flammabilityEnum.m_iChanceToEncourageFire, flammabilityEnum.m_iAbilityToCatchFire); }
     public boolean GetCanBeSetOnFireDirectly(IBlockAccess blockAccess, int i, int j, int k) { return false; }
-    public boolean GetCanBeSetOnFireDirectlyByItem(IBlockAccess blockAccess, int i, int j, int k) { return false; }
+    public boolean GetCanBeSetOnFireDirectlyByItem(IBlockAccess blockAccess, int i, int j, int k) {
+        return GetCanBeSetOnFireDirectly(blockAccess, i, j, k);
+    }
     public boolean SetOnFireDirectly(World world, int i, int j, int k) { return false; }
     public int GetChanceOfFireSpreadingDirectlyTo(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
     public boolean GetCanBlockLightItemOnFire(IBlockAccess blockAccess, int i, int j, int k) { return false; }

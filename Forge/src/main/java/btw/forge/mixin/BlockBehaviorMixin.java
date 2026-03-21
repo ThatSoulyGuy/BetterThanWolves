@@ -216,6 +216,8 @@ public abstract class BlockBehaviorMixin {
     private void btw$use(BlockState state, Level level, BlockPos pos,
                           Player player, InteractionHand hand, BlockHitResult hit,
                           CallbackInfoReturnable<InteractionResult> cir) {
+        // Skip for ProxyBlocks — they handle FC delegation in ProxyBlock.use()
+        if (state.getBlock() instanceof btw.forge.ProxyBlock) return;
         btw.modern.Block fcBlock = btw$getFcBlock();
         if (fcBlock == null) return;
 
@@ -228,6 +230,9 @@ public abstract class BlockBehaviorMixin {
             float hitX = (float) (hitLoc.x - pos.getX());
             float hitY = (float) (hitLoc.y - pos.getY());
             float hitZ = (float) (hitLoc.z - pos.getZ());
+
+            // Snapshot openContainer before FC call to detect GUI opens
+            btw.modern.Container prevContainer = fcPlayer.openContainer;
 
             // Stage 1: FC block activation (e.g., opening chests, adding spit to campfire)
             boolean result = fcBlock.onBlockActivated(world, pos.getX(), pos.getY(), pos.getZ(),
@@ -243,6 +248,9 @@ public abstract class BlockBehaviorMixin {
                             side, hitX, hitY, hitZ);
                 }
             }
+
+            // Check if FC opened a container GUI and open the MC menu
+            btw.forge.ContainerBridge.checkAndOpenContainer(fcPlayer, prevContainer);
 
             if (result) {
                 cir.setReturnValue(InteractionResult.SUCCESS);

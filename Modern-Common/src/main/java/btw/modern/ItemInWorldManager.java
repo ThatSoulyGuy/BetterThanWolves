@@ -5,6 +5,9 @@ public class ItemInWorldManager {
     public EntityPlayer thisPlayerMP;
     public EnumGameType gameType;
 
+    /** The held item stack after tryHarvestBlock completes — for writeback. */
+    public ItemStack lastHeldStack;
+
     public ItemInWorldManager(World world) {
         this.theWorld = world;
     }
@@ -89,6 +92,9 @@ public class ItemInWorldManager {
                 thisPlayerMP.destroyCurrentEquippedItem();
             }
         }
+
+        // Store for writeback by the Forge bridge
+        this.lastHeldStack = currentStack;
 
         return true;
     }

@@ -1,5 +1,6 @@
 package btw.forge.mixin;
 
+import btw.forge.InventoryBridge;
 import btw.forge.ItemStackHelper;
 import btw.forge.PlayerBridge;
 import btw.forge.ProxyRegistry;
@@ -60,10 +61,74 @@ public abstract class ServerPlayerGameModeMixin {
         btw.modern.ItemInWorldManager mgr = new btw.modern.ItemInWorldManager(
                 WorldBridge.getOrCreate(level));
         mgr.thisPlayerMP = fcPlayer;
+
         mgr.tryHarvestBlock(pos.getX(), pos.getY(), pos.getZ(), 1);
+
+        // Sync FC item state (damage, stackSize) back to MC inventory.
+        // mgr.lastHeldStack is the FC ItemStack that was modified inside
+        // tryHarvestBlock (damageItem, stackSize changes).
+        if (fcPlayer.inventory instanceof InventoryBridge invBridge) {
+            invBridge.writeBackCurrentItem(mgr.lastHeldStack);
+        }
 
         // Tell vanilla we handled it — don't let vanilla do its own removal/drops
         cir.setReturnValue(true);
+    }
+
+    // ================================================================
+    // useItemOn → FC Item.onItemUse (right-click on block)
+    // Catches vanilla items with FC replacements when used on non-ProxyBlocks.
+    // ProxyBlock.use() handles this for ProxyBlocks, but vanilla blocks don't
+    // trigger ProxyBlock.use().
+    // ================================================================
+
+    @Inject(method = "useItemOn", at = @At("HEAD"), cancellable = true)
+    private void btw$useItemOn(ServerPlayer serverPlayer, Level world,
+                                ItemStack mcStack, InteractionHand hand,
+                                net.minecraft.world.phys.BlockHitResult hitResult,
+                                CallbackInfoReturnable<InteractionResult> cir) {
+        if (mcStack.isEmpty() || !(world instanceof net.minecraft.server.level.ServerLevel sl)) return;
+
+        // Skip ProxyItems — they handle this in ProxyItem.useOn() or ProxyBlock.use()
+        if (mcStack.getItem() instanceof btw.forge.ProxyItem) return;
+
+        // Skip ProxyBlocks — ProxyBlock.use() handles both stages
+        net.minecraft.core.BlockPos pos = hitResult.getBlockPos();
+        if (world.getBlockState(pos).getBlock() instanceof btw.forge.ProxyBlock) return;
+
+        // Look up FC item replacement
+        int legacyId = ProxyRegistry.getItemId(mcStack.getItem());
+        if (mcStack.getItem() instanceof net.minecraft.world.item.BlockItem bi) {
+            legacyId = ProxyRegistry.getBlockId(bi.getBlock());
+        }
+        btw.modern.Item fcItem = null;
+        if (legacyId > 0 && legacyId < btw.modern.Item.itemsList.length) {
+            fcItem = btw.modern.Item.itemsList[legacyId];
+        }
+        if (fcItem == null) return;
+
+        PlayerBridge fcPlayer = PlayerBridge.getOrCreate(serverPlayer);
+        fcPlayer.syncFromReal();
+        btw.modern.ItemStack fcStack = fcPlayer.getCurrentEquippedItem();
+        if (fcStack == null) return;
+
+        int side = hitResult.getDirection().get3DDataValue();
+        net.minecraft.world.phys.Vec3 hitLoc = hitResult.getLocation();
+        float hitX = (float)(hitLoc.x - pos.getX());
+        float hitY = (float)(hitLoc.y - pos.getY());
+        float hitZ = (float)(hitLoc.z - pos.getZ());
+
+        boolean result = fcItem.onItemUse(fcStack, fcPlayer,
+                WorldBridge.getOrCreate(sl),
+                pos.getX(), pos.getY(), pos.getZ(), side, hitX, hitY, hitZ);
+
+        if (fcPlayer.inventory instanceof InventoryBridge invBridge) {
+            invBridge.writeBackCurrentItem(fcStack);
+        }
+
+        if (result) {
+            cir.setReturnValue(InteractionResult.SUCCESS);
+        }
     }
 
     // ================================================================

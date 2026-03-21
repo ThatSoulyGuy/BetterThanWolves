@@ -177,6 +177,113 @@ public class ProxyBlock extends Block implements EntityBlock {
         return fc().getTickRandomly();
     }
 
+    // --- animateTick (client-side particle effects) ---
+
+    @Override
+    public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
+        try {
+            // Create a lightweight client-side World wrapper for particle spawning
+            btw.modern.World clientWorld = new btw.modern.World() {
+                { this.isRemote = true; this.rand = new Random(); }
+                public int getBlockId(int x, int y, int z) {
+                    return ProxyRegistry.getBlockId(level.getBlockState(new BlockPos(x, y, z)).getBlock());
+                }
+                public int getBlockMetadata(int x, int y, int z) {
+                    BlockState s = level.getBlockState(new BlockPos(x, y, z));
+                    return s.hasProperty(META) ? s.getValue(META) : 0;
+                }
+                public btw.modern.Material getBlockMaterial(int x, int y, int z) {
+                    return fc().blockMaterial;
+                }
+                public boolean isAirBlock(int x, int y, int z) {
+                    return level.getBlockState(new BlockPos(x, y, z)).isAir();
+                }
+                public boolean isBlockNormalCube(int x, int y, int z) { return false; }
+                public void spawnParticle(String name, double x, double y, double z,
+                                          double vx, double vy, double vz) {
+                    try {
+                        // Map FC particle names to MC 1.20.1 ParticleTypes
+                        net.minecraft.core.particles.ParticleOptions particle = mapParticle(name);
+                        if (particle != null) {
+                            level.addParticle(particle, x, y, z, vx, vy, vz);
+                        }
+                    } catch (Exception ignored) {}
+                }
+                public void playSoundEffect(double x, double y, double z,
+                                             String sound, float vol, float pitch) {}
+                public boolean canBlockSeeTheSky(int x, int y, int z) {
+                    return level.canSeeSky(new BlockPos(x, y, z));
+                }
+                public boolean setBlock(int x, int y, int z, int id, int meta, int flags) { return false; }
+                public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) { return null; }
+                public boolean canPlaceEntityOnSide(int id, int x, int y, int z, boolean b, int s, btw.modern.Entity e, btw.modern.ItemStack st) { return false; }
+                public java.util.List getEntitiesWithinAABB(Class c, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
+                public java.util.List getEntitiesWithinAABBExcludingEntity(btw.modern.Entity e, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
+                public void scheduleBlockUpdate(int x, int y, int z, int id, int delay) {}
+                public void notifyBlockChange(int x, int y, int z, int id) {}
+                public boolean spawnEntityInWorld(btw.modern.Entity e) { return false; }
+                public boolean canMineBlock(btw.modern.EntityPlayer p, int x, int y, int z) { return true; }
+                public boolean doesBlockHaveSolidTopSurface(int x, int y, int z) { return true; }
+                public int getSavedLightValue(btw.modern.EnumSkyBlock type, int x, int y, int z) { return 15; }
+                public int getFullBlockLightValue(int x, int y, int z) { return 15; }
+                public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) { return true; }
+                public boolean checkNoEntityCollision(btw.modern.AxisAlignedBB bb) { return true; }
+                public void playSoundAtEntity(btw.modern.Entity e, String s, float v, float p) {}
+                public void playAuxSFX(int id, int x, int y, int z, int data) {}
+                public void playAuxSFXAtEntity(btw.modern.EntityPlayer p, int id, int x, int y, int z, int data) {}
+                public boolean isRaining() { return false; }
+                public boolean isBlockGettingPowered(int x, int y, int z) { return false; }
+                public boolean isBlockIndirectlyGettingPowered(int x, int y, int z) { return false; }
+                public btw.modern.IChunkProvider createChunkProvider() { return null; }
+                public boolean destroyBlock(int x, int y, int z, boolean drop) { return false; }
+                public void markBlockRangeForRenderUpdate(int x1, int y1, int z1, int x2, int y2, int z2) {}
+                public btw.modern.WorldChunkManager getWorldChunkManager() { return null; }
+                public boolean setBlockToAir(int x, int y, int z) { return false; }
+                public boolean setBlockMetadata(int x, int y, int z, int meta, int flags) { return false; }
+                public btw.modern.BiomeGenBase getBiomeGenForCoords(int x, int z) { return btw.modern.BiomeGenBase.plains; }
+            };
+            fc().randomDisplayTick(clientWorld, pos.getX(), pos.getY(), pos.getZ(),
+                    new Random(random.nextLong()));
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Maps FC particle names to MC 1.20.1 ParticleOptions. */
+    public static net.minecraft.core.particles.ParticleOptions mapParticle(String name) {
+        if (name == null) return null;
+        if (name.equals("smoke")) return net.minecraft.core.particles.ParticleTypes.SMOKE;
+        if (name.equals("largesmoke")) return net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE;
+        if (name.equals("flame")) return net.minecraft.core.particles.ParticleTypes.FLAME;
+        if (name.equals("lava")) return net.minecraft.core.particles.ParticleTypes.LAVA;
+        if (name.equals("splash")) return net.minecraft.core.particles.ParticleTypes.SPLASH;
+        if (name.equals("bubble")) return net.minecraft.core.particles.ParticleTypes.BUBBLE;
+        if (name.equals("reddust")) return new net.minecraft.core.particles.DustParticleOptions(
+                new org.joml.Vector3f(1.0f, 0.0f, 0.0f), 1.0f);
+        if (name.equals("snowballpoof")) return net.minecraft.core.particles.ParticleTypes.ITEM_SNOWBALL;
+        if (name.equals("explode")) return net.minecraft.core.particles.ParticleTypes.EXPLOSION;
+        if (name.equals("largeexplode")) return net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER;
+        if (name.equals("townaura")) return net.minecraft.core.particles.ParticleTypes.MYCELIUM;
+        if (name.equals("crit")) return net.minecraft.core.particles.ParticleTypes.CRIT;
+        if (name.equals("magicCrit")) return net.minecraft.core.particles.ParticleTypes.ENCHANTED_HIT;
+        if (name.equals("happyVillager")) return net.minecraft.core.particles.ParticleTypes.HAPPY_VILLAGER;
+        if (name.equals("note")) return net.minecraft.core.particles.ParticleTypes.NOTE;
+        if (name.equals("portal")) return net.minecraft.core.particles.ParticleTypes.PORTAL;
+        if (name.equals("enchantmenttable")) return net.minecraft.core.particles.ParticleTypes.ENCHANT;
+        if (name.equals("witchMagic")) return net.minecraft.core.particles.ParticleTypes.WITCH;
+        if (name.equals("snowshovel")) return net.minecraft.core.particles.ParticleTypes.POOF;
+        if (name.equals("dripWater")) return net.minecraft.core.particles.ParticleTypes.DRIPPING_WATER;
+        if (name.equals("dripLava")) return net.minecraft.core.particles.ParticleTypes.DRIPPING_LAVA;
+        if (name.equals("suspended")) return net.minecraft.core.particles.ParticleTypes.UNDERWATER;
+        if (name.equals("heart")) return net.minecraft.core.particles.ParticleTypes.HEART;
+        if (name.equals("angryVillager")) return net.minecraft.core.particles.ParticleTypes.ANGRY_VILLAGER;
+        if (name.startsWith("iconcrack_")) return net.minecraft.core.particles.ParticleTypes.ITEM_SNOWBALL;
+        if (name.startsWith("blockcrack_")) return net.minecraft.core.particles.ParticleTypes.POOF;
+        // FC custom particles
+        if (name.equals("fcwhitesmoke")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
+        if (name.equals("fccinders")) return net.minecraft.core.particles.ParticleTypes.FLAME;
+        return null;
+    }
+
     // --- neighborChanged ---
 
     @Override
@@ -224,13 +331,17 @@ public class ProxyBlock extends Block implements EntityBlock {
             float hitY = (float)(hitLoc.y - pos.getY());
             float hitZ = (float)(hitLoc.z - pos.getZ());
 
+            btw.modern.ItemStack fcHeld = fcPlayer.getCurrentEquippedItem();
+
+            // Snapshot openContainer before FC call to detect GUI opens
+            btw.modern.Container prevContainer = fcPlayer.openContainer;
+
             // Stage 1: FC block activation
             boolean result = fc().onBlockActivated(world, pos.getX(), pos.getY(), pos.getZ(),
                     fcPlayer, side, hitX, hitY, hitZ);
 
             if (!result) {
                 // Stage 2: FC item use on block
-                btw.modern.ItemStack fcHeld = fcPlayer.getCurrentEquippedItem();
                 if (fcHeld != null) {
                     result = fcHeld.tryPlaceItemIntoWorld(
                             fcPlayer, world, pos.getX(), pos.getY(), pos.getZ(),
@@ -238,7 +349,17 @@ public class ProxyBlock extends Block implements EntityBlock {
                 }
             }
 
-            return result ? InteractionResult.SUCCESS : InteractionResult.PASS;
+            // Check if FC opened a container GUI and open the MC menu
+            boolean containerOpened = ContainerBridge.checkAndOpenContainer(fcPlayer, prevContainer);
+
+            // Sync FC item state (damage, stackSize) back to MC inventory
+            if (fcPlayer.inventory instanceof InventoryBridge invBridge) {
+                invBridge.writeBackCurrentItem(fcHeld);
+            }
+
+            // Always return SUCCESS if a container was opened or FC handled the activation
+            // This prevents MC from calling use() again for the off hand
+            return (result || containerOpened) ? InteractionResult.SUCCESS : InteractionResult.PASS;
         }
         return InteractionResult.PASS;
     }
@@ -425,15 +546,46 @@ public class ProxyBlock extends Block implements EntityBlock {
     @Override
     public net.minecraft.world.phys.shapes.VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos,
             net.minecraft.world.phys.shapes.CollisionContext ctx) {
-        double minX = fc().minX, minY = fc().minY, minZ = fc().minZ;
-        double maxX = fc().maxX, maxY = fc().maxY, maxZ = fc().maxZ;
-        return net.minecraft.world.phys.shapes.Shapes.box(minX, minY, minZ, maxX, maxY, maxZ);
+        return getFcShape(level, pos);
     }
 
     @Override
     public net.minecraft.world.phys.shapes.VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos,
             net.minecraft.world.phys.shapes.CollisionContext ctx) {
-        return getCollisionShape(state, level, pos, ctx);
+        return getFcShape(level, pos);
+    }
+
+    /**
+     * Gets the VoxelShape from FC's block bounds. Calls setBlockBoundsBasedOnState
+     * with a real IBlockAccess so FC blocks with state-dependent bounds (campfire,
+     * axle, etc.) return the correct shape.
+     */
+    private net.minecraft.world.phys.shapes.VoxelShape getFcShape(BlockGetter level, BlockPos pos) {
+        btw.modern.Block fcBlock = fc();
+        try {
+            // Create a lightweight IBlockAccess from the BlockGetter
+            btw.modern.IBlockAccess access = new btw.modern.IBlockAccess() {
+                @Override public int getBlockId(int x, int y, int z) {
+                    return ProxyRegistry.getBlockId(level.getBlockState(new BlockPos(x, y, z)).getBlock());
+                }
+                @Override public int getBlockMetadata(int x, int y, int z) {
+                    BlockState s = level.getBlockState(new BlockPos(x, y, z));
+                    return s.hasProperty(META) ? s.getValue(META) : 0;
+                }
+                @Override public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) { return null; }
+                @Override public boolean isBlockOpaqueCube(int x, int y, int z) { return false; }
+                @Override public boolean isBlockNormalCube(int x, int y, int z) { return false; }
+                @Override public btw.modern.Material getBlockMaterial(int x, int y, int z) {
+                    return fcBlock.blockMaterial;
+                }
+            };
+            fcBlock.setBlockBoundsBasedOnState(access, pos.getX(), pos.getY(), pos.getZ());
+        } catch (Exception ignored) {
+            // If setBlockBoundsBasedOnState fails, use default bounds
+        }
+        return net.minecraft.world.phys.shapes.Shapes.box(
+                fcBlock.minX, fcBlock.minY, fcBlock.minZ,
+                fcBlock.maxX, fcBlock.maxY, fcBlock.maxZ);
     }
 
     @Override
@@ -483,6 +635,19 @@ public class ProxyBlock extends Block implements EntityBlock {
     @Override
     public boolean propagatesSkylightDown(BlockState state, BlockGetter level, BlockPos pos) {
         return btw.modern.Block.lightOpacity[legacyId] == 0;
+    }
+
+    /**
+     * Provides real world data to FCBakedModel so FC's RenderBlock runs with
+     * real neighbor access during chunk rebuilds — matching MC 1.5.2 behavior.
+     */
+    public net.minecraftforge.client.model.data.ModelData getModelData(
+            net.minecraft.world.level.BlockGetter level, net.minecraft.core.BlockPos pos,
+            BlockState state, net.minecraftforge.client.model.data.ModelData modelData) {
+        return modelData.derive()
+                .with(btw.forge.client.FCBakedModel.BLOCK_GETTER, level)
+                .with(btw.forge.client.FCBakedModel.BLOCK_POS, pos)
+                .build();
     }
 
     @Override
@@ -570,7 +735,8 @@ public class ProxyBlock extends Block implements EntityBlock {
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level,
             BlockState state, BlockEntityType<T> type) {
         if (!hasTileEntity) return null;
-        if (level.isClientSide()) return null;
+        // Tick on BOTH server and client — FC tile entities check worldObj.isRemote
+        // internally (server: cooking/crafting, client: particle spawning)
         if (type == ProxyBlockEntity.TYPE) {
             @SuppressWarnings("unchecked")
             BlockEntityTicker<T> ticker = (BlockEntityTicker<T>) (BlockEntityTicker<ProxyBlockEntity>) ProxyBlockEntity::tick;

@@ -15,8 +15,33 @@ public class InventoryBasic implements IInventory {
 
     public int getSizeInventory() { return slotsCount; }
     public ItemStack getStackInSlot(int slot) { return inventoryContents[slot]; }
-    public ItemStack decrStackSize(int slot, int amount) { return null; }
-    public ItemStack getStackInSlotOnClosing(int slot) { return null; }
+    public ItemStack decrStackSize(int slot, int amount) {
+        if (inventoryContents[slot] != null) {
+            if (inventoryContents[slot].stackSize <= amount) {
+                ItemStack stack = inventoryContents[slot];
+                inventoryContents[slot] = null;
+                onInventoryChanged();
+                return stack;
+            } else {
+                ItemStack splitStack = inventoryContents[slot].splitStack(amount);
+                if (inventoryContents[slot].stackSize == 0) {
+                    inventoryContents[slot] = null;
+                }
+                onInventoryChanged();
+                return splitStack;
+            }
+        }
+        return null;
+    }
+
+    public ItemStack getStackInSlotOnClosing(int slot) {
+        if (inventoryContents[slot] != null) {
+            ItemStack stack = inventoryContents[slot];
+            inventoryContents[slot] = null;
+            return stack;
+        }
+        return null;
+    }
     public void setInventorySlotContents(int slot, ItemStack stack) { inventoryContents[slot] = stack; }
     public String getInvName() { return inventoryTitle; }
     public boolean isInvNameLocalized() { return field_94051_d; }

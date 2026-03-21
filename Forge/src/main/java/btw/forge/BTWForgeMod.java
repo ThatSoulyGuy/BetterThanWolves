@@ -31,6 +31,9 @@ public class BTWForgeMod {
         // Register creative tab
         BTWCreativeTab.CREATIVE_MODE_TABS.register(modEventBus);
 
+        // Register menu types for FC container GUIs (hopper, soulforge, etc.)
+        BTWMenuTypes.MENU_TYPES.register(modEventBus);
+
         // Register network channel early so both sides agree on the protocol
         // before any packets are sent. Must happen during mod construction
         // (before FMLCommonSetupEvent) so the channel exists when the server

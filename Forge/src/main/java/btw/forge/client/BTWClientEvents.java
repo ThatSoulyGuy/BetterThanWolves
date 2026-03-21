@@ -1,7 +1,10 @@
 package btw.forge.client;
 
 import btw.forge.BTWForgeMod;
+import btw.forge.BTWMenuTypes;
+import btw.forge.FCContainerMenu;
 import btw.forge.ProxyBlock;
+import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.renderer.block.BlockModelShaper;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
@@ -12,6 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ModelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 
 import java.util.Map;
 import net.minecraftforge.fml.common.Mod;
@@ -40,6 +44,19 @@ public class BTWClientEvents {
 
     private static final ResourceLocation PLACEHOLDER_ITEM_MODEL =
             new ResourceLocation(BTWForgeMod.MOD_ID, "item/btw_placeholder_item");
+
+    /**
+     * Registers the FCContainerScreen for the FC_CONTAINER menu type.
+     * This links the server-side FCContainerMenu to the client-side screen
+     * so that when a container is opened, the correct GUI appears.
+     */
+    @SubscribeEvent
+    public static void onClientSetup(FMLClientSetupEvent event) {
+        event.enqueueWork(() -> {
+            MenuScreens.register(BTWMenuTypes.FC_CONTAINER.get(), FCContainerScreen::new);
+            LOGGER.info("BTW: Registered FCContainerScreen for FC container menus.");
+        });
+    }
 
     @SubscribeEvent
     public static void onRegisterAdditionalModels(ModelEvent.RegisterAdditional event) {

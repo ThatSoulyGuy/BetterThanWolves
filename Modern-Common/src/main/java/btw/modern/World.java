@@ -209,7 +209,9 @@ public abstract class World implements IBlockAccess {
     }
 
     public int GetBlockNaturalLightValueMaximum(int i, int j, int k) {
-        return 0;
+        // Returns the maximum natural (sky) light the block can receive.
+        // If the block can see the sky, it gets full sunlight (15).
+        return canBlockSeeTheSky(i, j, k) ? 15 : 0;
     }
 
     public float GetNaturalLightBrightness(int i, int j, int k) {
@@ -341,7 +343,7 @@ public abstract class World implements IBlockAccess {
     public abstract boolean isRaining();
 
     public boolean isThundering() {
-        return false;
+        return worldInfo != null && worldInfo.isThundering();
     }
 
     public boolean canLightningStrikeAt(int x, int y, int z) {
