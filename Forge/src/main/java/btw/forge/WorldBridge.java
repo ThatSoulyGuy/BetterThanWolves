@@ -65,6 +65,24 @@ public class WorldBridge extends btw.modern.World {
         this.m_MagneticPointList = new FCMagneticPointList();
         this.m_SpawnLocationList = new FCSpawnLocationList();
         this.m_LootingBeaconLocationList = new FCBeaconEffectLocationList();
+
+        // Set difficulty (FC checks this for food/starvation logic)
+        // MC 1.20.1: PEACEFUL=0, EASY=1, NORMAL=2, HARD=3
+        this.difficultySetting = level.getDifficulty().getId();
+
+        // Set up the WorldProvider so FC code can read dimensionId.
+        this.provider = new btw.modern.WorldProvider() {};
+        this.provider.worldObj = this;
+        if (level.dimension() == net.minecraft.world.level.Level.NETHER) {
+            this.provider.dimensionId = -1;
+            this.provider.isHellWorld = true;
+            this.provider.hasNoSky = true;
+        } else if (level.dimension() == net.minecraft.world.level.Level.END) {
+            this.provider.dimensionId = 1;
+            this.provider.hasNoSky = true;
+        } else {
+            this.provider.dimensionId = 0;
+        }
     }
 
     /**
@@ -677,15 +695,19 @@ public class WorldBridge extends btw.modern.World {
     public boolean spawnEntityInWorld(btw.modern.Entity entity) {
         if (entity == null) return false;
         try {
+            LOGGER.info("spawnEntityInWorld: {} at ({}, {}, {})",
+                    entity.getClass().getSimpleName(), entity.posX, entity.posY, entity.posZ);
             net.minecraft.world.entity.Entity proxy =
                     EntityProxyFactory.createProxy(entity, level);
             if (proxy == null) {
-                LOGGER.debug("EntityProxyFactory returned null for {}",
+                LOGGER.warn("EntityProxyFactory returned null for {}",
                         entity.getClass().getSimpleName());
                 return false;
             }
             fcToForgeEntity.put(entity, proxy);
-            return level.addFreshEntity(proxy);
+            boolean result = level.addFreshEntity(proxy);
+            LOGGER.info("spawnEntityInWorld result: {} for {}", result, entity.getClass().getSimpleName());
+            return result;
         } catch (Exception e) {
             LOGGER.debug("Failed to spawn proxy for {}: {}",
                     entity.getClass().getSimpleName(), e.getMessage());

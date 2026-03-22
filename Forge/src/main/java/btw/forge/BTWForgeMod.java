@@ -72,6 +72,10 @@ public class BTWForgeMod {
             LOGGER.info("Better Than Wolves: Registering proxy items...");
             BTWRegistration.registerAllBTWContent(event);
             LOGGER.info("Better Than Wolves: Item registration complete.");
+        } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.ENTITY_TYPES)) {
+            LOGGER.info("Better Than Wolves: Registering entity types...");
+            BTWRegistration.registerAllBTWContent(event);
+            LOGGER.info("Better Than Wolves: Entity type registration complete.");
         } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCK_ENTITY_TYPES)) {
             LOGGER.info("Better Than Wolves: Registering block entity types...");
             BTWRegistration.registerAllBTWContent(event);

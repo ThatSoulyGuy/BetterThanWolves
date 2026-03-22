@@ -30,11 +30,13 @@ import org.apache.logging.log4j.Logger;
  *   <li>FCEntityWitherSkull (EntityFireball)</li>
  * </ul>
  */
-public class ProxyEntity extends net.minecraft.world.entity.Entity {
+public class ProxyEntity extends net.minecraft.world.entity.Entity
+        implements net.minecraftforge.entity.IEntityAdditionalSpawnData {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-ProxyEntity");
 
     private btw.modern.Entity fcEntity;
+    private String fcClassName = "";
 
     public ProxyEntity(EntityType<?> type, Level level) {
         super(type, level);
@@ -46,6 +48,7 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity {
 
     public void setFcEntity(btw.modern.Entity fc) {
         this.fcEntity = fc;
+        this.fcClassName = fc.getClass().getName();
         if (level() instanceof ServerLevel sl) {
             fc.worldObj = WorldBridge.getOrCreate(sl);
         }
@@ -53,7 +56,39 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity {
     }
 
     public btw.modern.Entity getFcEntity() {
+        if (fcEntity == null && level().isClientSide && !fcClassName.isEmpty()) {
+            createClientFcEntity();
+        }
         return fcEntity;
+    }
+
+    public String getFcClassName() {
+        return fcClassName;
+    }
+
+    /**
+     * Creates a lightweight FC entity on the client for rendering.
+     * The entity has position/rotation synced but no game logic.
+     */
+    private void createClientFcEntity() {
+        String className = getFcClassName();
+        if (className == null || className.isEmpty()) return;
+        try {
+            Class<?> fcClass = Class.forName(className);
+            // Try constructor(World) — most FC entities use this
+            try {
+                var ctor = fcClass.getConstructor(btw.modern.World.class);
+                fcEntity = (btw.modern.Entity) ctor.newInstance((btw.modern.World) null);
+            } catch (NoSuchMethodException e) {
+                // Try no-arg constructor
+                var ctor = fcClass.getDeclaredConstructor();
+                ctor.setAccessible(true);
+                fcEntity = (btw.modern.Entity) ctor.newInstance();
+            }
+            syncToFc();
+        } catch (Exception e) {
+            LOGGER.debug("Could not create client FC entity {}: {}", className, e.getMessage());
+        }
     }
 
     // ------------------------------------------------------------------
@@ -126,8 +161,24 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity {
 
     @Override
     protected void defineSynchedData() {
-        // No synched data needed for the proxy shell itself.
-        // FC entities manage their own DataWatcher internally.
+        // No synched entity data — FC class name is sent via IEntityAdditionalSpawnData
+    }
+
+    // ------------------------------------------------------------------
+    // IEntityAdditionalSpawnData — sends FC class name with spawn packet
+    // ------------------------------------------------------------------
+
+    @Override
+    public void writeSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
+        buf.writeUtf(fcClassName);
+    }
+
+    @Override
+    public void readSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
+        fcClassName = buf.readUtf();
+        if (!fcClassName.isEmpty()) {
+            createClientFcEntity();
+        }
     }
 
     @Override
@@ -161,6 +212,6 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity {
 
     @Override
     public Packet<ClientGamePacketListener> getAddEntityPacket() {
-        return new ClientboundAddEntityPacket(this);
+        return net.minecraftforge.network.NetworkHooks.getEntitySpawningPacket(this);
     }
 }

@@ -41,12 +41,39 @@ public class BTWEntityRegistration {
      * Maps FC entity class -> EntityType for external lookup
      * (used by {@link EntityProxyFactory}).
      */
+    /** Returns all registered FC EntityTypes from the Forge registry. */
+    public static java.util.Collection<EntityType<?>> getAllEntityTypes() {
+        java.util.List<EntityType<?>> result = new java.util.ArrayList<>();
+        for (Map.Entry<Class<?>, EntityType<?>> entry : fcClassToEntityType.entrySet()) {
+            // Look up the type from the actual registry to ensure instance identity
+            ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(entry.getValue());
+            if (key != null) {
+                EntityType<?> registryType = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getValue(key);
+                if (registryType != null) {
+                    result.add(registryType);
+                    continue;
+                }
+            }
+            result.add(entry.getValue());
+        }
+        return result;
+    }
+
     public static EntityType<?> getEntityType(Class<?> fcClass) {
         // Walk the hierarchy to find a registered type
         Class<?> c = fcClass;
         while (c != null && c != Object.class) {
             EntityType<?> type = fcClassToEntityType.get(c);
-            if (type != null) return type;
+            if (type != null) {
+                // Return the instance from the Forge registry (not our local copy)
+                // so MC's identity-based renderer lookup matches
+                ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(type);
+                if (key != null) {
+                    EntityType<?> registryType = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getValue(key);
+                    if (registryType != null) return registryType;
+                }
+                return type;
+            }
             c = c.getSuperclass();
         }
         return null;
@@ -57,6 +84,14 @@ public class BTWEntityRegistration {
      * Should be called during post-init after FC has populated its
      * EntityList mappings.
      */
+    private static net.minecraftforge.registries.RegisterEvent currentEvent;
+
+    public static void registerEntities(net.minecraftforge.registries.RegisterEvent event) {
+        currentEvent = event;
+        registerEntities();
+        currentEvent = null;
+    }
+
     public static void registerEntities() {
         int registered = 0;
 
@@ -185,7 +220,12 @@ public class BTWEntityRegistration {
                     .build(BTWForgeMod.MOD_ID + ":" + id);
 
             ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, id);
-            Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            if (currentEvent != null) {
+                currentEvent.register(net.minecraftforge.registries.ForgeRegistries.Keys.ENTITY_TYPES,
+                        key, () -> type);
+            } else {
+                Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            }
             fcClassToEntityType.put(fcClass, type);
             return 1;
         } catch (Exception e) {
@@ -208,7 +248,12 @@ public class BTWEntityRegistration {
                     .build(BTWForgeMod.MOD_ID + ":" + id);
 
             ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, id);
-            Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            if (currentEvent != null) {
+                currentEvent.register(net.minecraftforge.registries.ForgeRegistries.Keys.ENTITY_TYPES,
+                        key, () -> type);
+            } else {
+                Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            }
             fcClassToEntityType.put(fcClass, type);
             return 1;
         } catch (Exception e) {
@@ -232,7 +277,12 @@ public class BTWEntityRegistration {
                     .build(BTWForgeMod.MOD_ID + ":" + id);
 
             ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, id);
-            Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            if (currentEvent != null) {
+                currentEvent.register(net.minecraftforge.registries.ForgeRegistries.Keys.ENTITY_TYPES,
+                        key, () -> type);
+            } else {
+                Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            }
             fcClassToEntityType.put(fcClass, type);
             return 1;
         } catch (Exception e) {
@@ -257,7 +307,12 @@ public class BTWEntityRegistration {
                     .build(BTWForgeMod.MOD_ID + ":" + id);
 
             ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, id);
-            Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            if (currentEvent != null) {
+                currentEvent.register(net.minecraftforge.registries.ForgeRegistries.Keys.ENTITY_TYPES,
+                        key, () -> type);
+            } else {
+                Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            }
             fcClassToEntityType.put(fcClass, type);
             return 1;
         } catch (Exception e) {

@@ -48,6 +48,17 @@ public class ProxyBlockEntity extends BlockEntity {
 
     public ProxyBlockEntity(BlockPos pos, BlockState state) {
         super(TYPE, pos, state);
+        if (TYPE != null) {
+            // Verify the type in the registry matches
+            var regKey = net.minecraftforge.registries.ForgeRegistries.BLOCK_ENTITY_TYPES.getKey(TYPE);
+            var regType = regKey != null ? net.minecraftforge.registries.ForgeRegistries.BLOCK_ENTITY_TYPES.getValue(regKey) : null;
+            if (regType != TYPE) {
+                LOGGER.warn("ProxyBlockEntity TYPE mismatch! TYPE={} regType={} key={}",
+                        System.identityHashCode(TYPE),
+                        regType != null ? System.identityHashCode(regType) : "null",
+                        regKey);
+            }
+        }
     }
 
     /**
@@ -58,6 +69,7 @@ public class ProxyBlockEntity extends BlockEntity {
         this.fcTileEntity = fcTe;
         this.fcBlockId = legacyBlockId;
         initFcTileEntity();
+        LOGGER.info("ProxyBlockEntity created at {} fcTe={} blockId={}", pos, fcTe != null ? fcTe.getClass().getSimpleName() : "null", legacyBlockId);
     }
 
     /**
@@ -214,6 +226,9 @@ public class ProxyBlockEntity extends BlockEntity {
                 LOGGER.debug("Failed to save FC tile entity data for block {}: {}",
                         fcBlockId, e.getMessage());
             }
+            if (fcBlockId >= 1013 && fcBlockId <= 1016) {
+                LOGGER.info("Saving campfire FC data: keys={}", fcData.getAllKeys());
+            }
             tag.put(TAG_FC_DATA, fcData);
         }
     }
@@ -239,6 +254,16 @@ public class ProxyBlockEntity extends BlockEntity {
         // Load saved FC data into the tile entity
         if (fcTileEntity != null && tag.contains(TAG_FC_DATA)) {
             CompoundTag fcData = tag.getCompound(TAG_FC_DATA);
+            if (fcBlockId >= 1013 && fcBlockId <= 1016) {
+                LOGGER.info("Loading campfire FC data: keys={} hasCookStack={}",
+                        fcData.getAllKeys(), fcData.contains("fcCookStack"));
+                if (fcData.contains("fcCookStack")) {
+                    CompoundTag cookTag = fcData.getCompound("fcCookStack");
+                    LOGGER.info("  fcCookStack contents: id={} Count={} Damage={} keys={}",
+                            cookTag.getShort("id"), cookTag.getByte("Count"),
+                            cookTag.getShort("Damage"), cookTag.getAllKeys());
+                }
+            }
             ForgeNBTCompound wrapper = new ForgeNBTCompound(fcData);
             try {
                 fcTileEntity.readFromNBT(wrapper);

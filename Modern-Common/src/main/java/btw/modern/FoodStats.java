@@ -44,7 +44,7 @@ public class FoodStats {
      * Called on server only.
      */
     public void onUpdate(EntityPlayer player) {
-        int iDifficulty = player.worldObj.difficultySetting;
+        int iDifficulty = player.worldObj != null ? player.worldObj.difficultySetting : 2;
 
         prevFoodLevel = foodLevel;
 

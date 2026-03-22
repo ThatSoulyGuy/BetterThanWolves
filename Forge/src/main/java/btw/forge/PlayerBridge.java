@@ -81,10 +81,13 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
         this.health = (int) realPlayer.getHealth();
         this.fallDistance = realPlayer.fallDistance;
         this.ticksExisted = realPlayer.tickCount;
+        this.experienceLevel = realPlayer.experienceLevel;
         this.capBridge.sync();
         this.invBridge.sync();
         if (realPlayer.level() instanceof ServerLevel sl) {
             this.worldObj = WorldBridge.getOrCreate(sl);
+            // Keep difficulty setting current (FC checks it for food/starvation)
+            this.worldObj.difficultySetting = sl.getDifficulty().getId();
         }
     }
 
@@ -185,6 +188,12 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     @Override
     public void addExperience(int amount) {
         realPlayer.giveExperiencePoints(amount);
+    }
+
+    @Override
+    public void addExperienceLevel(int levels) {
+        realPlayer.giveExperienceLevels(levels);
+        this.experienceLevel = realPlayer.experienceLevel;
     }
 
     /**
@@ -557,5 +566,41 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     @Override
     public void displayGUIChest(btw.modern.IInventory inventory) {
         ContainerBridge.openChestGUI(this, inventory);
+    }
+
+    // ================================================================
+    // ICrafting bridge — FC's sendProgressBarUpdate → MC DataSlots
+    // ================================================================
+
+    /**
+     * FC containers call this via the ICrafting interface to sync
+     * progress bar data (cook progress, bookshelf level, etc.).
+     * Writes the value into the FCContainerMenu's data slot array,
+     * which MC automatically syncs to the client via DataSlots.
+     */
+    @Override
+    public void sendProgressBarUpdate(btw.modern.Container container, int id, int value) {
+        if (realPlayer instanceof net.minecraft.server.level.ServerPlayer sp
+                && sp.containerMenu instanceof FCContainerMenu fcMenu) {
+            fcMenu.setFcData(id, value);
+        }
+    }
+
+    /**
+     * FC containers call this to send full slot contents.
+     * No-op: MC's broadcastChanges handles slot sync via InventoryAdapter.
+     */
+    @Override
+    public void sendSlotContents(btw.modern.Container container, int slot, btw.modern.ItemStack stack) {
+        // No-op — MC handles slot sync
+    }
+
+    /**
+     * FC containers call this to send all contents at once.
+     * No-op: MC's broadcastChanges handles slot sync.
+     */
+    @Override
+    public void sendContainerAndContentsToPlayer(btw.modern.Container container, java.util.List items) {
+        // No-op — MC handles slot sync
     }
 }

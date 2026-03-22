@@ -51,7 +51,12 @@ public class ForgeNBTCompound extends btw.modern.NBTTagCompound {
 
     @Override
     public boolean hasKey(String key) {
-        return tag.contains(key);
+        // Check both the real CompoundTag AND the inherited tagMap.
+        // FC's generic setTag(String, NBTBase) stores in tagMap (base class),
+        // while typed setters (setInteger, etc.) store in the CompoundTag.
+        // Without this, addEnchantment overwrites previous enchantments
+        // because it thinks the "ench" key doesn't exist.
+        return tag.contains(key) || super.hasKey(key);
     }
 
     @Override
@@ -125,12 +130,36 @@ public class ForgeNBTCompound extends btw.modern.NBTTagCompound {
     }
 
     @Override
+    public void setTag(String key, btw.modern.NBTBase value) {
+        // Store in BOTH the real CompoundTag and the inherited tagMap.
+        // FC code reads back via getTagList/getCompoundTag which may
+        // check tagMap, while toMcTag reads from the CompoundTag.
+        super.setTag(key, value); // tagMap for FC reads
+        if (value instanceof ForgeNBTCompound fnbt) {
+            tag.put(key, fnbt.getTag());
+        } else if (value instanceof btw.modern.NBTTagCompound sub) {
+            CompoundTag mcSub = ItemStackHelper.toMcTag(sub);
+            if (mcSub != null) tag.put(key, mcSub);
+        } else if (value instanceof btw.modern.NBTTagList list) {
+            net.minecraft.nbt.ListTag mcList = ItemStackHelper.toMcList(list);
+            if (mcList != null) tag.put(key, mcList);
+        }
+    }
+
+    @Override
     public void removeTag(String key) {
+        super.removeTag(key); // also remove from tagMap
         tag.remove(key);
     }
 
     @Override
+    public btw.modern.NBTBase copy() {
+        return new ForgeNBTCompound(tag.copy());
+    }
+
+    @Override
     public btw.modern.NBTTagCompound getCompoundTag(String key) {
+        if (!tag.contains(key, 10)) return null; // 10 = compound tag type
         CompoundTag sub = tag.getCompound(key);
         return new ForgeNBTCompound(sub);
     }
@@ -140,8 +169,9 @@ public class ForgeNBTCompound extends btw.modern.NBTTagCompound {
         if (value instanceof ForgeNBTCompound fnbt) {
             tag.put(key, fnbt.getTag());
         } else {
-            // Fallback: create a new CompoundTag and copy
-            CompoundTag sub = new CompoundTag();
+            // Convert plain NBTTagCompound to real CompoundTag by reading its tagMap
+            CompoundTag sub = ItemStackHelper.toMcTag(value);
+            if (sub == null) sub = new CompoundTag();
             tag.put(key, sub);
         }
     }

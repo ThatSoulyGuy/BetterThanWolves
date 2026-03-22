@@ -273,11 +273,23 @@ public class Item {
     }
 
     public String getItemDisplayName(ItemStack stack) {
-        return "";
+        String key = this.getUnlocalizedName(stack) + ".name";
+        String translated = StatCollector.translateToLocal(key);
+        // If translation exists (different from key), use it
+        if (!translated.equals(key)) {
+            return translated;
+        }
+        // Fallback: try base name without subtype
+        key = this.getUnlocalizedName() + ".name";
+        translated = StatCollector.translateToLocal(key);
+        if (!translated.equals(key)) {
+            return translated;
+        }
+        return this.getUnlocalizedName(stack);
     }
 
     public boolean isItemTool(ItemStack stack) {
-        return false;
+        return getItemStackLimit() == 1 && isDamageable();
     }
 
     public int getItemEnchantability() {
@@ -340,12 +352,32 @@ public class Item {
 
     public void onUpdate(ItemStack stack, World world, EntityPlayer player, int inventorySlot, boolean isHandHeld) {}
 
+
     public void onCreated(ItemStack stack, World world, EntityPlayer player) {}
 
     public void onPlayerStoppedUsing(ItemStack stack, World world, EntityPlayer player, int ticksRemaining) {}
-
     public MovingObjectPosition getMovingObjectPositionFromPlayer(World world, EntityPlayer player, boolean hitFluids) {
-        return null;
+        float pitch = player.rotationPitch;
+        float yaw = player.rotationYaw;
+        double x = player.posX;
+        double y = player.posY + 1.62D - (double) player.yOffset;
+        double z = player.posZ;
+
+        Vec3 startVec = Vec3.createVectorHelper(x, y, z);
+
+        float cosYaw = MathHelper.cos(-yaw * 0.017453292F - (float) Math.PI);
+        float sinYaw = MathHelper.sin(-yaw * 0.017453292F - (float) Math.PI);
+        float cosPitch = -MathHelper.cos(-pitch * 0.017453292F);
+        float sinPitch = MathHelper.sin(-pitch * 0.017453292F);
+
+        float dx = sinYaw * cosPitch;
+        float dy = sinPitch;
+        float dz = cosYaw * cosPitch;
+
+        double reach = 5.0D;
+        Vec3 endVec = startVec.addVector((double) dx * reach, (double) dy * reach, (double) dz * reach);
+
+        return world.rayTraceBlocks_do(startVec, endVec, hitFluids);
     }
 
     // --- Client-side rendering methods ---
@@ -355,6 +387,7 @@ public class Item {
     }
 
     public void registerIcons(IconRegister register) {
+        this.itemIcon = register.registerIcon(this.unlocalizedName);
     }
 
     public int getColorFromItemStack(ItemStack stack, int renderPass) {
@@ -370,11 +403,11 @@ public class Item {
     }
 
     public Icon func_94597_g() {
-        return null;
+        return this.itemIcon;
     }
 
     public String getUnlocalizedName2() {
-        return "";
+        return unlocalizedName;
     }
 
     // --- BTW-added methods ---
@@ -469,14 +502,20 @@ public class Item {
 
     public int GetFurnaceBurnTime(int iItemDamage) { return m_iDefaultFurnaceBurnTime; }
     public Item SetFurnaceBurnTime(int iBurnTime) { this.m_iDefaultFurnaceBurnTime = iBurnTime; return this; }
-    public int GetCampfireBurnTime(int iItemDamage) { return 0; }
+    public int GetCampfireBurnTime(int iItemDamage) { return GetFurnaceBurnTime(iItemDamage); }
 
     // --- BTW-added: Fire ---
 
     public boolean GetCanItemStartFireOnUse(int iItemDamage) { return false; }
     public boolean GetCanItemBeSetOnFireOnUse(int iItemDamage) { return false; }
-    public boolean GetCanBeFedDirectlyIntoCampfire(int iItemDamage) { return false; }
-    public boolean GetCanBeFedDirectlyIntoBrickOven(int iItemDamage) { return false; }
+    public boolean GetCanBeFedDirectlyIntoCampfire(int iItemDamage) {
+        return !GetCanItemBeSetOnFireOnUse(iItemDamage) && !GetCanItemStartFireOnUse(iItemDamage) &&
+                GetCampfireBurnTime(iItemDamage) > 0;
+    }
+    public boolean GetCanBeFedDirectlyIntoBrickOven(int iItemDamage) {
+        return !GetCanItemBeSetOnFireOnUse(iItemDamage) && !GetCanItemStartFireOnUse(iItemDamage) &&
+                GetFurnaceBurnTime(iItemDamage) > 0;
+    }
 
     // --- BTW-added: Crucible ---
 
@@ -566,12 +605,26 @@ public class Item {
     public int getMaxItemUseDuration(ItemStack stack) { return 0; }
     public EnumAction getItemUseAction(ItemStack stack) { return null; }
     public String getUnlocalizedName(ItemStack stack) { return getUnlocalizedName(); }
-    public String getLocalizedName(ItemStack stack) { return ""; }
-    public Item setContainerItem(Item item) { return this; }
+    public String getLocalizedName(ItemStack stack) {
+        String key = this.getUnlocalizedName(stack) + ".name";
+        String translated = StatCollector.translateToLocal(key);
+        if (!translated.equals(key)) return translated;
+        // Fallback: try base name
+        key = this.getUnlocalizedName() + ".name";
+        translated = StatCollector.translateToLocal(key);
+        if (!translated.equals(key)) return translated;
+        return "";
+    }
+    private Item containerItem;
+    public Item setContainerItem(Item item) { this.containerItem = item; return this; }
+    public Item getContainerItem() { return containerItem; }
+    public boolean hasContainerItem() { return containerItem != null; }
 
     // --- Client-side rendering methods ---
 
+    @SuppressWarnings("unchecked")
     public void getSubItems(int itemID, CreativeTabs creativeTabs, java.util.List list) {
+        list.add(new ItemStack(itemID, 1, 0));
     }
 
     public void addInformation(ItemStack itemStack, EntityPlayer player, java.util.List infoList, boolean advancedToolTips) {
@@ -582,7 +635,7 @@ public class Item {
     }
 
     public boolean hasEffect(ItemStack itemStack) {
-        return false;
+        return itemStack != null && itemStack.isItemEnchanted();
     }
 
     public boolean itemInteractionForEntity(ItemStack itemStack, EntityLiving targetEntity) {
@@ -594,7 +647,7 @@ public class Item {
     }
 
     public Icon getIconFromDamageForRenderPass(int damage, int renderPass) {
-        return null;
+        return this.getIconFromDamage(damage);
     }
 
     /**

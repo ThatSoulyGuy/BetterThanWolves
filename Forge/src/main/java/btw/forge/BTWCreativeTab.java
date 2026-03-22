@@ -88,8 +88,31 @@ public class BTWCreativeTab {
                         continue;
                     }
                     try {
-                        event.accept(item);
-                        itemsAdded++;
+                        // Ask FC for valid subtypes via getSubItems.
+                        // FC items with subtypes (scrolls, wool, candles, etc.)
+                        // populate the list with their valid variants.
+                        btw.modern.Item fcItem = (id < btw.modern.Item.itemsList.length)
+                                ? btw.modern.Item.itemsList[id] : null;
+                        if (fcItem != null && fcItem.getHasSubtypes()) {
+                            java.util.List<btw.modern.ItemStack> subItems = new java.util.ArrayList<>();
+                            fcItem.getSubItems(id, null, subItems);
+                            if (!subItems.isEmpty()) {
+                                for (btw.modern.ItemStack fcSub : subItems) {
+                                    ItemStack mcSub = ItemStackHelper.toMcStack(fcSub);
+                                    if (!mcSub.isEmpty()) {
+                                        event.accept(mcSub);
+                                        itemsAdded++;
+                                    }
+                                }
+                            } else {
+                                // FC didn't populate subtypes — add the base item
+                                event.accept(item);
+                                itemsAdded++;
+                            }
+                        } else {
+                            event.accept(item);
+                            itemsAdded++;
+                        }
                     } catch (Exception e) {
                         // Skip items that can't be added
                     }

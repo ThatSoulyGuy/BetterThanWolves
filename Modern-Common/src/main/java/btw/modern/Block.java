@@ -224,6 +224,14 @@ public abstract class Block {
         if (blockID >= 0 && blockID < blocksList.length) {
             blocksList[blockID] = this;
         }
+        // Create an ItemBlock at Item.itemsList[blockID] so FC code can call
+        // stack.getItem() on block item stacks and get a valid Item back.
+        // In vanilla MC 1.5.2 this was done automatically by Block's constructor.
+        // FC code relies on this for campfire fuel checks, block placement, etc.
+        // Skip blockID 0 (air) — air shouldn't have an item form.
+        if (blockID > 0 && blockID < Item.itemsList.length && Item.itemsList[blockID] == null) {
+            new ItemBlock(blockID - 256);
+        }
     }
 
     // --- Initialization ---

@@ -10,6 +10,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
@@ -43,7 +44,54 @@ public class ProxyItem extends Item {
 
     @Override
     public Component getName(ItemStack stack) {
+        btw.modern.Item fcItem = fc();
+        if (fcItem != null) {
+            btw.modern.ItemStack fcStack = ItemStackHelper.toFcStack(stack);
+            if (fcStack != null) {
+                String name = fcItem.getItemDisplayName(fcStack);
+                if (name != null && !name.isEmpty()) {
+                    return Component.literal(name);
+                }
+            }
+        }
         return Component.literal(displayName);
+    }
+
+    // ================================================================
+    // Enchantment glint → FC hasEffect
+    // ================================================================
+
+    @Override
+    public boolean isFoil(ItemStack stack) {
+        btw.modern.Item fcItem = fc();
+        if (fcItem != null) {
+            btw.modern.ItemStack fcStack = ItemStackHelper.toFcStack(stack);
+            if (fcStack != null) {
+                return fcItem.hasEffect(fcStack);
+            }
+        }
+        return super.isFoil(stack);
+    }
+
+    // ================================================================
+    // Tooltip lore → FC addInformation
+    // ================================================================
+
+    @Override
+    public void appendHoverText(ItemStack stack, Level level, java.util.List<Component> tooltip, TooltipFlag flag) {
+        btw.modern.Item fcItem = fc();
+        if (fcItem != null) {
+            btw.modern.ItemStack fcStack = ItemStackHelper.toFcStack(stack);
+            if (fcStack != null) {
+                java.util.List<String> fcTooltip = new java.util.ArrayList<>();
+                fcItem.addInformation(fcStack, null, fcTooltip, flag.isAdvanced());
+                for (String line : fcTooltip) {
+                    if (line != null && !line.isEmpty()) {
+                        tooltip.add(Component.literal(line));
+                    }
+                }
+            }
+        }
     }
 
     // ================================================================

@@ -192,11 +192,22 @@ public class Tessellator {
     public void addVertex(double x, double y, double z) {
         if (!capturing) return;
 
+        double vx = x + transX, vy = y + transY, vz = z + transZ;
+        double nx = curNX, ny = curNY, nz = curNZ;
+
+        // Apply GL11 matrix stack if tracking is active (entity/TE rendering)
+        if (GL11.isMatrixTrackingEnabled()) {
+            float[] p = GL11.transformPoint((float) vx, (float) vy, (float) vz);
+            vx = p[0]; vy = p[1]; vz = p[2];
+            float[] n = GL11.transformNormal((float) nx, (float) ny, (float) nz);
+            nx = n[0]; ny = n[1]; nz = n[2];
+        }
+
         CapturedVertex vert = new CapturedVertex(
-                x + transX, y + transY, z + transZ,
+                vx, vy, vz,
                 curU, curV,
                 curR, curG, curB, curA,
-                curNX, curNY, curNZ,
+                (float) nx, (float) ny, (float) nz,
                 curBrightness
         );
         currentVertices.add(vert);

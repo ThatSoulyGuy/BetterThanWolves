@@ -108,6 +108,9 @@ public class BTWLifecycle {
             LOGGER.error("Failed to call FCAddOnHandler.InitializeMods()", e);
         }
 
+        LOGGER.info("Step 5b: Loading FC language files...");
+        loadLanguageFiles();
+
         LOGGER.info("Step 6: Block/item registration happens via RegisterEvent (see BTWForgeMod).");
         // Registration moved to BTWForgeMod.onRegister() which calls BTWRegistration.registerAllBTWContent(event)
         try {
@@ -115,6 +118,39 @@ public class BTWLifecycle {
         } catch (Exception e) {
             LOGGER.error("Failed to register BTW content with Forge", e);
         }
+    }
+
+    /**
+     * Loads vanilla MC 1.5.2 and FC language files into the StringTranslate
+     * system so that FC's getItemDisplayName / getUnlocalizedName produce
+     * proper localized names (e.g., "Arcane Scroll of Sharpness" instead
+     * of "item.fcItemScrollArcane.name").
+     */
+    private static void loadLanguageFiles() {
+        btw.modern.StringTranslate st = btw.modern.StringTranslate.getInstance();
+        int before = st.GetTranslateTable().size();
+
+        // Load vanilla MC 1.5.2 en_US.lang (item/block names from 1.5.2)
+        try (java.io.InputStream vanillaStream =
+                     BTWLifecycle.class.getResourceAsStream("/lang/en_US.lang")) {
+            if (vanillaStream != null) {
+                st.loadLangStream(vanillaStream);
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not load vanilla en_US.lang: {}", e.getMessage());
+        }
+
+        // Load FC's BTW_en_US.lang (FC-specific item/block names)
+        try (java.io.InputStream btwStream =
+                     BTWLifecycle.class.getResourceAsStream("/lang/BTW_en_US.lang")) {
+            if (btwStream != null) {
+                st.loadLangStream(btwStream);
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not load BTW_en_US.lang: {}", e.getMessage());
+        }
+
+        LOGGER.info("Loaded {} translation entries.", st.GetTranslateTable().size() - before);
     }
 
     /**

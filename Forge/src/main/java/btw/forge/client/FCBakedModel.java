@@ -49,6 +49,10 @@ public class FCBakedModel implements BakedModel {
     public static final net.minecraftforge.client.model.data.ModelProperty<net.minecraft.world.level.BlockGetter> BLOCK_GETTER =
             new net.minecraftforge.client.model.data.ModelProperty<>();
     /** ModelData property: the block position in the world. */
+    /** ModelData property: the FC TileEntity for this block position (if any). */
+    public static final net.minecraftforge.client.model.data.ModelProperty<btw.modern.TileEntity> FC_TILE_ENTITY =
+            new net.minecraftforge.client.model.data.ModelProperty<>();
+
     public static final net.minecraftforge.client.model.data.ModelProperty<BlockPos> BLOCK_POS =
             new net.minecraftforge.client.model.data.ModelProperty<>();
 
@@ -94,16 +98,25 @@ public class FCBakedModel implements BakedModel {
     private static final Object CAPTURE_LOCK = new Object();
 
     /** Ensure icons are registered (once, thread-safe). */
+    private static volatile boolean globalIconsRegistered = false;
+
     private void ensureIconsRegistered() {
         if (iconsRegistered) return;
         synchronized (CAPTURE_LOCK) {
             if (iconsRegistered) return;
+            btw.modern.IconRegister capturer = new btw.modern.IconRegister() {
+                @Override public btw.modern.Icon registerIcon(String name) { return new NamedIcon(name); }
+                @Override public btw.modern.Icon registerIcon(String name, btw.modern.TextureStitched tex) { return new NamedIcon(name); }
+            };
             if (fcBlock != null) {
-                btw.modern.IconRegister capturer = new btw.modern.IconRegister() {
-                    @Override public btw.modern.Icon registerIcon(String name) { return new NamedIcon(name); }
-                    @Override public btw.modern.Icon registerIcon(String name, btw.modern.TextureStitched tex) { return new NamedIcon(name); }
-                };
                 try { fcBlock.registerIcons(capturer); } catch (Exception ignored) {}
+            }
+            // Register icons on commonly-referenced blocks (fire textures for campfires, etc.)
+            if (!globalIconsRegistered) {
+                globalIconsRegistered = true;
+                if (btw.modern.Block.fire != null) {
+                    try { btw.modern.Block.fire.registerIcons(capturer); } catch (Exception ignored) {}
+                }
             }
             iconsRegistered = true;
         }
@@ -297,7 +310,7 @@ public class FCBakedModel implements BakedModel {
      * real neighbor data. Called during chunk rebuilds — exactly like
      * MC 1.5.2's rendering pipeline.
      */
-    private List<BakedQuad> captureLive(BlockGetter blockGetter, BlockPos pos) {
+    private List<BakedQuad> captureLive(BlockGetter blockGetter, BlockPos pos, btw.modern.TileEntity fcTileEntity) {
         btw.modern.Block block = this.fcBlock;
         if (block == null) return Collections.emptyList();
 
@@ -313,6 +326,18 @@ public class FCBakedModel implements BakedModel {
                 return 0;
             }
             @Override public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {
+                // Return the FC tile entity passed via ModelData for this block's position
+                if (fcTileEntity != null && x == pos.getX() && y == pos.getY() && z == pos.getZ()) {
+                    return fcTileEntity;
+                }
+                // For other positions, try the blockGetter
+                try {
+                    net.minecraft.world.level.block.entity.BlockEntity be =
+                            blockGetter.getBlockEntity(new BlockPos(x, y, z));
+                    if (be instanceof btw.forge.ProxyBlockEntity pbe) {
+                        return pbe.getFcTileEntity();
+                    }
+                } catch (Exception ignored) {}
                 return null;
             }
             @Override public int getLightBrightnessForSkyBlocks(int x, int y, int z, int light) {
@@ -475,8 +500,9 @@ public class FCBakedModel implements BakedModel {
         // This is exactly what MC 1.5.2 did during chunk rebuilds.
         BlockGetter blockGetter = extraData.get(BLOCK_GETTER);
         BlockPos pos = extraData.get(BLOCK_POS);
+        btw.modern.TileEntity fcTe = extraData.get(FC_TILE_ENTITY);
         if (blockGetter != null && pos != null && fcBlock != null) {
-            return captureLive(blockGetter, pos);
+            return captureLive(blockGetter, pos, fcTe);
         }
 
         // Fallback: item rendering (no world context) — use static per-meta cache
@@ -645,6 +671,9 @@ public class FCBakedModel implements BakedModel {
         VANILLA_TEXTURE_MAP.put("hellsand", "soul_sand");
         VANILLA_TEXTURE_MAP.put("netherquartz", "nether_quartz_ore");
         VANILLA_TEXTURE_MAP.put("whiteStone", "end_stone");
+        // Fire
+        VANILLA_TEXTURE_MAP.put("fire_layer_0", "fire_0");
+        VANILLA_TEXTURE_MAP.put("fire_layer_1", "fire_1");
         VANILLA_TEXTURE_MAP.put("tallgrass", "short_grass");
         VANILLA_TEXTURE_MAP.put("musicblock", "note_block");
         VANILLA_TEXTURE_MAP.put("blockcoal", "coal_block");
@@ -753,7 +782,21 @@ public class FCBakedModel implements BakedModel {
             sprite = tryLookupInNamespace("minecraft", "block/" + textureName);
         }
 
-        // 4. Try without block/ prefix
+        // 4. Try item/ prefix (for FC items with subtype textures)
+        if (sprite == null) {
+            sprite = tryLookupInNamespace(BTWForgeMod.MOD_ID, "item/" + textureName);
+        }
+        if (sprite == null) {
+            String mapped = VANILLA_TEXTURE_MAP.get(textureName);
+            if (mapped != null) {
+                sprite = tryLookupInNamespace("minecraft", "item/" + mapped);
+            }
+        }
+        if (sprite == null) {
+            sprite = tryLookupInNamespace("minecraft", "item/" + textureName);
+        }
+
+        // 5. Try without prefix
         if (sprite == null) {
             sprite = tryLookupInNamespace(BTWForgeMod.MOD_ID, textureName);
         }

@@ -5,6 +5,9 @@ public class RenderManager {
     /** The static instance of RenderManager. */
     public static RenderManager instance = new RenderManager();
 
+    /** FC entity class → FC Render instance, populated by AddEntityRenderer. */
+    private static final java.util.Map<Class<?>, Render> entityRenderers = new java.util.LinkedHashMap<>();
+
     public static double renderPosX;
     public static double renderPosY;
     public static double renderPosZ;
@@ -51,5 +54,12 @@ public class RenderManager {
 
     public void updateIcons(IconRegister iconRegister) {}
 
-    public static void AddEntityRenderer(Class entityClass, Render entityRenderer) {}
+    public static void AddEntityRenderer(Class entityClass, Render entityRenderer) {
+        entityRenderers.put(entityClass, entityRenderer);
+    }
+
+    /** Returns the FC entity renderer map (class → Render). */
+    public java.util.Map<Class<?>, Render> getEntityRenderMap() {
+        return entityRenderers;
+    }
 }

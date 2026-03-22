@@ -35,23 +35,25 @@ public class InventoryBridge extends btw.modern.InventoryPlayer {
 
     @Override
     public btw.modern.ItemStack getCurrentItem() {
+        // Return the FC snapshot from mainInventory[] so FC code that
+        // modifies the stack (stackSize--, damageItem, etc.) modifies
+        // the same object that writeBackAll() will read.
         int selected = inventory.selected;
-        if (selected >= 0 && selected < 9 && selected < inventory.items.size()) {
-            return wrapItemStack(inventory.items.get(selected));
+        if (selected >= 0 && selected < mainInventory.length) {
+            return mainInventory[selected];
         }
         return null;
     }
 
     @Override
     public btw.modern.ItemStack getStackInSlot(int slot) {
-        if (slot >= 0 && slot < mainInventory.length && slot < inventory.items.size()) {
-            return wrapItemStack(inventory.items.get(slot));
+        // Return FC snapshots directly — same reason as getCurrentItem.
+        if (slot >= 0 && slot < mainInventory.length) {
+            return mainInventory[slot];
         }
-        // Armor slots come after main inventory in FC layout
         int armorSlot = slot - mainInventory.length;
-        if (armorSlot >= 0 && armorSlot < armorInventory.length
-                && armorSlot < inventory.armor.size()) {
-            return wrapItemStack(inventory.armor.get(armorSlot));
+        if (armorSlot >= 0 && armorSlot < armorInventory.length) {
+            return armorInventory[armorSlot];
         }
         return null;
     }
@@ -116,23 +118,10 @@ public class InventoryBridge extends btw.modern.InventoryPlayer {
     private static btw.modern.ItemStack wrapItemStack(net.minecraft.world.item.ItemStack modern) {
         if (modern == null || modern.isEmpty()) return null;
 
-        int legacyId;
-        // Check if this is a block item with a proxy
-        if (modern.getItem() instanceof net.minecraft.world.item.BlockItem bi) {
-            legacyId = ProxyRegistry.getBlockId(bi.getBlock());
-        } else {
-            legacyId = ProxyRegistry.getItemId(modern.getItem());
-        }
-
-        // If the legacy ID doesn't map to any FC item or block, return null.
-        // FC code does Item.itemsList[stack.itemID] without null checks, so
-        // an unmapped item would NPE (e.g., FCBlockCampfire.onBlockActivated).
+        // getOrCreateLegacyId always succeeds: unknown items get a
+        // headless passthrough entry so they survive FC container logic.
+        int legacyId = ProxyRegistry.getOrCreateLegacyId(modern.getItem());
         if (legacyId <= 0) return null;
-        boolean hasItem = legacyId < btw.modern.Item.itemsList.length
-                && btw.modern.Item.itemsList[legacyId] != null;
-        boolean hasBlock = legacyId < btw.modern.Block.blocksList.length
-                && btw.modern.Block.blocksList[legacyId] != null;
-        if (!hasItem && !hasBlock) return null;
 
         int damage = modern.getDamageValue();
         int count = modern.getCount();

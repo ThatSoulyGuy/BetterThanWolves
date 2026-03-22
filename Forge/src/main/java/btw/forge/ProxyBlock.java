@@ -77,10 +77,13 @@ public class ProxyBlock extends Block implements EntityBlock {
         try {
             btw.modern.TileEntity te = fcBlock.createNewTileEntity(null);
             needsTe = (te != null);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // Some FC blocks may NPE when passed null world; treat as no tile entity
         }
         this.hasTileEntity = needsTe;
+        if (legacyId >= 1013 && legacyId <= 1016) {
+            LOGGER.info("Campfire block {} ({}) hasTileEntity={}", legacyId, fcBlock.getClass().getSimpleName(), needsTe);
+        }
     }
 
     private static BlockBehaviour.Properties initAndBuildProperties(btw.modern.Block fcBlock) {
@@ -275,6 +278,10 @@ public class ProxyBlock extends Block implements EntityBlock {
         if (name.equals("dripLava")) return net.minecraft.core.particles.ParticleTypes.DRIPPING_LAVA;
         if (name.equals("suspended")) return net.minecraft.core.particles.ParticleTypes.UNDERWATER;
         if (name.equals("heart")) return net.minecraft.core.particles.ParticleTypes.HEART;
+        // FC custom particles — map to closest vanilla equivalents
+        if (name.equals("fcwhitesmoke")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
+        if (name.equals("fcblacksmoke")) return net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE;
+        if (name.equals("fcsteam")) return net.minecraft.core.particles.ParticleTypes.CLOUD;
         if (name.equals("angryVillager")) return net.minecraft.core.particles.ParticleTypes.ANGRY_VILLAGER;
         if (name.startsWith("iconcrack_")) return net.minecraft.core.particles.ParticleTypes.ITEM_SNOWBALL;
         if (name.startsWith("blockcrack_")) return net.minecraft.core.particles.ParticleTypes.POOF;
@@ -352,16 +359,30 @@ public class ProxyBlock extends Block implements EntityBlock {
             // Check if FC opened a container GUI and open the MC menu
             boolean containerOpened = ContainerBridge.checkAndOpenContainer(fcPlayer, prevContainer);
 
-            // Sync FC item state (damage, stackSize) back to MC inventory
+            // Sync FC item state (damage, stackSize) back to MC inventory.
             if (fcPlayer.inventory instanceof InventoryBridge invBridge) {
-                invBridge.writeBackCurrentItem(fcHeld);
+                invBridge.writeBackAll();
+            }
+
+            // Force immediate tile entity sync to clients so visual changes
+            // (cook stack, spit, metadata) are visible without waiting for
+            // the periodic 20-tick sync.
+            if (result) {
+                net.minecraft.world.level.block.entity.BlockEntity be = sl.getBlockEntity(pos);
+                if (be instanceof ProxyBlockEntity pbe) {
+                    pbe.syncToClients();
+                }
             }
 
             // Always return SUCCESS if a container was opened or FC handled the activation
             // This prevents MC from calling use() again for the off hand
             return (result || containerOpened) ? InteractionResult.SUCCESS : InteractionResult.PASS;
         }
-        return InteractionResult.PASS;
+        // CLIENT: return SUCCESS to prevent MC from predicting item use
+        // (eating animation, bow draw, etc.) before the server's block
+        // activation runs. If FC doesn't handle it, the server returns
+        // PASS and the client's prediction is harmlessly overridden.
+        return InteractionResult.sidedSuccess(level.isClientSide());
     }
 
     // --- attack (onBlockClicked) ---
@@ -644,10 +665,21 @@ public class ProxyBlock extends Block implements EntityBlock {
     public net.minecraftforge.client.model.data.ModelData getModelData(
             net.minecraft.world.level.BlockGetter level, net.minecraft.core.BlockPos pos,
             BlockState state, net.minecraftforge.client.model.data.ModelData modelData) {
-        return modelData.derive()
+        var builder = modelData.derive()
                 .with(btw.forge.client.FCBakedModel.BLOCK_GETTER, level)
-                .with(btw.forge.client.FCBakedModel.BLOCK_POS, pos)
-                .build();
+                .with(btw.forge.client.FCBakedModel.BLOCK_POS, pos);
+
+        // Pass the FC tile entity so the live capture can read block state
+        // (e.g., campfire m_bIsCooking for fire rendering).
+        // RenderChunkRegion doesn't support getBlockEntity(), so we pass it explicitly.
+        try {
+            net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof ProxyBlockEntity pbe && pbe.getFcTileEntity() != null) {
+                builder.with(btw.forge.client.FCBakedModel.FC_TILE_ENTITY, pbe.getFcTileEntity());
+            }
+        } catch (Exception ignored) {}
+
+        return builder.build();
     }
 
     @Override

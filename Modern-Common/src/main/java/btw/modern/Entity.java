@@ -87,6 +87,7 @@ public abstract class Entity {
     protected Entity(World world) {
         this.worldObj = world;
         this.rand = new Random();
+        this.dataWatcher = new DataWatcher();
         this.boundingBox = AxisAlignedBB.getBoundingBox(0, 0, 0, 0, 0, 0);
     }
 

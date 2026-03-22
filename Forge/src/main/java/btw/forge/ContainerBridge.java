@@ -78,14 +78,16 @@ public class ContainerBridge {
             LOGGER.error("Failed to open FC container screen: {}", e.toString(), e);
         }
 
-        // NOTE: We do NOT call fcContainer.addCraftingToCrafters(player) here.
-        // FC's crafter registration is used for legacy slot sync via custom packets
-        // (sendSlotContents, sendProgressBarUpdate). In the Forge 1.20.1 bridge,
-        // slot synchronization is handled by the MC container system (AbstractContainerMenu
-        // + broadcastChanges()). Additionally, PlayerBridge extends EntityPlayer
-        // (not EntityPlayerMP which implements ICrafting), so it cannot be registered
-        // as a crafter directly. For the ServerOpenCustomInterface path, FC code
-        // already called onCraftGuiOpened which is a no-op in the stub.
+        // Register the player as a crafter so FC's detectAndSendChanges()
+        // can send progress bar updates (cook progress, bookshelf level, etc.)
+        // via ICrafting.sendProgressBarUpdate → PlayerBridge → FCContainerMenu DataSlots.
+        try {
+            if (!fcContainer.crafters.contains(player)) {
+                fcContainer.addCraftingToCrafters(player);
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not register crafter: {}", e.getMessage());
+        }
     }
 
     /**
@@ -195,6 +197,14 @@ public class ContainerBridge {
                 previousContainer != null ? previousContainer.getClass().getSimpleName() : "null",
                 currentContainer != null ? currentContainer.getClass().getSimpleName() : "null",
                 player.inventoryContainer != null ? player.inventoryContainer.getClass().getSimpleName() : "null");
+
+        // Guard: if an FCContainerMenu is already open, skip duplicate opens.
+        // FC may call ServerOpenCustomInterface multiple times during a single
+        // block activation, creating duplicate containers.
+        ServerPlayer sp = player.getServerPlayer();
+        if (sp != null && sp.containerMenu instanceof FCContainerMenu) {
+            return false;
+        }
 
         // If openContainer changed and is not null and not the player's
         // own inventory container, then FC opened a new GUI

@@ -36,6 +36,8 @@ public class BTWRegistration {
             registerBlocks(event);
         } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS)) {
             registerItems(event);
+        } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.ENTITY_TYPES)) {
+            registerEntities(event);
         } else if (event.getRegistryKey().equals(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCK_ENTITY_TYPES)) {
             registerBlockEntityType(event);
         }
@@ -204,9 +206,9 @@ public class BTWRegistration {
      * Delegates to {@link BTWEntityRegistration} which knows the full
      * list of FC entity classes and their proxy mappings.
      */
-    private static void registerEntities() {
+    private static void registerEntities(net.minecraftforge.registries.RegisterEvent event) {
         try {
-            BTWEntityRegistration.registerEntities();
+            BTWEntityRegistration.registerEntities(event);
         } catch (Exception e) {
             LOGGER.error("Failed to register BTW entities", e);
         }
@@ -242,11 +244,12 @@ public class BTWRegistration {
                 ProxyBlockEntity::new, blocks
         ).build((Type<?>) null);
 
-        ProxyBlockEntity.TYPE = type;
-
         ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, "proxy_block_entity");
         event.register(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCK_ENTITY_TYPES,
-                helper -> helper.register(key, type));
+                key, () -> type);
+
+        // Store TYPE — will be the same instance since we registered it
+        ProxyBlockEntity.TYPE = type;
 
         LOGGER.info("Registered ProxyBlockEntity type for {} FC blocks with tile entities.",
                 validBlocks.size());

@@ -1,5 +1,6 @@
 package btw.forge;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -613,6 +614,85 @@ public class ProxyRegistry {
             return btw.modern.Item.itemsList[id];
         }
         return null;
+    }
+
+    // ================================================================
+    // Headless item system: passthrough entries for modern-only items
+    // ================================================================
+
+    /**
+     * Next available ID for headless items. Starts at 25000 to avoid
+     * all FC item IDs (which max out around ~2000).
+     */
+    private static int nextHeadlessId = 25000;
+
+    /**
+     * Returns a legacy ID for any modern MC item, creating a headless
+     * passthrough entry in {@code Item.itemsList[]} if needed.
+     *
+     * <p>A "headless" item is a minimal FC Item that exists solely so
+     * modern-only items (netherite, bundles, etc.) can pass through FC
+     * container logic without being destroyed. FC code sees a valid
+     * itemID and doesn't NPE; the item roundtrips losslessly.</p>
+     *
+     * @param modernItem the MC 1.20.1 Item instance
+     * @return a positive legacy ID guaranteed to have an entry in itemsList
+     */
+    public static int getOrCreateLegacyId(Item modernItem) {
+        if (modernItem == null) return 0;
+
+        // Check BlockItem first
+        if (modernItem instanceof net.minecraft.world.item.BlockItem bi) {
+            int blockId = getBlockId(bi.getBlock());
+            if (blockId > 0 && blockId < btw.modern.Block.blocksList.length
+                    && btw.modern.Block.blocksList[blockId] != null) {
+                return blockId;
+            }
+        }
+
+        // Check existing item mapping
+        Integer existing = proxyItemToLegacyId.get(modernItem);
+        if (existing != null && existing > 0) {
+            // Verify it has an FC entry
+            if (existing < btw.modern.Item.itemsList.length
+                    && btw.modern.Item.itemsList[existing] != null) {
+                return existing;
+            }
+        }
+
+        // Check vanilla item map
+        ensureVanillaItemMapInitialized();
+        Integer vanillaId = vanillaItemToLegacyId.get(modernItem);
+        if (vanillaId != null && vanillaId > 0) {
+            boolean hasItem = vanillaId < btw.modern.Item.itemsList.length
+                    && btw.modern.Item.itemsList[vanillaId] != null;
+            boolean hasBlock = vanillaId < btw.modern.Block.blocksList.length
+                    && btw.modern.Block.blocksList[vanillaId] != null;
+            if (hasItem || hasBlock) return vanillaId;
+        }
+
+        // No valid FC entry — create a headless passthrough item
+        return createHeadlessItem(modernItem);
+    }
+
+    private static synchronized int createHeadlessItem(Item modernItem) {
+        // Double-check in case another thread raced
+        Integer raceCheck = proxyItemToLegacyId.get(modernItem);
+        if (raceCheck != null && raceCheck >= 25000) return raceCheck;
+
+        int id = nextHeadlessId++;
+        // Item constructor does: this.itemID = 256 + rawId; itemsList[itemID] = this;
+        // So rawId = id - 256
+        btw.modern.Item headless = new btw.modern.Item(id - 256);
+        headless.setMaxStackSize(modernItem.getMaxStackSize());
+
+        // Register both directions
+        itemsByLegacyId.put(id, modernItem);
+        proxyItemToLegacyId.put(modernItem, id);
+
+        LOGGER.debug("Created headless FC item ID {} for modern item {}",
+                id, net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(modernItem));
+        return id;
     }
 
     private static synchronized void ensureVanillaItemMapInitialized() {

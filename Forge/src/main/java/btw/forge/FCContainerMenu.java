@@ -4,6 +4,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.apache.logging.log4j.LogManager;
@@ -15,29 +16,55 @@ import org.apache.logging.log4j.Logger;
  *
  * <h3>Architecture: FC is sole authority</h3>
  * <p>ALL slot interaction logic runs through FC's {@code Container.slotClick()}.
- * The client does NOT predict clicks — it sends the click to the server, FC
- * handles it, and MC's {@code broadcastChanges()} pushes the resulting state
- * back to the client. This eliminates all prediction mismatches between MC
- * and FC click logic.</p>
+ * The client predicts via vanilla logic for instant feedback; the server (FC)
+ * is authoritative and {@code broadcastChanges()} corrects any mismatches.</p>
  *
- * <h3>Slot bridging</h3>
- * <p>Container (non-player) slots are backed by {@link InventoryAdapter},
- * a live view of the FC inventory — reads go directly to FC, no copying.
- * Player inventory slots are backed by the real MC {@link Inventory}; after
- * each FC click, {@link InventoryBridge#writeBackAll()} flushes FC's
- * snapshot back to the real MC inventory.</p>
+ * <h3>Data sync</h3>
+ * <p>FC containers sync UI state (cook progress, enchantment levels, etc.)
+ * via the {@link btw.modern.ICrafting} interface. The PlayerBridge implements
+ * ICrafting and writes received values into this menu's {@link #fcData} array,
+ * which is backed by MC {@link DataSlot}s — MC automatically detects changes
+ * and pushes them to the client.</p>
+ *
+ * <p>For FC containers that compute state client-side (e.g., enchantment
+ * levels), {@link #pushFcComputedData()} reads those fields via reflection
+ * and pushes them as additional data slots.</p>
  */
 public class FCContainerMenu extends AbstractContainerMenu {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-FCContainerMenu");
 
+    /** Number of data slots reserved for FC progress bars + computed data. */
+    private static final int FC_DATA_SLOT_COUNT = 16;
+
     private final btw.modern.Container fcContainer;
     private final PlayerBridge fcPlayer;
+
+    /**
+     * FC container data array. Slots 0+ are used by FC's progress bar system
+     * (sendProgressBarUpdate) and by pushFcComputedData() for container-specific
+     * computed fields like enchantment levels.
+     *
+     * <p>Backed by MC DataSlots — changes are auto-synced to the client.</p>
+     */
+    private final int[] fcData = new int[FC_DATA_SLOT_COUNT];
 
     /** FC container type name (e.g., "FCContainerSoulforge") for texture selection. */
     private String containerType = "";
 
     public String getContainerType() { return containerType; }
+
+    /** Read a synced FC data value (available on both server and client). */
+    public int getFcData(int id) {
+        return id >= 0 && id < fcData.length ? fcData[id] : 0;
+    }
+
+    /** Write an FC data value (called by PlayerBridge.sendProgressBarUpdate). */
+    public void setFcData(int id, int value) {
+        if (id >= 0 && id < fcData.length) {
+            fcData[id] = value;
+        }
+    }
 
     /**
      * Server-side constructor: wraps an existing FC container.
@@ -48,15 +75,12 @@ public class FCContainerMenu extends AbstractContainerMenu {
         this.fcContainer = fcContainer;
         this.fcPlayer = fcPlayer;
         mirrorFcSlots();
+        addFcDataSlots();
     }
 
     /**
      * Client-side constructor: called by the IContainerFactory when the
      * server opens a menu via NetworkHooks.openScreen.
-     *
-     * <p>On the client we do not have the real FC container. We create
-     * a dummy container with enough slots to match the server's layout.
-     * The slot count is transmitted in the network buffer.</p>
      */
     public FCContainerMenu(int containerId, Inventory playerInv, FriendlyByteBuf buf) {
         super(BTWMenuTypes.FC_CONTAINER.get(), containerId);
@@ -84,12 +108,23 @@ public class FCContainerMenu extends AbstractContainerMenu {
                 this.addSlot(new Slot(dummyContainer, safeIndex, x, y));
             }
         }
+
+        addFcDataSlots();
+    }
+
+    /** Registers MC DataSlots backed by the fcData array. */
+    private void addFcDataSlots() {
+        for (int i = 0; i < FC_DATA_SLOT_COUNT; i++) {
+            final int idx = i;
+            addDataSlot(new DataSlot() {
+                @Override public int get() { return fcData[idx]; }
+                @Override public void set(int value) { fcData[idx] = value; }
+            });
+        }
     }
 
     /**
      * Reads the FC container's slot list and creates MC Slot wrappers.
-     * Container slots get an {@link InventoryAdapter} (live view of FC inventory).
-     * Player slots get the real MC {@link Inventory}.
      */
     private void mirrorFcSlots() {
         java.util.Map<btw.modern.IInventory, InventoryAdapter> adapters = new java.util.IdentityHashMap<>();
@@ -126,9 +161,6 @@ public class FCContainerMenu extends AbstractContainerMenu {
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
-        // Shift-click is handled by FC's Container.slotClick mode 1,
-        // which calls transferStackInSlot internally. This method exists
-        // as a fallback but should not be reached in normal flow.
         if (fcContainer != null && fcPlayer != null) {
             try {
                 btw.modern.ItemStack fcResult = fcContainer.transferStackInSlot(fcPlayer, index);
@@ -142,19 +174,12 @@ public class FCContainerMenu extends AbstractContainerMenu {
 
     /**
      * All slot clicks are delegated to FC's {@code Container.slotClick()}.
-     *
-     * <p><b>Server:</b> syncs MC cursor → FC, calls FC slotClick, reads back
-     * all state from FC, flushes player inventory to MC. MC's
-     * {@code broadcastChanges()} then pushes the resulting state to the client.</p>
-     *
-     * <p><b>Client:</b> does nothing (no prediction). The server pushes the
-     * correct state. Since the client "predicted" no change, every real change
-     * is detected as a diff and sent as a correction.</p>
      */
     @Override
     public void clicked(int slotId, int button, net.minecraft.world.inventory.ClickType type, Player player) {
         if (fcContainer == null || fcPlayer == null) {
-            // CLIENT: no prediction. Server will push correct state.
+            // CLIENT: let vanilla predict for instant visual feedback.
+            super.clicked(slotId, button, type, player);
             return;
         }
 
@@ -173,9 +198,7 @@ public class FCContainerMenu extends AbstractContainerMenu {
             setCarried(ItemStackHelper.toMcStack(
                     fcPlayer.inventory.getItemStack()));
 
-            // Flush player inventory: FC may have mutated ItemStack objects
-            // in mainInventory[] directly (e.g., stackSize changes during
-            // merge/split), which bypasses InventoryBridge's write-through.
+            // Flush player inventory
             ((InventoryBridge) fcPlayer.inventory).writeBackAll();
 
         } catch (Exception e) {
@@ -184,13 +207,143 @@ public class FCContainerMenu extends AbstractContainerMenu {
         }
     }
 
+    /**
+     * Forwards MC's menu button clicks to FC's {@code enchantItem()}.
+     * MC sends this when the client clicks an enchantment button or
+     * similar UI element (via ServerboundContainerButtonClickPacket).
+     */
+    @Override
+    public boolean clickMenuButton(Player player, int buttonId) {
+        if (fcContainer != null && fcPlayer != null) {
+            try {
+                fcPlayer.syncFromReal();
+                boolean result = fcContainer.enchantItem(fcPlayer, buttonId);
+                // Flush inventory changes (XP cost, scroll consumed, etc.)
+                ((InventoryBridge) fcPlayer.inventory).writeBackAll();
+                return result;
+            } catch (Exception e) {
+                LOGGER.debug("FC enchantItem failed for button {}: {}", buttonId, e.getMessage());
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Runs FC's sync loop and pushes computed data to MC DataSlots.
+     *
+     * <p>Called every server tick while the container is open. FC's
+     * {@code detectAndSendChanges()} iterates registered crafters and
+     * calls {@code sendProgressBarUpdate()} which writes into {@link #fcData}.
+     * MC then detects the DataSlot changes and sends them to the client.</p>
+     */
+    @Override
+    public void broadcastChanges() {
+        if (fcContainer != null && fcPlayer != null) {
+            try {
+                // Run FC's sync loop — triggers sendProgressBarUpdate on crafters
+                fcContainer.detectAndSendChanges();
+
+                // Push FC-computed data that FC normally computes client-side
+                // (e.g., enchantment levels). We send these explicitly because
+                // the client doesn't have the FC container.
+                pushFcComputedData();
+            } catch (Exception e) {
+                LOGGER.debug("FC detectAndSendChanges failed: {}", e.getMessage());
+            }
+        }
+        // MC's broadcastChanges syncs slots + DataSlots to client
+        super.broadcastChanges();
+    }
+
+    /**
+     * Reads FC container fields via reflection and pushes them into
+     * the fcData array. MC DataSlots detect changes and sync to client.
+     *
+     * <p>FC containers like the Infernal Enchanter compute enchantment
+     * levels on the client from slot contents. Since the Forge client
+     * doesn't have the FC container, we send these values explicitly.</p>
+     *
+     * <p>Layout:</p>
+     * <ul>
+     *   <li>0: reserved for FC's native progress bar (e.g., bookshelf level)</li>
+     *   <li>1-5: enchantment levels (m_CurrentEnchantmentLevels[0..4])</li>
+     *   <li>6-7: enchantment name seed (m_lNameSeed split into two ints)</li>
+     * </ul>
+     */
+    private void pushFcComputedData() {
+        // Enchanter: m_CurrentEnchantmentLevels[] and m_lNameSeed
+        // Use getDeclaredField + setAccessible to access private/package-private fields
+        try {
+            java.lang.reflect.Field levelsField = findField(fcContainer.getClass(), "m_CurrentEnchantmentLevels");
+            if (levelsField != null) {
+                int[] levels = (int[]) levelsField.get(fcContainer);
+                boolean anyNonZero = false;
+                for (int i = 0; i < Math.min(levels.length, 5); i++) {
+                    fcData[i + 1] = levels[i];
+                    if (levels[i] != 0) anyNonZero = true;
+                }
+                if (anyNonZero) {
+                    LOGGER.info("Enchanter levels: [{},{},{},{},{}]",
+                            levels[0], levels[1], levels[2], levels[3], levels[4]);
+                }
+            } else {
+                LOGGER.warn("m_CurrentEnchantmentLevels field not found on {}",
+                        fcContainer.getClass().getName());
+            }
+
+            java.lang.reflect.Field seedField = findField(fcContainer.getClass(), "m_lNameSeed");
+            if (seedField != null) {
+                long seed = seedField.getLong(fcContainer);
+                fcData[6] = (int) (seed & 0xFFFFFFFFL);
+                fcData[7] = (int) ((seed >>> 32) & 0xFFFFFFFFL);
+            }
+
+            // Log slot contents for diagnostics
+            java.lang.reflect.Field tableField = findField(fcContainer.getClass(), "m_tableInventory");
+            if (tableField != null) {
+                btw.modern.IInventory table = (btw.modern.IInventory) tableField.get(fcContainer);
+                if (table != null) {
+                    btw.modern.ItemStack s0 = table.getStackInSlot(0);
+                    btw.modern.ItemStack s1 = table.getStackInSlot(1);
+                    if (s0 != null || s1 != null) {
+                        LOGGER.info("Enchanter slots: [0]={} [1]={}",
+                                s0 != null ? "id=" + s0.itemID + " dmg=" + s0.getItemDamage() : "empty",
+                                s1 != null ? "id=" + s1.itemID + " dmg=" + s1.getItemDamage() : "empty");
+                    }
+                }
+            }
+
+            // Log bookshelf level for diagnostics
+            java.lang.reflect.Field bsField = findField(fcContainer.getClass(), "m_iMaxSurroundingBookshelfLevel");
+            if (bsField != null) {
+                int bsLevel = bsField.getInt(fcContainer);
+                if (bsLevel != fcData[0]) {
+                    LOGGER.info("Enchanter bookshelf level: {}", bsLevel);
+                    fcData[0] = bsLevel; // Also push via data slot (in case crafter registration didn't fire)
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.debug("pushFcComputedData failed: {}", e.getMessage());
+        }
+    }
+
+    /** Finds a field by name, searching the class hierarchy. Sets accessible. */
+    private static java.lang.reflect.Field findField(Class<?> clazz, String name) {
+        for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
+            try {
+                java.lang.reflect.Field f = c.getDeclaredField(name);
+                f.setAccessible(true);
+                return f;
+            } catch (NoSuchFieldException ignored) {}
+        }
+        return null;
+    }
+
     @Override
     public void removed(Player player) {
         super.removed(player);
         if (fcContainer != null && fcPlayer != null) {
             try {
-                // FC containers override onCraftGuiClosed (NOT onContainerClosed)
-                // to drop temporary items back to the player on close.
                 fcContainer.onCraftGuiClosed(fcPlayer);
             } catch (Exception e) {
                 LOGGER.debug("FC onCraftGuiClosed failed: {}", e.getMessage());
@@ -209,10 +362,6 @@ public class FCContainerMenu extends AbstractContainerMenu {
     // Custom Slot implementations
     // ================================================================
 
-    /**
-     * A slot backed by the real MC player {@link Inventory}, positioned
-     * according to the FC slot's x/y coordinates.
-     */
     private static class PlayerMappedSlot extends Slot {
         private final btw.modern.Slot fcSlot;
 
@@ -222,10 +371,6 @@ public class FCContainerMenu extends AbstractContainerMenu {
         }
     }
 
-    /**
-     * A slot backed by an {@link InventoryAdapter} (live view of FC inventory),
-     * positioned according to the FC slot's x/y coordinates.
-     */
     private static class ContainerMappedSlot extends Slot {
         private final btw.modern.Slot fcSlot;
 
