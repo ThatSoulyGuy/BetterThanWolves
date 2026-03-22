@@ -54,6 +54,9 @@ public class BTWNetwork {
     /** FC food level on the 0-60 scale (3x vanilla resolution). */
     public static int clientFoodLevel = 60;
 
+    /** FC saturation level (0-20). */
+    public static float clientSaturation = 0f;
+
     private static int nextMessageId = 0;
 
     public static void register() {
@@ -96,7 +99,8 @@ public class BTWNetwork {
                         pb.GetFatPenaltyLevel(),
                         pb.GetHungerPenaltyLevel(),
                         pb.GetHealthPenaltyLevel(),
-                        pb.foodStats.getFoodLevel()
+                        pb.foodStats.getFoodLevel(),
+                        pb.foodStats.getSaturationLevel()
                 ));
     }
 
@@ -116,13 +120,15 @@ public class BTWNetwork {
         final int hunger;
         final int health;
         final int food;
+        final float saturation;
 
-        public PenaltySync(int gloom, int fat, int hunger, int health, int food) {
+        public PenaltySync(int gloom, int fat, int hunger, int health, int food, float saturation) {
             this.gloom = gloom;
             this.fat = fat;
             this.hunger = hunger;
             this.health = health;
             this.food = food;
+            this.saturation = saturation;
         }
 
         public static void encode(PenaltySync msg, FriendlyByteBuf buf) {
@@ -131,6 +137,7 @@ public class BTWNetwork {
             buf.writeVarInt(msg.hunger);
             buf.writeVarInt(msg.health);
             buf.writeVarInt(msg.food);
+            buf.writeFloat(msg.saturation);
         }
 
         public static PenaltySync decode(FriendlyByteBuf buf) {
@@ -139,7 +146,8 @@ public class BTWNetwork {
                     buf.readVarInt(),
                     buf.readVarInt(),
                     buf.readVarInt(),
-                    buf.readVarInt()
+                    buf.readVarInt(),
+                    buf.readFloat()
             );
         }
 
@@ -152,6 +160,7 @@ public class BTWNetwork {
                 clientHungerPenalty = msg.hunger;
                 clientHealthPenalty = msg.health;
                 clientFoodLevel = msg.food;
+                clientSaturation = msg.saturation;
             });
             ctx.setPacketHandled(true);
         }

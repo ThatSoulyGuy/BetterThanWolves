@@ -55,14 +55,36 @@ public abstract class FoodDataMixin {
     }
 
     /**
-     * Redirect food eating to FC food system.
+     * Redirect vanilla food eating to FC food system.
+     * Vanilla items call FoodData.eat(nutrition, saturation) — we convert
+     * to FC's 3x scale and forward to the FC FoodStats.
      */
     @Inject(method = "eat(IF)V", at = @At("HEAD"), cancellable = true)
-    private void btw$eat(int foodLevel, float saturationModifier, CallbackInfo ci) {
-        // We can't easily get the Player from FoodData here.
-        // The FC food system handles eating through block/item activation
-        // which goes through the btw.modern layer directly.
-        // For safety, cancel the vanilla eat and let FC handle it.
+    private void btw$eat(int nutrition, float saturationModifier, CallbackInfo ci) {
+        // Find the owning player via Minecraft's internals
+        // FoodData doesn't store a player reference, but the mixin can
+        // intercept and route through PlayerBridge
+        try {
+            // Find the player that owns this FoodData by checking all server players.
+            net.minecraft.server.MinecraftServer server =
+                    net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            if (server != null) {
+                for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
+                    if (sp.getFoodData() == (Object) this) {
+                        PlayerBridge pb = PlayerBridge.getOrCreate(sp);
+                        // Convert vanilla nutrition to FC's 3x scale
+                        int fcNutrition = nutrition * 3;
+                        pb.foodStats.addStats(fcNutrition, saturationModifier);
+                        // Sync back to vanilla
+                        this.foodLevel = pb.foodStats.getFoodLevel() / 3;
+                        this.saturationLevel = pb.foodStats.getSaturationLevel();
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Fall through silently if we can't find the player
+        }
         ci.cancel();
     }
 }

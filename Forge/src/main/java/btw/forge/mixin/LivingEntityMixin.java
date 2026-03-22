@@ -294,4 +294,31 @@ public abstract class LivingEntityMixin {
             sp.setAirSupply(newAir);
         }
     }
+
+    // ================================================================
+    // DEBUG: Instrument causeFallDamage to diagnose missing fall damage
+    // ================================================================
+
+    @Inject(method = "causeFallDamage", at = @At("HEAD"))
+    private void btw$debugFallDamage(float fallDistance, float multiplier,
+            net.minecraft.world.damagesource.DamageSource source,
+            CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self instanceof net.minecraft.server.level.ServerPlayer sp) {
+            org.apache.logging.log4j.LogManager.getLogger("BTW-Fall").info(
+                    "LivingEntity.causeFallDamage: dist={} mult={} health={} mayfly={}",
+                    fallDistance, multiplier, self.getHealth(), sp.getAbilities().mayfly);
+        }
+    }
+
+    @Inject(method = "checkFallDamage", at = @At("HEAD"))
+    private void btw$debugCheckFall(double y, boolean onGround,
+            BlockState state, BlockPos pos, CallbackInfo ci) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self instanceof net.minecraft.server.level.ServerPlayer && self.fallDistance > 3.0F && onGround) {
+            org.apache.logging.log4j.LogManager.getLogger("BTW-Fall").info(
+                    "checkFallDamage: onGround={} fallDist={} y={} block={}",
+                    onGround, self.fallDistance, y, state.getBlock());
+        }
+    }
 }

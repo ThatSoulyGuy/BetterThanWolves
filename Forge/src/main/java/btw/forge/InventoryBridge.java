@@ -203,6 +203,22 @@ public class InventoryBridge extends btw.modern.InventoryPlayer {
         }
     }
 
+    /**
+     * FC's harvest check with material fallback.
+     * The base InventoryPlayer.canHarvestBlock only checks the held item,
+     * returning false for empty hand. Vanilla MC 1.5.2 also checked
+     * block.blockMaterial.isToolNotRequired() — blocks like cooked bricks
+     * (Material.circuits) don't require a tool to harvest.
+     */
+    @Override
+    public boolean canHarvestBlock(btw.modern.World world, btw.modern.Block block, int i, int j, int k) {
+        // Material check first: blocks that don't require tools are always harvestable
+        if (block.blockMaterial != null && block.blockMaterial.isToolNotRequired()) {
+            return true;
+        }
+        return super.canHarvestBlock(world, block, i, j, k);
+    }
+
     /** Returns the underlying Forge inventory. */
     public Inventory getRealInventory() {
         return inventory;

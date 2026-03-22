@@ -362,6 +362,28 @@ public class AxisAlignedBB extends FCUtilsPrimitiveGeometric {
     }
 
     @Override
+    public boolean RenderAsBlockWithTexture(RenderBlocks renderBlocks, Block block, int i, int j, int k, Icon icon) {
+        renderBlocks.setRenderBounds(minX, minY, minZ, maxX, maxY, maxZ);
+
+        Tessellator t = Tessellator.instance;
+        t.setColorOpaque_F(1, 1, 1);
+
+        renderBlocks.renderFaceYNeg(block, i, j, k, icon);
+        renderBlocks.renderFaceYPos(block, i, j, k, icon);
+        renderBlocks.renderFaceZNeg(block, i, j, k, icon);
+        renderBlocks.renderFaceZPos(block, i, j, k, icon);
+        renderBlocks.renderFaceXNeg(block, i, j, k, icon);
+        renderBlocks.renderFaceXPos(block, i, j, k, icon);
+
+        return true;
+    }
+
+    @Override
+    public boolean RenderAsBlockFullBrightWithTexture(RenderBlocks renderBlocks, Block block, int i, int j, int k, Icon icon) {
+        return RenderAsBlockWithTexture(renderBlocks, block, i, j, k, icon);
+    }
+
+    @Override
     public void RenderAsFallingBlock(RenderBlocks renderBlocks, Block block, int i, int j, int k, int iMetadata) {
         RenderAsBlock(renderBlocks, block, i, j, k);
     }

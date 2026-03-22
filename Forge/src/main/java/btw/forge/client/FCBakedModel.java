@@ -232,11 +232,8 @@ public class FCBakedModel implements BakedModel {
             List<btw.modern.Tessellator.CapturedQuad> captured = tess.stopCapturing();
 
             if (captured.isEmpty() && meta == 0) {
-                // Log Tessellator state for debugging
-                LOGGER.warn("BTW: Block {} ({}) RenderBlockAsItem produced 0 quads for meta 0. " +
-                                "Tessellator.capturing={}, blockIcon={}",
+                LOGGER.warn("BTW: Block {} ({}) produced 0 quads for meta 0. blockIcon={}",
                         legacyBlockId, block.getClass().getSimpleName(),
-                        tess.isCapturing(),
                         block.blockIcon != null ? block.blockIcon.getIconName() : "NULL");
             }
 

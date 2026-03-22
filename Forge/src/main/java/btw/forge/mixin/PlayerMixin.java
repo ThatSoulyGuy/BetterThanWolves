@@ -107,6 +107,20 @@ public abstract class PlayerMixin {
     }
 
     // ================================================================
+    // DEBUG: catch fall damage at Player level
+    // ================================================================
+
+    @Inject(method = "causeFallDamage", at = @At("HEAD"))
+    private void btw$debugPlayerFall(float fallDistance, float multiplier,
+            net.minecraft.world.damagesource.DamageSource source,
+            CallbackInfoReturnable<Boolean> cir) {
+        Player self = (Player) (Object) this;
+        org.apache.logging.log4j.LogManager.getLogger("BTW-Fall").info(
+                "Player.causeFallDamage: dist={} mayfly={} creative={}",
+                fallDistance, self.getAbilities().mayfly, self.getAbilities().instabuild);
+    }
+
+    // ================================================================
     // FC combat: blasting oil detonation on damage (#18)
     // ================================================================
 

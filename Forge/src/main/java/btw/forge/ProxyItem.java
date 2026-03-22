@@ -151,7 +151,31 @@ public class ProxyItem extends Item {
             pb.syncFromReal();
             btw.modern.ItemStack fcStack = pb.getCurrentEquippedItem();
             if (fcStack != null) {
-                fc().onEaten(fcStack, WorldBridge.getOrCreate(sl), pb);
+                btw.modern.ItemStack result = fc().onEaten(fcStack, WorldBridge.getOrCreate(sl), pb);
+
+                // Bridge gap: btw.modern.ItemFood.onEaten() is a stub that doesn't
+                // call foodStats.addStats(). The original MC 1.5.2 ItemFood.onEaten()
+                // did this automatically. Apply nutrition here for any ItemFood.
+                btw.modern.Item fcItem = fc();
+                if (fcItem instanceof btw.modern.ItemFood food) {
+                    int hungerRestored = fcItem.GetHungerRestored();
+                    if (hungerRestored > 0) {
+                        // FC subclass (FCItemFoodHighRes etc.) provides its own value
+                        pb.foodStats.addStats(hungerRestored, food.getSaturationModifier());
+                    } else {
+                        // Base ItemFood: original MC 1.5.2 returned getHealAmount() * 3
+                        pb.foodStats.addStats(food.getHealAmount() * 3, food.getSaturationModifier());
+                    }
+                }
+
+                pb.syncToReal();
+
+                // Consume the item (decrease stack size) like vanilla does
+                if (result != null && result != fcStack) {
+                    // FC returned a different stack (e.g., bowl from stew)
+                    // handled by FC's own logic
+                }
+                stack.shrink(1);
             }
         }
         return stack;

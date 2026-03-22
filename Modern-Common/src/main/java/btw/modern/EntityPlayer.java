@@ -80,12 +80,16 @@ public abstract class EntityPlayer extends EntityLiving {
 
     public void displayGUIChest(IInventory inventory) {}
 
+    /** Set to true when exhaustion is added; read by HUD rendering to trigger food pip shake. */
+    public boolean m_bExhaustionAddedSinceLastGuiUpdate = false;
+
     public void addExhaustion(float exhaustion) {
         if (!this.capabilities.disableDamage) {
             if (!this.worldObj.isRemote) {
                 // FC: Apply armor weight exhaustion modifier
                 exhaustion *= GetArmorExhaustionModifier();
                 this.foodStats.addExhaustion(exhaustion);
+                m_bExhaustionAddedSinceLastGuiUpdate = true;
             }
         }
     }

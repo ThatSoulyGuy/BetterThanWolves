@@ -69,7 +69,7 @@ public abstract class BlockMixin {
     // fallOn -> FC onFallenUpon
     // ================================================================
 
-    @Inject(method = "fallOn", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "fallOn", at = @At("HEAD"))
     private void btw$fallOn(Level level, BlockState state, BlockPos pos, Entity entity,
                              float fallDistance, CallbackInfo ci) {
         btw.modern.Block fcBlock = btw$getFcBlock();
@@ -77,9 +77,9 @@ public abstract class BlockMixin {
 
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
-            // Entity wrapping not yet implemented — pass null
             fcBlock.onFallenUpon(world, pos.getX(), pos.getY(), pos.getZ(), null, fallDistance);
-            ci.cancel();
+            // Do NOT cancel — vanilla fallOn must still call entity.causeFallDamage().
+            // FC's onFallenUpon is a notification hook, not a damage replacement.
         }
     }
 
@@ -104,10 +104,13 @@ public abstract class BlockMixin {
         btw.modern.Block fcBlock = btw$getFcBlock();
         if (fcBlock == null) return;
 
-        float modifier = fcBlock.GetMovementModifier(null, 0, 0, 0);
-        if (modifier > 0 && modifier != 1.0F) {
-            cir.setReturnValue(modifier);
-        }
+        // Bridge to FC's GetMovementModifier — pass through whatever FC returns.
+        try {
+            float modifier = fcBlock.GetMovementModifier(null, 0, 0, 0);
+            if (modifier > 0) {
+                cir.setReturnValue(modifier);
+            }
+        } catch (Exception ignored) {}
     }
 
     // ================================================================

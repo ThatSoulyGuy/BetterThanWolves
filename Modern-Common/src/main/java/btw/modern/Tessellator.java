@@ -87,6 +87,9 @@ public class Tessellator {
     }
 
     /** Whether capture mode is active. */
+    public int getCurrentVertexCount() { return currentVertices.size(); }
+    public int getCapturedQuadCount() { return capturedQuads.size(); }
+
     public boolean isCapturing() {
         return capturing;
     }

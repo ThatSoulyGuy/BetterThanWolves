@@ -428,9 +428,10 @@ public class ProxyBlock extends Block implements EntityBlock {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
             btw.modern.Entity fcEntity = wrapEntity(entity);
             fc().onFallenUpon(world, pos.getX(), pos.getY(), pos.getZ(), fcEntity, fallDistance);
-        } else {
-            super.fallOn(level, state, pos, entity, fallDistance);
         }
+        // Always call super to apply vanilla fall damage (entity.causeFallDamage).
+        // FC's onFallenUpon is a notification hook, not a replacement for damage.
+        super.fallOn(level, state, pos, entity, fallDistance);
     }
 
     // --- getDestroySpeed (getPlayerRelativeBlockHardness mapped to destroy speed) ---
