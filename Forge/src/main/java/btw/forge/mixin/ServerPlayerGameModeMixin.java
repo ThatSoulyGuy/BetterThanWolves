@@ -89,9 +89,19 @@ public abstract class ServerPlayerGameModeMixin {
                                 CallbackInfoReturnable<InteractionResult> cir) {
         if (mcStack.isEmpty() || !(world instanceof net.minecraft.server.level.ServerLevel sl)) return;
 
+        // Skip ALL BlockItem placement — let MC handle natively via
+        // getStateForPlacement + setPlacedBy. This ensures correct facing
+        // for furnaces, pistons, dispensers, etc.
+        LOGGER.info("[MIXIN-USE-ITEM] item={} isBlockItem={} thread={}",
+                mcStack.getItem().getClass().getSimpleName(),
+                mcStack.getItem() instanceof net.minecraft.world.item.BlockItem,
+                Thread.currentThread().getName());
+        if (mcStack.getItem() instanceof net.minecraft.world.item.BlockItem) return;
+
         net.minecraft.core.BlockPos pos = hitResult.getBlockPos();
 
-        // Look up FC item — works for both ProxyItems and vanilla items with FC replacements
+        // Look up FC item — ProxyItems (FC non-block items like seeds, tools)
+        // and vanilla items with FC replacements (hoe, shears, etc.)
         btw.modern.Item fcItem = null;
         if (mcStack.getItem() instanceof btw.forge.ProxyItem) {
             int proxyLegacyId = ProxyRegistry.getItemId(mcStack.getItem());
@@ -99,13 +109,10 @@ public abstract class ServerPlayerGameModeMixin {
                 fcItem = btw.modern.Item.itemsList[proxyLegacyId];
             }
         } else {
-            // Skip ProxyBlocks — ProxyBlock.use() handles both stages
+            // Skip ProxyBlocks — ProxyBlock.use() handles activation
             if (world.getBlockState(pos).getBlock() instanceof btw.forge.ProxyBlock) return;
 
             int legacyId = ProxyRegistry.getItemId(mcStack.getItem());
-            if (mcStack.getItem() instanceof net.minecraft.world.item.BlockItem bi) {
-                legacyId = ProxyRegistry.getBlockId(bi.getBlock());
-            }
             if (legacyId > 0 && legacyId < btw.modern.Item.itemsList.length) {
                 fcItem = btw.modern.Item.itemsList[legacyId];
             }

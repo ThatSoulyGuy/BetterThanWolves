@@ -357,11 +357,69 @@ public class ProxyBlock extends Block implements EntityBlock {
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                         BlockState oldState, boolean moving) {
+        LOGGER.info("[ON-PLACE] block={} pos={} thread={} isServer={} sameBlock={}",
+                legacyId, pos, Thread.currentThread().getName(),
+                level instanceof ServerLevel, state.is(oldState.getBlock()));
         if (!state.is(oldState.getBlock())) {
             if (level instanceof ServerLevel sl) {
                 btw.modern.World world = WorldBridge.getOrCreate(sl);
                 fc().onBlockAdded(world, pos.getX(), pos.getY(), pos.getZ());
+
+                // Defer onBlockPlacedBy to next tick — calling setBlockMetadata
+                // during onPlace triggers nested level.setBlock which MC rejects.
+                final btw.modern.World fWorld = world;
+                final int fx = pos.getX(), fy = pos.getY(), fz = pos.getZ();
+                sl.getServer().execute(() -> {
+                    net.minecraft.world.entity.player.Player nearest = sl.getNearestPlayer(
+                            fx + 0.5, fy + 0.5, fz + 0.5, 10, false);
+                    if (nearest != null) {
+                        PlayerBridge fcPlayer = PlayerBridge.getOrCreate(nearest);
+                        fcPlayer.syncFromReal();
+                        btw.modern.ItemStack fcStack = fcPlayer.getCurrentEquippedItem();
+                        fc().onBlockPlacedBy(fWorld, fx, fy, fz, fcPlayer, fcStack);
+                        LOGGER.info("[DEFERRED-PLACED] block={} pos={},{},{} yaw={}",
+                                legacyId, fx, fy, fz, fcPlayer.rotationYaw);
+                    }
+                });
             }
+        }
+    }
+
+    // --- setPlacedBy (onBlockPlacedBy) ---
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state,
+                            net.minecraft.world.entity.LivingEntity placer,
+                            net.minecraft.world.item.ItemStack stack) {
+        LOGGER.info("[SET-PLACED-BY] block={} pos={} placer={} thread={} levelType={}",
+                legacyId, pos, placer != null ? placer.getClass().getSimpleName() : "null",
+                Thread.currentThread().getName(), level.getClass().getSimpleName());
+        if (level instanceof ServerLevel sl && placer != null) {
+            btw.modern.World world = WorldBridge.getOrCreate(sl);
+            btw.modern.EntityLiving fcPlacer = null;
+            if (placer instanceof net.minecraft.server.level.ServerPlayer sp) {
+                fcPlacer = PlayerBridge.getOrCreate(sp);
+                ((PlayerBridge) fcPlacer).syncFromReal();
+            }
+            if (fcPlacer == null) {
+                // Create a minimal EntityLiving with position/rotation for facing calc
+                fcPlacer = new btw.modern.EntityLiving(world) {
+                    public int getMaxHealth() { return 20; }
+                };
+                fcPlacer.posX = placer.getX();
+                fcPlacer.posY = placer.getY();
+                fcPlacer.posZ = placer.getZ();
+                fcPlacer.rotationYaw = placer.getYRot();
+            }
+            btw.modern.ItemStack fcStack = fcPlacer instanceof PlayerBridge pb
+                    ? pb.getCurrentEquippedItem()
+                    : null;
+            int metaBefore = state.hasProperty(META) ? state.getValue(META) : -1;
+            fc().onBlockPlacedBy(world, pos.getX(), pos.getY(), pos.getZ(), fcPlacer, fcStack);
+            int metaAfter = level.getBlockState(pos).hasProperty(META)
+                    ? level.getBlockState(pos).getValue(META) : -1;
+            LOGGER.info("[PLACED] block={} at {} yaw={} metaBefore={} metaAfter={}",
+                    fc().getClass().getSimpleName(), pos, fcPlacer.rotationYaw, metaBefore, metaAfter);
         }
     }
 
@@ -388,7 +446,8 @@ public class ProxyBlock extends Block implements EntityBlock {
             btw.modern.Container prevContainer = fcPlayer.openContainer;
 
             // Stage 1: FC block activation
-            LOGGER.info("use() block={} fc={} pos={} blockAbove={} isNormalAbove={}", legacyId, fc().getClass().getSimpleName(), pos,
+            int meta = state.hasProperty(META) ? state.getValue(META) : -1;
+            LOGGER.info("use() block={} fc={} pos={} meta={} side={} hitY={} blockAbove={} isNormalAbove={}", legacyId, fc().getClass().getSimpleName(), pos, meta, side, hitY,
                     world.getBlockId(pos.getX(), pos.getY() + 1, pos.getZ()),
                     btw.modern.Block.isNormalCube(world.getBlockId(pos.getX(), pos.getY() + 1, pos.getZ())));
             boolean result = fc().onBlockActivated(world, pos.getX(), pos.getY(), pos.getZ(),
