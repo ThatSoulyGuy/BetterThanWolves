@@ -84,7 +84,67 @@ public abstract class Container {
         InventoryPlayer inventoryPlayer = player.inventory;
 
         if (mode == 5) {
-            // Drag mode - stub for now, handled by server in real MC
+            // Drag mode: button encodes phase and mouse button
+            // Phase 0 = start, Phase 1 = add slot, Phase 2 = end
+            // Button bits: low 2 = mouse (0=left, 1=right, 2=middle), high bits = phase
+            int phase = (clickedButton >> 2) & 3;
+            int mouseButton = clickedButton & 3;
+
+            if (phase == 0) {
+                // Start drag
+                dragMode = mouseButton;
+                dragEvent = 0;
+                dragSlots.clear();
+            } else if (phase == 1 && dragEvent >= 0) {
+                // Add slot to drag set
+                if (slotId >= 0 && slotId < inventorySlots.size()) {
+                    Slot slot = inventorySlots.get(slotId);
+                    ItemStack held = inventoryPlayer.getItemStack();
+                    if (held != null && slot.isItemValid(held)) {
+                        dragSlots.add(slot);
+                    }
+                }
+                dragEvent = 1;
+            } else if (phase == 2 && dragEvent >= 0) {
+                // End drag — distribute held stack across collected slots
+                ItemStack held = inventoryPlayer.getItemStack();
+                if (held != null && !dragSlots.isEmpty()) {
+                    int totalAmount = held.stackSize;
+                    int perSlot = dragMode == 0 ? totalAmount / dragSlots.size() : 1; // left=even split, right=1 each
+
+                    for (Slot slot : dragSlots) {
+                        if (held.stackSize <= 0) break;
+                        ItemStack existing = slot.getStack();
+                        int maxSize = Math.min(slot.getSlotStackLimit(), held.getMaxStackSize());
+                        int placeCount = Math.min(perSlot, maxSize);
+
+                        if (existing == null) {
+                            placeCount = Math.min(placeCount, held.stackSize);
+                            slot.putStack(held.splitStack(placeCount));
+                        } else if (existing.itemID == held.itemID
+                                && existing.getItemDamage() == held.getItemDamage()
+                                && ItemStack.areItemStackTagsEqual(existing, held)) {
+                            int space = maxSize - existing.stackSize;
+                            placeCount = Math.min(placeCount, Math.min(space, held.stackSize));
+                            if (placeCount > 0) {
+                                existing.stackSize += placeCount;
+                                held.stackSize -= placeCount;
+                                slot.onSlotChanged();
+                            }
+                        }
+                    }
+
+                    if (held.stackSize <= 0) {
+                        inventoryPlayer.setItemStack(null);
+                    }
+                }
+                dragSlots.clear();
+                dragEvent = -1;
+            } else {
+                // Invalid state — reset
+                dragSlots.clear();
+                dragEvent = -1;
+            }
             return null;
         }
 

@@ -4,7 +4,10 @@ import java.awt.image.BufferedImage;
 
 public class RenderEngine {
 
-    public void bindTexture(String textureName) {}
+    public void bindTexture(String textureName) {
+        // Record texture name on Tessellator so captured quads know which texture to use
+        Tessellator.instance.setCurrentTextureName(textureName);
+    }
 
     public void resetBoundTexture() {}
 

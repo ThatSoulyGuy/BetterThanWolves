@@ -1,8 +1,5 @@
 package btw.modern;
-
 public class RenderMagmaCube extends RenderLiving {
-
-    public RenderMagmaCube() {
-        super(new ModelBase() {}, 0.25F);
-    }
+    public RenderMagmaCube(ModelBase model, float shadow) { super(model, shadow); }
+    public RenderMagmaCube() { super(null, 0); }
 }

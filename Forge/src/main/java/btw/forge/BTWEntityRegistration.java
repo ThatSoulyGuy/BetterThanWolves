@@ -36,6 +36,13 @@ public class BTWEntityRegistration {
      * Populated during {@link #registerEntities()}.
      */
     private static final Map<Class<?>, EntityType<?>> fcClassToEntityType = new HashMap<>();
+    private static final Map<EntityType<?>, String> entityTypeToFcClassName = new HashMap<>();
+
+    /** Returns the FC class name for a given EntityType, or empty string if unknown. */
+    public static String getFcClassName(EntityType<?> type) {
+        String name = entityTypeToFcClassName.get(type);
+        return name != null ? name : "";
+    }
 
     /**
      * Maps FC entity class -> EntityType for external lookup
@@ -227,6 +234,7 @@ public class BTWEntityRegistration {
                 Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
             }
             fcClassToEntityType.put(fcClass, type);
+            entityTypeToFcClassName.put(type, fcClass.getName());
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to register mob entity type '{}': {}", id, e.getMessage());
@@ -255,6 +263,7 @@ public class BTWEntityRegistration {
                 Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
             }
             fcClassToEntityType.put(fcClass, type);
+            entityTypeToFcClassName.put(type, fcClass.getName());
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to register animal entity type '{}': {}", id, e.getMessage());
@@ -284,6 +293,7 @@ public class BTWEntityRegistration {
                 Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
             }
             fcClassToEntityType.put(fcClass, type);
+            entityTypeToFcClassName.put(type, fcClass.getName());
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to register pathfinder mob entity type '{}': {}",
@@ -314,6 +324,7 @@ public class BTWEntityRegistration {
                 Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
             }
             fcClassToEntityType.put(fcClass, type);
+            entityTypeToFcClassName.put(type, fcClass.getName());
             return 1;
         } catch (Exception e) {
             LOGGER.error("Failed to register plain entity type '{}': {}",

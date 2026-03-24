@@ -214,6 +214,10 @@ public abstract class EntityPlayer extends EntityLiving {
      * (improper) is called.
      */
     public boolean canHarvestBlock(Block block, int i, int j, int k) {
+        // Blocks that don't require a tool can always be harvested (bare hand works)
+        if (block.blockMaterial != null && block.blockMaterial.isToolNotRequired()) {
+            return true;
+        }
         if (this.inventory != null) {
             return this.inventory.canHarvestBlock(worldObj, block, i, j, k);
         }

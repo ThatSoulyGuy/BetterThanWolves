@@ -122,8 +122,20 @@ public class CraftingManager {
         return true;
     }
 
-    public ItemStack findMatchingRecipe(InventoryCrafting inv, World world) { return null; }
-    public IRecipe FindMatchingRecipe(InventoryCrafting inv, World world) { return null; }
+    public ItemStack findMatchingRecipe(InventoryCrafting inv, World world) {
+        IRecipe recipe = FindMatchingRecipe(inv, world);
+        return recipe != null ? recipe.getCraftingResult(inv) : null;
+    }
+
+    public IRecipe FindMatchingRecipe(InventoryCrafting inv, World world) {
+        for (Object obj : recipes) {
+            IRecipe recipe = (IRecipe) obj;
+            if (recipe.matches(inv, world)) {
+                return recipe;
+            }
+        }
+        return null;
+    }
 
     /**
      * Converts an Object parameter to an ItemStack.

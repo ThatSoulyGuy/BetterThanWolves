@@ -14,6 +14,15 @@ public class BlockCrops extends BlockFlower {
         disableStats();
     }
 
+    // Shadow remapping maps FCBlockCrops → BlockCrops.
+    // FCBlockCrops overrides CanGrowOnBlock to check domesticated crops
+    // instead of wild vegetation (the BlockFlower/FCBlockPlants default).
+    @Override
+    public boolean CanGrowOnBlock(World world, int i, int j, int k) {
+        Block blockOn = Block.blocksList[world.getBlockId(i, j, k)];
+        return blockOn != null && blockOn.CanDomesticatedCropsGrowOnBlock(world, i, j, k);
+    }
+
     // --- Render overrides ---
 
     public int getRenderType() {
@@ -45,50 +54,124 @@ public class BlockCrops extends BlockFlower {
         return metadata & 7;
     }
 
-    /**
-     * Set the growth level in the world without sending a block-change notification.
-     */
-    public void SetGrowthLevelNoNotify(World world, int x, int y, int z, int level) {
-        int metadata = world.getBlockMetadata(x, y, z) & (~7); // filter out old level
-        world.setBlockMetadata(x, y, z, metadata | level);
-    }
 
-    // --- Growth logic ---
+
+    // --- FC growth bridge (FCBlockCrops methods) ---
 
     /**
-     * Attempt to advance the crop one growth stage. FC subclasses override this
-     * with custom daily-growth / hydration / weed checks.
-     *
-     * Default behaviour: if growth level is below 7 and there is enough light,
-     * increment growth level with a random chance scaled by getGrowthRate-style
-     * logic matching the vanilla crop tick.
+     * Bridge for FCBlockCrops.updateTick — called via random tick.
+     * Checks if block can stay, then attempts growth if not fully grown.
+     * FC subclasses (FCBlockHempCrop etc.) override AttemptToGrow.
      */
-    public void AttemptToGrow(World world, int i, int j, int k, java.util.Random rand) {
-        if (world.getBlockLightValue(i, j + 1, k) >= 9) {
-            int metadata = world.getBlockMetadata(i, j, k);
-            int growthLevel = GetGrowthLevel(metadata);
-
-            if (growthLevel < 7) {
-                if (rand.nextInt(26) == 0) {
-                    int newMetadata = (metadata & (~7)) | (growthLevel + 1);
-                    world.setBlockMetadataWithNotify(i, j, k, newMetadata);
-                }
+    @Override
+    public void updateTick(World world, int i, int j, int k, java.util.Random rand) {
+        if (UpdateIfBlockStays(world, i, j, k)) {
+            if (world.provider == null || world.provider.dimensionId != 1) {
+                // Always call AttemptToGrow — FC subclasses like FCBlockHempCrop
+                // handle multi-block growth (top block placement) inside
+                // AttemptToGrow even when the base is at max growth level.
+                AttemptToGrow(world, i, j, k, rand);
             }
         }
     }
 
     /**
-     * Apply bonemeal-style fertilisation: boost growth by 2-5 stages, capped at 7.
+     * Bridge for FCBlockCrops.UpdateIfBlockStays — removes crop if it
+     * can't stay (soil removed, light too low, etc.).
      */
+    public boolean UpdateIfBlockStays(World world, int i, int j, int k) {
+        if (!canBlockStay(world, i, j, k)) {
+            dropBlockAsItem(world, i, j, k, world.getBlockMetadata(i, j, k), 0);
+            world.setBlockToAir(i, j, k);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Bridge for FCBlockCrops.IsFullyGrown.
+     */
+    public boolean IsFullyGrown(IBlockAccess blockAccess, int i, int j, int k) {
+        return IsFullyGrown(blockAccess.getBlockMetadata(i, j, k));
+    }
+
+    public boolean IsFullyGrown(int iMetadata) {
+        return GetGrowthLevel(iMetadata) >= 7;
+    }
+
+    /**
+     * FC subclasses override with custom growth logic (light, hydration, weeds).
+     * Default: basic light-gated growth matching FCBlockCrops base behavior.
+     */
+    public void AttemptToGrow(World world, int i, int j, int k, java.util.Random rand) {
+        if (world.getBlockLightValue(i, j + 1, k) >= GetLightLevelForGrowth()) {
+            if (rand.nextFloat() <= GetBaseGrowthChance(world, i, j, k)) {
+                IncrementGrowthLevel(world, i, j, k);
+            }
+        }
+    }
+
+    /** Bridge for FCBlockCrops.GetBaseGrowthChance. FC subclasses override (hemp=0.1). */
+    public float GetBaseGrowthChance(World world, int i, int j, int k) {
+        return 0.05F;
+    }
+
+    /** Bridge for FCBlockCrops.IncrementGrowthLevel. */
+    public void IncrementGrowthLevel(World world, int i, int j, int k) {
+        int growthLevel = GetGrowthLevel(world, i, j, k) + 1;
+        SetGrowthLevel(world, i, j, k, growthLevel);
+        if (IsFullyGrown(world, i, j, k)) {
+            Block blockBelow = Block.blocksList[world.getBlockId(i, j - 1, k)];
+            if (blockBelow != null) {
+                blockBelow.NotifyOfFullStagePlantGrowthOn(world, i, j - 1, k, this);
+            }
+        }
+    }
+
+    /** Bridge for FCBlockCrops.SetGrowthLevel. */
+    public void SetGrowthLevel(World world, int i, int j, int k, int level) {
+        int metadata = world.getBlockMetadata(i, j, k) & (~7);
+        world.setBlockMetadataWithNotify(i, j, k, metadata | level);
+    }
+
+    /** Bridge for FCBlockCrops.SetGrowthLevelNoNotify. */
+    public void SetGrowthLevelNoNotify(World world, int x, int y, int z, int level) {
+        int metadata = world.getBlockMetadata(x, y, z) & (~7);
+        world.setBlockMetadata(x, y, z, metadata | level);
+    }
+
+    /** Bridge for FCBlockCrops.GetLightLevelForGrowth. */
+    public int GetLightLevelForGrowth() {
+        return 11;
+    }
+
+    /** Bridge for FCBlockCrops.fertilize. */
     public void fertilize(World world, int i, int j, int k) {
         int newLevel = world.getBlockMetadata(i, j, k)
             + MathHelper.getRandomIntegerInRange(world.rand, 2, 5);
-
-        if (newLevel > 7) {
-            newLevel = 7;
-        }
-
+        if (newLevel > 7) newLevel = 7;
         world.setBlockMetadataWithNotify(i, j, k, newLevel);
+    }
+
+    // --- FC drop bridge ---
+
+    /**
+     * Bridge for FCBlockCrops.dropBlockAsItemWithChance.
+     * Calls idDropped to determine if something should drop — FC subclasses
+     * (FCBlockHempCrop) override idDropped with their own metadata checks
+     * (e.g. metadata >= 7 for hemp, which covers both base at 7 and top at 8+).
+     * DropSeeds is called when the crop yields an item.
+     */
+    @Override
+    public void dropBlockAsItemWithChance(World world, int x, int y, int z, int metadata,
+            float chance, int fortune) {
+        if (!world.isRemote) {
+            int dropId = idDropped(metadata, world.rand, fortune);
+            if (dropId > 0) {
+                super.dropBlockAsItemWithChance(world, x, y, z, metadata, chance, 0);
+                DropSeeds(world, x, y, z, metadata, chance, fortune);
+            }
+        }
     }
 
     // --- Seed / crop item IDs ---

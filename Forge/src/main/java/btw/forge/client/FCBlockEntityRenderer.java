@@ -53,25 +53,58 @@ public class FCBlockEntityRenderer implements BlockEntityRenderer<ProxyBlockEnti
 
         // Try rendering cook stack for any tile entity that has one
         btw.modern.ItemStack cookStack = getCookStack(fcTe);
-        if (className.contains("Campfire")) {
-            // Direct field access diagnostic
-            try {
-                var f = fcTe.getClass().getDeclaredField("m_cookStack");
-                f.setAccessible(true);
-                Object raw = f.get(fcTe);
-                if (raw != null) {
-                    btw.modern.ItemStack direct = (btw.modern.ItemStack) raw;
-                    LOGGER.info("Campfire m_cookStack DIRECT: id={} count={} item={}",
-                            direct.itemID, direct.stackSize,
-                            direct.getItem() != null ? direct.getItem().getClass().getSimpleName() : "NULL_ITEM");
-                }
-            } catch (Exception ignored) {}
-        }
         if (cookStack != null) {
             if (className.contains("Campfire")) {
                 renderCampfireCookItem(cookStack, poseStack, bufferSource, packedLight, packedOverlay, blockEntity);
             } else {
                 renderGenericCookItem(cookStack, poseStack, bufferSource, packedLight, packedOverlay);
+            }
+        }
+
+        // Emit cooking particles for crucible/cauldron when fire is below
+        if (className.contains("CookingVessel") || className.contains("Crucible") || className.contains("Cauldron")) {
+            emitCookingParticles(fcTe, blockEntity);
+        }
+    }
+
+    /** Emits steam/smoke particles from cooking vessels when they have fire below. */
+    private void emitCookingParticles(btw.modern.TileEntity fcTe, ProxyBlockEntity blockEntity) {
+        // Check m_iFireUnderType via reflection (0=none, 1=normal fire, 2=stoked)
+        int fireType = 0;
+        try {
+            var f = fcTe.getClass().getField("m_iFireUnderType");
+            fireType = f.getInt(fcTe);
+        } catch (Exception e) {
+            try {
+                var f = fcTe.getClass().getDeclaredField("m_iFireUnderType");
+                f.setAccessible(true);
+                fireType = f.getInt(fcTe);
+            } catch (Exception ignored) {}
+        }
+
+        if (fireType <= 0) return;
+
+        var level = Minecraft.getInstance().level;
+        if (level == null) return;
+
+        var pos = blockEntity.getBlockPos();
+        var rand = level.getRandom();
+
+        // Normal fire: gentle steam. Stoked fire: more intense
+        int chance = fireType == 2 ? 2 : 4;
+        if (rand.nextInt(chance) == 0) {
+            double px = pos.getX() + 0.2 + rand.nextFloat() * 0.6;
+            double py = pos.getY() + 0.9 + rand.nextFloat() * 0.2;
+            double pz = pos.getZ() + 0.2 + rand.nextFloat() * 0.6;
+
+            if (fireType == 2) {
+                // Stoked: larger smoke
+                level.addParticle(net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE,
+                        px, py, pz, 0, 0.05, 0);
+            } else {
+                // Normal: gentle steam
+                level.addParticle(net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE,
+                        px, py, pz, 0, 0.03, 0);
             }
         }
     }
@@ -109,8 +142,13 @@ public class FCBlockEntityRenderer implements BlockEntityRenderer<ProxyBlockEnti
                 Minecraft.getInstance().level, 0);
         poseStack.popPose();
 
-        // Spawn cooking particles from the food itself
-        if (Minecraft.getInstance().level != null) {
+        // Spawn cooking particles only when the campfire is lit (fire level > 0).
+        // Unlit campfire = block 1013 (m_iFireLevel=0), lit = 1014/1015/1016.
+        boolean isLit = false;
+        if (blockEntity.getBlockState().getBlock() instanceof btw.forge.ProxyBlock pb) {
+            isLit = pb.getLegacyId() >= 1014 && pb.getLegacyId() <= 1016;
+        }
+        if (isLit && Minecraft.getInstance().level != null) {
             var level = Minecraft.getInstance().level;
             var pos = blockEntity.getBlockPos();
             var rand = level.getRandom();

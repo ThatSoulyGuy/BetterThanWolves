@@ -156,28 +156,69 @@ public class ProxyBlock extends Block implements EntityBlock {
     @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         btw.modern.World world = WorldBridge.getOrCreate(level);
+        String fcName = fc().getClass().getSimpleName();
+        boolean isKiln = fcName.contains("Kiln");
+        int metaBefore = state.hasProperty(META) ? state.getValue(META) : -1;
+        if (isKiln) {
+            // Check what's above and below
+            int aboveId = world.getBlockId(pos.getX(), pos.getY() + 1, pos.getZ());
+            int belowId = world.getBlockId(pos.getX(), pos.getY() - 1, pos.getZ());
+            btw.modern.Block aboveBlock = aboveId > 0 && aboveId < btw.modern.Block.blocksList.length ? btw.modern.Block.blocksList[aboveId] : null;
+            boolean canCook = aboveBlock != null && aboveBlock.GetCanBeCookedByKiln(world, pos.getX(), pos.getY() + 1, pos.getZ());
+            LOGGER.info("[KILN-TICK] at {} meta={} aboveId={} above={} canCook={} belowId={}",
+                    pos, metaBefore, aboveId,
+                    aboveBlock != null ? aboveBlock.getClass().getSimpleName() : "null",
+                    canCook, belowId);
+        }
         try {
             fc().updateTick(world, pos.getX(), pos.getY(), pos.getZ(), new Random(random.nextLong()));
-        } catch (NullPointerException e) {
-            // FC block may expect tile entity or world state not yet bridged
+        } catch (Exception e) {
+            if (isKiln) {
+                LOGGER.error("[KILN-TICK] FAILED at {}: {}", pos, e.getMessage(), e);
+            }
+        }
+        if (isKiln) {
+            int metaAfter = level.getBlockState(pos).hasProperty(META) ? level.getBlockState(pos).getValue(META) : -1;
+            // Check if block is still a kiln (might have reverted to brick)
+            boolean stillKiln = level.getBlockState(pos).getBlock() instanceof ProxyBlock;
+            LOGGER.info("[KILN-TICK] DONE at {} metaBefore={} metaAfter={} stillKiln={}",
+                    pos, metaBefore, metaAfter, stillKiln);
         }
     }
 
     // --- randomTick ---
 
+    private static boolean loggedRandomTick = false;
+
     @Override
     public void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         btw.modern.World world = WorldBridge.getOrCreate(level);
+        if (fc().getClass().getSimpleName().contains("Hemp") && !loggedRandomTick) {
+            loggedRandomTick = true;
+            int light = world.getBlockLightValue(pos.getX(), pos.getY(), pos.getZ());
+            int belowId = world.getBlockId(pos.getX(), pos.getY() - 1, pos.getZ());
+            btw.modern.Block belowBlock = belowId > 0 && belowId < btw.modern.Block.blocksList.length ? btw.modern.Block.blocksList[belowId] : null;
+            boolean hydrated = belowBlock != null && belowBlock.IsBlockHydratedForPlantGrowthOn(world, pos.getX(), pos.getY() - 1, pos.getZ());
+            LOGGER.info("[HEMP-GROW] at {} meta={} light={} belowId={} below={} hydrated={}",
+                    pos, state.hasProperty(META) ? state.getValue(META) : -1,
+                    light, belowId,
+                    belowBlock != null ? belowBlock.getClass().getSimpleName() : "null",
+                    hydrated);
+        }
         try {
             fc().RandomUpdateTick(world, pos.getX(), pos.getY(), pos.getZ(), new Random(random.nextLong()));
-        } catch (NullPointerException e) {
-            // FC block may expect tile entity or world state not yet bridged
+        } catch (Throwable e) {
+            LOGGER.error("[RANDOM-TICK] {} at {} FAILED: {}", fc().getClass().getSimpleName(), pos, e.toString(), e);
         }
     }
 
     @Override
     public boolean isRandomlyTicking(BlockState state) {
-        return fc().getTickRandomly();
+        boolean result = fc().getTickRandomly();
+        if (fc().getClass().getSimpleName().contains("Hemp")) {
+            LOGGER.info("[TICK-CHECK] {} isRandomlyTicking={} needsRandomTick={}", fc().getClass().getSimpleName(), result, fc().needsRandomTick);
+        }
+        return result;
     }
 
     // --- animateTick (client-side particle effects) ---
@@ -304,6 +345,9 @@ public class ProxyBlock extends Block implements EntityBlock {
             if (block instanceof ProxyBlock pb) {
                 neighborId = pb.getLegacyId();
             }
+            if (fc().getClass().getSimpleName().contains("Turntable")) {
+                LOGGER.info("[NEIGHBOR] Turntable at {} neighborChanged from {} neighborId={} block={}", pos, neighborPos, neighborId, block);
+            }
             fc().onNeighborBlockChange(world, pos.getX(), pos.getY(), pos.getZ(), neighborId);
         }
     }
@@ -344,8 +388,13 @@ public class ProxyBlock extends Block implements EntityBlock {
             btw.modern.Container prevContainer = fcPlayer.openContainer;
 
             // Stage 1: FC block activation
+            LOGGER.info("use() block={} fc={} pos={} blockAbove={} isNormalAbove={}", legacyId, fc().getClass().getSimpleName(), pos,
+                    world.getBlockId(pos.getX(), pos.getY() + 1, pos.getZ()),
+                    btw.modern.Block.isNormalCube(world.getBlockId(pos.getX(), pos.getY() + 1, pos.getZ())));
             boolean result = fc().onBlockActivated(world, pos.getX(), pos.getY(), pos.getZ(),
                     fcPlayer, side, hitX, hitY, hitZ);
+            LOGGER.info("use() result={} openContainer={}", result,
+                    fcPlayer.openContainer != null ? fcPlayer.openContainer.getClass().getSimpleName() : "null");
 
             if (!result) {
                 // Stage 2: FC item use on block
@@ -574,6 +623,18 @@ public class ProxyBlock extends Block implements EntityBlock {
     @Override
     public net.minecraft.world.phys.shapes.VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos,
             net.minecraft.world.phys.shapes.CollisionContext ctx) {
+        return getFcShape(level, pos);
+    }
+
+    /**
+     * Block support shape determines if torches, levers, etc. can attach to faces.
+     * For full-cube FC blocks, return the full block shape so attachments work.
+     */
+    @Override
+    public net.minecraft.world.phys.shapes.VoxelShape getBlockSupportShape(BlockState state, BlockGetter level, BlockPos pos) {
+        if (fc().isOpaqueCube()) {
+            return net.minecraft.world.phys.shapes.Shapes.block();
+        }
         return getFcShape(level, pos);
     }
 

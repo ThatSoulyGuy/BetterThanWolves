@@ -335,6 +335,7 @@ public abstract class Block {
     // --- Static query methods ---
 
     public static boolean isNormalCube(int blockID) {
+        if (blockID <= 0) return false; // air is never a normal cube
         Block block = blocksList[blockID];
         return block != null && block.isOpaqueCube();
     }
@@ -354,7 +355,7 @@ public abstract class Block {
     public boolean canProvidePower() { return false; }
     public boolean canSilkHarvest() { return false; }
     public boolean getEnableStats() { return this.enableStats; }
-    public int getMobilityFlag() { return 0; }
+    public int getMobilityFlag() { return this.blockMaterial != null ? this.blockMaterial.getMaterialMobility() : 0; }
     public boolean hasComparatorInputOverride() { return false; }
     public int getComparatorInputOverride(World world, int i, int j, int k, int side) { return 0; }
     public boolean canDropFromExplosion(Explosion explosion) { return true; }
@@ -596,21 +597,43 @@ public abstract class Block {
 
     // --- BTW-added: Falling block methods ---
 
-    public boolean CheckForFall(World world, int i, int j, int k) { return false; }
+    public boolean CheckForFall(World world, int i, int j, int k) {
+        if (CanFallIntoBlockAtPos(world, i, j - 1, k) && j >= 0) {
+            if (!world.checkChunksExist(i - 16, j - 16, k - 16, i + 16, j + 16, k + 16)) {
+                world.setBlockToAir(i, j, k);
+                return true;
+            }
+
+            EntityFallingSand fallingEntity = new EntityFallingSand(world,
+                    (double)i + 0.5D, (double)j + 0.5D, (double)k + 0.5D,
+                    this.blockID, world.getBlockMetadata(i, j, k));
+
+            world.spawnEntityInWorld(fallingEntity);
+            return true;
+        }
+        return false;
+    }
     public void onStartFalling(EntityFallingSand entity) {}
     public void onFinishFalling(World world, int i, int j, int k, int iMetadata) {}
     public void OnFallingUpdate(EntityFallingSand entity) {}
 
     public void NotifyNearbyAnimalsFinishedFalling(World world, int i, int j, int k) {}
 
-    public boolean OnFinishedFalling(EntityFallingSand entity, float fFallDistance) { return false; }
+    public boolean OnFinishedFalling(EntityFallingSand entity, float fFallDistance) { return true; }
     public boolean AttemptToCombineWithFallingEntity(World world, int i, int j, int k, EntityFallingSand entity) { return false; }
     public boolean CanBeCrushedByFallingEntity(World world, int i, int j, int k, EntityFallingSand entity) { return false; }
     public void OnCrushedByFallingEntity(World world, int i, int j, int k, EntityFallingSand entity) {}
-    public boolean CanFallIntoBlockAtPos(World world, int i, int j, int k) { return false; }
-    public boolean CanSupportFallingBlocks(IBlockAccess blockAccess, int i, int j, int k) { return true; }
+    public boolean CanFallIntoBlockAtPos(World world, int i, int j, int k) {
+        int blockId = world.getBlockId(i, j, k);
+        if (blockId == 0) return true; // air
+        Block block = blocksList[blockId];
+        return block == null || !block.CanSupportFallingBlocks(world, i, j, k);
+    }
+    public boolean CanSupportFallingBlocks(IBlockAccess blockAccess, int i, int j, int k) { return HasCenterHardPointToFacing(blockAccess, i, j, k, 1, true); }
     public void CheckForUnstableGround(World world, int i, int j, int k) {}
-    public void ScheduleCheckForFall(World world, int i, int j, int k) {}
+    public void ScheduleCheckForFall(World world, int i, int j, int k) {
+        world.scheduleBlockUpdate(i, j, k, this.blockID, this.tickRate(world));
+    }
     public void OnBlockDestroyedLandingFromFall(World world, int i, int j, int k, int iMetadata) {}
     public boolean HasFallingBlockRestingOn(IBlockAccess blockAccess, int i, int j, int k) { return false; }
 
@@ -628,12 +651,28 @@ public abstract class Block {
 
     // --- BTW-added: Turntable methods ---
 
-    public boolean CanRotateOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return false; }
-    public boolean CanTransmitRotationHorizontallyOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return false; }
-    public boolean CanTransmitRotationVerticallyOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return false; }
-    public int RotateOnTurntable(World world, int i, int j, int k, boolean bReverse, int iCraftingCounter) { return 0; }
-    public int GetRotationsToCraftOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
-    public void OnCraftedOnTurntable(World world, int i, int j, int k) {}
+    public boolean CanRotateOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return blockAccess.isBlockNormalCube(i, j, k); }
+    public boolean CanTransmitRotationHorizontallyOnTurntable(IBlockAccess blockAccess, int i, int j, int k) {
+        boolean result = blockAccess.isBlockNormalCube(i, j, k);
+        org.apache.logging.log4j.LogManager.getLogger("BTW-Block").info("[TRANSMIT-H] block={} at {},{},{} isNormalCube={}", getClass().getSimpleName(), i, j, k, result);
+        return result;
+    }
+    public boolean CanTransmitRotationVerticallyOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return blockAccess.isBlockNormalCube(i, j, k); }
+    public int RotateOnTurntable(World world, int i, int j, int k, boolean bReverse, int iCraftingCounter) {
+        org.apache.logging.log4j.LogManager.getLogger("BTW-Block").info("[ROTATE] RotateOnTurntable at {},{},{} block={} id={}", i, j, k, getClass().getSimpleName(), blockID);
+        OnRotatedOnTurntable(world, i, j, k);
+        if (!RotateAroundJAxis(world, i, j, k, bReverse)) {
+            org.apache.logging.log4j.LogManager.getLogger("BTW-Block").info("[ROTATE] RotateAroundJAxis returned false — no metadata change");
+            world.notifyBlocksOfNeighborChange(i, j, k, blockID);
+        } else {
+            org.apache.logging.log4j.LogManager.getLogger("BTW-Block").info("[ROTATE] RotateAroundJAxis returned true — metadata changed");
+        }
+        return iCraftingCounter;
+    }
+    public int GetRotationsToCraftOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return 1; }
+    public void OnCraftedOnTurntable(World world, int i, int j, int k) {
+        world.playAuxSFX(2001, i, j, k, world.getBlockId(i, j, k) + (world.getBlockMetadata(i, j, k) << 12));
+    }
     public int GetNewBlockIDCraftedOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
     public int GetNewMetadataCraftedOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
     public int GetItemIDCraftedOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
@@ -642,6 +681,7 @@ public abstract class Block {
     public boolean RotateAroundJAxis(World world, int i, int j, int k, boolean bReverse) {
         int oldMeta = world.getBlockMetadata(i, j, k);
         int newMeta = RotateMetadataAroundJAxis(oldMeta, bReverse);
+        org.apache.logging.log4j.LogManager.getLogger("BTW-Block").info("[ROTATE] RotateAroundJAxis: block={} oldMeta={} newMeta={} class={}", getClass().getSimpleName(), oldMeta, newMeta, getClass().getName());
         if (newMeta != oldMeta) {
             world.setBlockMetadataWithClient(i, j, k, newMeta);
             return true;
@@ -650,9 +690,39 @@ public abstract class Block {
     }
     public int RotateMetadataAroundJAxis(int iMetadata, boolean bReverse) { return iMetadata; }
     protected void OnRotatedOnTurntable(World world, int i, int j, int k) {}
-    protected int TurntableCraftingRotation(World world, int i, int j, int k, boolean bReverse, int iCraftingCounter) { return 0; }
-    public boolean CanRotateAroundBlockOnTurntableToFacing(World world, int i, int j, int k, int iFacing) { return false; }
-    public boolean OnRotatedAroundBlockOnTurntableToFacing(World world, int i, int j, int k, int iFacing) { return false; }
+    protected int TurntableCraftingRotation(World world, int i, int j, int k, boolean bReverse, int iCraftingCounter) {
+        iCraftingCounter++;
+        if (iCraftingCounter >= GetRotationsToCraftOnTurntable(world, i, j, k)) {
+            OnCraftedOnTurntable(world, i, j, k);
+            int iNewBlockID = GetNewBlockIDCraftedOnTurntable(world, i, j, k);
+            int iNewBlockMetadata = GetNewMetadataCraftedOnTurntable(world, i, j, k);
+            int iItemIDDropped = GetItemIDCraftedOnTurntable(world, i, j, k);
+            int iItemCountDropped = GetItemCountCraftedOnTurntable(world, i, j, k);
+            int iItemDamageDropped = GetItemDamageCraftedOnTurntable(world, i, j, k);
+            // Eject crafted items above the turntable
+            for (int t = 0; t < iItemCountDropped; t++) {
+                try {
+                    // FCUtilsItem is FC code — call via reflection
+                    Class<?> utilsClass = Class.forName("net.minecraft.src.btw.util.FCUtilsItem");
+                    java.lang.reflect.Method eject = utilsClass.getMethod(
+                            "EjectSingleItemWithRandomOffset",
+                            World.class, int.class, int.class, int.class, int.class, int.class);
+                    eject.invoke(null, world, i, j + 1, k, iItemIDDropped, iItemDamageDropped);
+                } catch (Exception ignored) {}
+            }
+            world.setBlockAndMetadataWithNotify(i, j, k, iNewBlockID, iNewBlockMetadata);
+            iCraftingCounter = 0;
+        }
+        return iCraftingCounter;
+    }
+    public boolean CanRotateAroundBlockOnTurntableToFacing(World world, int i, int j, int k, int iFacing) {
+        // Log the ACTUAL MC block at this position for debugging ID mapping
+        org.apache.logging.log4j.LogManager.getLogger("BTW-Block").info("[ATTACHED] block={} id={} at {},{},{} facing={} → false. world={}",
+                getClass().getSimpleName(), blockID, i, j, k, iFacing,
+                world != null ? world.getClass().getSimpleName() : "null");
+        return false;
+    }
+    public boolean OnRotatedAroundBlockOnTurntableToFacing(World world, int i, int j, int k, int iFacing) { return true; }
     public int GetNewMetadataRotatedAroundBlockOnTurntableToFacing(World world, int i, int j, int k, int iInitialFacing, int iRotatedFacing) { return 0; }
     public int ConvertFacingToTopTextureRotation(int iFacing) { return 0; }
     public int ConvertFacingToBottomTextureRotation(int iFacing) { return 0; }
@@ -1134,9 +1204,9 @@ public abstract class Block {
 
     // --- BTW-added: Contact points ---
 
-    public boolean HasContactPointToFullFace(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return false; }
-    public boolean HasContactPointToSlabSideFace(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIsSlabUpsideDown) { return false; }
-    public boolean HasContactPointToStairShapedFace(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return false; }
+    public boolean HasContactPointToFullFace(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return blockAccess.isBlockNormalCube(i, j, k); }
+    public boolean HasContactPointToSlabSideFace(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIsSlabUpsideDown) { return HasContactPointToFullFace(blockAccess, i, j, k, iFacing); }
+    public boolean HasContactPointToStairShapedFace(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return HasContactPointToFullFace(blockAccess, i, j, k, iFacing); }
     public boolean HasContactPointToStairNarrowVerticalFace(IBlockAccess blockAccess, int i, int j, int k, int iFacing, int iStairFacing) { return false; }
 
     // --- BTW-added: Mortar ---
@@ -1192,7 +1262,26 @@ public abstract class Block {
     public int GetItemIndexDroppedWhenCookedByKiln(IBlockAccess blockAccess, int i, int j, int k) { return kilnDropItemIndex; }
     public Block SetItemDamageDroppedWhenCookedByKiln(int iItemDamage) { this.kilnDropItemDamage = iItemDamage; return this; }
     public int GetItemDamageDroppedWhenCookedByKiln(IBlockAccess blockAccess, int i, int j, int k) { return kilnDropItemDamage; }
-    public void OnCookedByKiln(World world, int i, int j, int k) {}
+    public void OnCookedByKiln(World world, int i, int j, int k) {
+        // FC patched Block.OnCookedByKiln: drops the cooked item and removes the block
+        int iItemDropped = GetItemIndexDroppedWhenCookedByKiln(world, i, j, k);
+        if (iItemDropped >= 0) {
+            int iDamageDropped = GetItemDamageDroppedWhenCookedByKiln(world, i, j, k);
+            world.setBlockToAir(i, j, k);
+            if (iItemDropped > 0) {
+                try {
+                    Class<?> utilsClass = Class.forName("net.minecraft.src.btw.util.FCUtilsItem");
+                    java.lang.reflect.Method eject = utilsClass.getMethod(
+                            "EjectSingleItemWithRandomOffset",
+                            World.class, int.class, int.class, int.class, int.class, int.class);
+                    eject.invoke(null, world, i, j, k, iItemDropped, iDamageDropped);
+                } catch (Exception e) {
+                    // Fallback: drop as item entity
+                    dropBlockAsItem_do(world, i, j, k, new ItemStack(iItemDropped, 1, iDamageDropped));
+                }
+            }
+        }
+    }
 
     // --- BTW-added: Saw ---
 
@@ -1283,8 +1372,18 @@ public abstract class Block {
     // --- BTW-added: Static facing helpers ---
 
     public static int GetOppositeFacing(int iFacing) { return iFacing ^ 1; }
-    public static int RotateFacingAroundJ(int iFacing, boolean bReverse) { return iFacing; }
-    public static int CycleFacing(int iFacing, boolean bReverse) { return iFacing; }
+    public static int RotateFacingAroundJ(int iFacing, boolean bReverse) {
+        if (iFacing < 2) return iFacing; // up/down unchanged
+        if (bReverse) {
+            return switch (iFacing) { case 2 -> 4; case 4 -> 3; case 3 -> 5; case 5 -> 2; default -> iFacing; };
+        } else {
+            return switch (iFacing) { case 2 -> 5; case 5 -> 3; case 3 -> 4; case 4 -> 2; default -> iFacing; };
+        }
+    }
+    public static int CycleFacing(int iFacing, boolean bReverse) {
+        if (bReverse) return (iFacing + 5) % 6;
+        return (iFacing + 1) % 6;
+    }
 
     // --- BTW-added: Conversion/combined block ---
 
@@ -1387,7 +1486,7 @@ public abstract class Block {
         bookShelf = new ConcreteBlock(47, Material.wood);
         cobblestoneMossy = new ConcreteBlock(48, Material.rock);
         obsidian = new ConcreteBlock(49, Material.rock);
-        torchWood = new ConcreteBlock(50, Material.circuits);
+        torchWood = new ConcreteTorchBlock(50, Material.circuits);
         fire = new ConcreteBlockFire(51);
         mobSpawner = new ConcreteBlock(52, Material.rock);
         stairsWoodOak = new ConcreteBlock(53, Material.wood);
@@ -1412,8 +1511,8 @@ public abstract class Block {
         pressurePlatePlanks = new ConcreteBlock(72, Material.wood);
         oreRedstone = new ConcreteBlock(73, Material.rock);
         oreRedstoneGlowing = new ConcreteBlock(74, Material.rock);
-        torchRedstoneIdle = new ConcreteBlock(75, Material.circuits);
-        torchRedstoneActive = new ConcreteBlock(76, Material.circuits);
+        torchRedstoneIdle = new ConcreteTorchBlock(75, Material.circuits);
+        torchRedstoneActive = new ConcreteTorchBlock(76, Material.circuits);
         stoneButton = new ConcreteBlock(77, Material.circuits);
         snow = new ConcreteBlock(78, Material.snow);
         ice = new ConcreteBlock(79, Material.ice);
@@ -1493,6 +1592,35 @@ public abstract class Block {
     // Concrete subclass since Block is abstract
     private static class ConcreteBlock extends Block {
         ConcreteBlock(int id, Material mat) { super(id, mat); }
+    }
+    /**
+     * Torch block with FC turntable rotation support.
+     * Replicates FCBlockTorchBase's turntable methods for vanilla torch IDs (50, 75, 76).
+     * Torch orientation: metadata & 7 → 1=east, 2=west, 3=south, 4=north, 5=floor.
+     * Torch facing: 6 - orientation (facing is the direction the torch points, opposite of attachment).
+     */
+    private static class ConcreteTorchBlock extends Block {
+        ConcreteTorchBlock(int id, Material mat) { super(id, mat); }
+        private static int getOrientation(int meta) { return meta & 7; }
+        private static int setOrientation(int meta, int orient) { return (meta & ~7) | orient; }
+        @Override public int GetFacing(int iMetadata) {
+            return MathHelper.clamp_int(6 - getOrientation(iMetadata), 1, 5);
+        }
+        @Override public int SetFacing(int iMetadata, int iFacing) {
+            iFacing = MathHelper.clamp_int(iFacing, 1, 5);
+            return setOrientation(iMetadata, 6 - iFacing);
+        }
+        @Override public boolean CanRotateOnTurntable(IBlockAccess blockAccess, int i, int j, int k) { return false; }
+        @Override public boolean CanRotateAroundBlockOnTurntableToFacing(World world, int i, int j, int k, int iFacing) {
+            return iFacing == GetOppositeFacing(GetFacing(world, i, j, k));
+        }
+        @Override public boolean OnRotatedAroundBlockOnTurntableToFacing(World world, int i, int j, int k, int iFacing) {
+            return true;
+        }
+        @Override public int GetNewMetadataRotatedAroundBlockOnTurntableToFacing(World world, int i, int j, int k, int iInitialFacing, int iRotatedFacing) {
+            int oldMeta = world.getBlockMetadata(i, j, k);
+            return SetFacing(oldMeta, GetOppositeFacing(iRotatedFacing));
+        }
     }
     private static class ConcreteBlockGrass extends BlockGrass {
         ConcreteBlockGrass(int id) { super(id); }

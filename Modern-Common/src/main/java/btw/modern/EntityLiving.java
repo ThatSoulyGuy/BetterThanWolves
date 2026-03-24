@@ -49,9 +49,16 @@ public abstract class EntityLiving extends Entity {
     public float[] equipmentDropChances = new float[5];
     public int entityAge;
     public int carryoverDamage;
+    private EntityLiving attackTarget;
+    public ItemStack[] equipment = new ItemStack[5];
+    protected PathNavigate navigator;
+    protected EntityLookHelper lookHelper;
+    protected EntitySenses senses;
 
     protected EntityLiving(World world) {
         super(world);
+        this.tasks = new EntityAITasks();
+        this.targetTasks = new EntityAITasks();
     }
 
     public abstract int getMaxHealth();
@@ -59,25 +66,34 @@ public abstract class EntityLiving extends Entity {
     public void jump() {}
 
     public ItemStack getHeldItem() {
-        return null;
+        return getCurrentItemOrArmor(0);
     }
 
     public void swingItem() {}
 
     public EntityLiving getAttackTarget() {
-        return null;
+        return this.attackTarget;
     }
 
     public EntitySenses getEntitySenses() {
-        return null;
+        if (senses == null) {
+            senses = new EntitySenses();
+        }
+        return senses;
     }
 
     public PathNavigate getNavigator() {
-        return null;
+        if (navigator == null) {
+            navigator = new PathNavigate(this, this.worldObj, 16.0F);
+        }
+        return navigator;
     }
 
     public EntityLookHelper getLookHelper() {
-        return null;
+        if (lookHelper == null) {
+            lookHelper = new EntityLookHelper();
+        }
+        return lookHelper;
     }
 
     public void onLivingUpdate() {}
@@ -104,19 +120,26 @@ public abstract class EntityLiving extends Entity {
     }
 
     public void setAttackTarget(EntityLiving target) {
+        this.attackTarget = target;
         this.entityLivingToAttack = target;
     }
 
     public float getEyeHeight() {
-        return 0.0F;
+        return this.height * 0.85F;
     }
 
     public boolean canEntityBeSeen(Entity entity) {
-        return false;
+        return true; // TODO: implement ray tracing
     }
 
     public int getTotalArmorValue() {
-        return 0;
+        int total = 0;
+        for (int i = 1; i < 5; i++) {
+            if (equipment[i] != null && equipment[i].getItem() instanceof ItemArmor) {
+                total += ((ItemArmor) equipment[i].getItem()).damageReduceAmount;
+            }
+        }
+        return total;
     }
 
     public boolean isPotionActive(int potionId) {
@@ -152,7 +175,7 @@ public abstract class EntityLiving extends Entity {
     }
 
     public ItemStack getCurrentItemOrArmor(int slot) {
-        return null;
+        return (slot >= 0 && slot < equipment.length) ? equipment[slot] : null;
     }
 
     public ItemStack getCurrentArmor(int slot) {
@@ -469,7 +492,46 @@ public abstract class EntityLiving extends Entity {
     public void handleHealthUpdate(byte updateType) {}
 
     public String getTexture() {
+        if (this.texture == null || this.texture.isEmpty()) {
+            // Derive texture from class name for vanilla mobs whose
+            // Modern-Common stubs don't set the texture field.
+            this.texture = deriveTextureFromClass();
+        }
         return this.texture;
+    }
+
+    private String deriveTextureFromClass() {
+        String name = getClass().getSimpleName();
+        // Strip FC prefix: FCEntityCow → Cow
+        if (name.startsWith("FCEntity")) name = name.substring(8);
+        else if (name.startsWith("Entity")) name = name.substring(6);
+        String lower = name.toLowerCase();
+        return switch (lower) {
+            case "cow" -> "/mob/cow.png";
+            case "pig" -> "/mob/pig.png";
+            case "sheep" -> "/mob/sheep.png";
+            case "chicken" -> "/mob/chicken.png";
+            case "wolf" -> "/mob/wolf.png";
+            case "ocelot" -> "/mob/ocelot.png";
+            case "creeper" -> "/mob/creeper.png";
+            case "skeleton" -> "/mob/skeleton.png";
+            case "zombie" -> "/mob/zombie.png";
+            case "spider", "cavespider" -> "/mob/spider.png";
+            case "enderman" -> "/mob/enderman.png";
+            case "blaze" -> "/mob/fire.png";
+            case "ghast" -> "/mob/ghast.png";
+            case "slime" -> "/mob/slime.png";
+            case "magmacube" -> "/mob/magmacube.png";
+            case "bat" -> "/mob/bat.png";
+            case "witch" -> "/mob/witch.png";
+            case "villager" -> "/mob/villager/villager.png";
+            case "snowman" -> "/mob/snowman.png";
+            case "pigzombie" -> "/mob/pigzombie.png";
+            case "wither", "witherpersistent" -> "/mob/wither.png";
+            case "wolfdire" -> "/mob/wolf.png";
+            case "junglespider" -> "/mob/spider.png";
+            default -> "/mob/" + lower + ".png";
+        };
     }
 
     public void performHurtAnimation() {}

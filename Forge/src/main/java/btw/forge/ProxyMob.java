@@ -20,11 +20,13 @@ import org.apache.logging.log4j.Logger;
  * enderman, witch, wither, pig zombie, slime, etc.) as well as
  * {@link btw.modern.EntityFlying} (ghast) and other hostile mob variants.
  */
-public class ProxyMob extends Mob {
+public class ProxyMob extends Mob
+        implements net.minecraftforge.entity.IEntityAdditionalSpawnData {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-ProxyMob");
 
     private btw.modern.EntityLiving fcEntity;
+    private String fcClassName = "";
 
     public ProxyMob(EntityType<? extends Mob> type, Level level) {
         super(type, level);
@@ -36,6 +38,7 @@ public class ProxyMob extends Mob {
 
     public void setFcEntity(btw.modern.EntityLiving fc) {
         this.fcEntity = fc;
+        this.fcClassName = fc.getClass().getName();
         if (level() instanceof ServerLevel sl) {
             fc.worldObj = WorldBridge.getOrCreate(sl);
         }
@@ -43,7 +46,49 @@ public class ProxyMob extends Mob {
     }
 
     public btw.modern.EntityLiving getFcEntity() {
+        if (fcEntity == null && level().isClientSide && !fcClassName.isEmpty()) {
+            createClientFcEntity();
+        }
+        if (fcEntity != null) syncToFc();
         return fcEntity;
+    }
+
+    public String getFcClassName() {
+        if (fcClassName.isEmpty()) {
+            fcClassName = BTWEntityRegistration.getFcClassName(getType());
+        }
+        return fcClassName;
+    }
+
+    private void createClientFcEntity() {
+        if (fcClassName == null || fcClassName.isEmpty()) return;
+        btw.modern.World dummyWorld = ProxyEntity.createDummyClientWorld();
+        try {
+            Class<?> fcClass = Class.forName(fcClassName);
+            try {
+                var ctor = fcClass.getConstructor(btw.modern.World.class);
+                fcEntity = (btw.modern.EntityLiving) ctor.newInstance(dummyWorld);
+            } catch (NoSuchMethodException e) {
+                var ctor = fcClass.getDeclaredConstructor();
+                ctor.setAccessible(true);
+                fcEntity = (btw.modern.EntityLiving) ctor.newInstance();
+            }
+            if (fcEntity != null) fcEntity.worldObj = dummyWorld;
+            syncToFc();
+        } catch (Throwable e) {
+            LOGGER.info("Could not create client FC entity {}: {}", fcClassName, e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void writeSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
+        buf.writeUtf(fcClassName);
+    }
+
+    @Override
+    public void readSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
+        fcClassName = buf.readUtf();
+        if (!fcClassName.isEmpty()) createClientFcEntity();
     }
 
     // ------------------------------------------------------------------
@@ -73,6 +118,18 @@ public class ProxyMob extends Mob {
         fcEntity.motionZ = getDeltaMovement().z;
         fcEntity.ticksExisted = tickCount;
         fcEntity.fallDistance = fallDistance;
+
+        // Animation fields — derived from MC entity's walk/body state
+        fcEntity.renderYawOffset = yBodyRot;
+        fcEntity.prevRenderYawOffset = yBodyRotO;
+        fcEntity.rotationYawHead = yHeadRot;
+        fcEntity.prevRotationYawHead = yHeadRotO;
+
+        // Limb swing: compute from walk distance
+        float dist = walkDist - walkDistO;
+        fcEntity.limbYaw = Math.min(dist * 4.0F, 1.0F);
+        fcEntity.prevLimbYaw = fcEntity.limbYaw;
+        fcEntity.limbSwing = walkDist * 0.6662F;
     }
 
     /**
@@ -145,6 +202,12 @@ public class ProxyMob extends Mob {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        if (tag.contains("FCClassName")) {
+            fcClassName = tag.getString("FCClassName");
+            if (fcEntity == null && !fcClassName.isEmpty()) {
+                createClientFcEntity(); // recreate on server side too
+            }
+        }
         if (fcEntity != null && tag.contains("FCData")) {
             CompoundTag fcCompound = tag.getCompound("FCData");
             ForgeNBTCompound wrapper = new ForgeNBTCompound(fcCompound);
@@ -160,6 +223,7 @@ public class ProxyMob extends Mob {
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+        tag.putString("FCClassName", fcClassName);
         if (fcEntity != null) {
             CompoundTag fcCompound = new CompoundTag();
             ForgeNBTCompound wrapper = new ForgeNBTCompound(fcCompound);

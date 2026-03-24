@@ -1,11 +1,7 @@
 package btw.modern;
-
 public class RenderSlime extends RenderLiving {
-
-    private ModelBase scaleAmount;
-
-    public RenderSlime(ModelBase model, ModelBase scaleModel, float shadowSize) {
-        super(model, shadowSize);
-        this.scaleAmount = scaleModel;
-    }
+    protected ModelBase renderPassModel2;
+    public RenderSlime(ModelBase model, ModelBase model2, float shadow) { super(model, shadow); this.renderPassModel2 = model2; }
+    public RenderSlime(ModelBase model, float shadow) { super(model, shadow); }
+    public RenderSlime() { super(null, 0); }
 }

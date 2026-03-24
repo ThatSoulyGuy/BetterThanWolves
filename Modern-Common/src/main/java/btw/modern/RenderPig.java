@@ -1,9 +1,7 @@
 package btw.modern;
-
 public class RenderPig extends RenderLiving {
-
-    public RenderPig(ModelBase model, ModelBase renderPassModel, float shadowSize) {
-        super(model, shadowSize);
-        this.setRenderPassModel(renderPassModel);
-    }
+    protected ModelBase renderPassModel2;
+    public RenderPig(ModelBase model, ModelBase model2, float shadow) { super(model, shadow); this.renderPassModel2 = model2; }
+    public RenderPig(ModelBase model, float shadow) { super(model, shadow); }
+    public RenderPig() { super(null, 0); }
 }

@@ -3,7 +3,7 @@ package btw.modern;
 public class BlockCloth extends Block {
 
     public BlockCloth() {
-        super(0, Material.cloth);
+        super(35, Material.cloth);
     }
 
     protected BlockCloth(int id) {

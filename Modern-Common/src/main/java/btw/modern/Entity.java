@@ -83,6 +83,7 @@ public abstract class Entity {
     public int serverPosX;
     public int serverPosY;
     public int serverPosZ;
+    protected int air = 300;
 
     protected Entity(World world) {
         this.worldObj = world;
@@ -218,8 +219,8 @@ public abstract class Entity {
 
     public void setFlag(int flag, boolean value) {}
 
-    public int getAir() { return 0; }
-    public void setAir(int air) {}
+    public int getAir() { return this.air; }
+    public void setAir(int air) { this.air = air; }
 
     public float getBrightness(float partialTicks) {
         return 0;
@@ -237,7 +238,11 @@ public abstract class Entity {
     }
 
     public Vec3 getLookVec() {
-        return null;
+        float f1 = MathHelper.cos(-rotationYaw * 0.017453292F - (float)Math.PI);
+        float f2 = MathHelper.sin(-rotationYaw * 0.017453292F - (float)Math.PI);
+        float f3 = -MathHelper.cos(-rotationPitch * 0.017453292F);
+        float f4 = MathHelper.sin(-rotationPitch * 0.017453292F);
+        return Vec3.createVectorHelper(f2 * f3, f4, f1 * f3);
     }
 
     // getLook is on EntityLiving in vanilla, not Entity

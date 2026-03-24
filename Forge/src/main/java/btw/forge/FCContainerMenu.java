@@ -91,21 +91,26 @@ public class FCContainerMenu extends AbstractContainerMenu {
         int slotCount = buf.readVarInt();
         int containerSlots = buf.readVarInt();
 
+        // Use sequential indices for ALL container slots to avoid collisions.
+        // The result slot (slotIndex=0 in craftResult) and first grid slot
+        // (slotIndex=0 in craftMatrix) must NOT share the same index in the
+        // same SimpleContainer — that causes them to mirror each other.
         net.minecraft.world.SimpleContainer dummyContainer =
-                new net.minecraft.world.SimpleContainer(containerSlots > 0 ? containerSlots : 1);
+                new net.minecraft.world.SimpleContainer(Math.max(slotCount, containerSlots + 1));
+        int nextContainerSlot = 0;
 
         for (int i = 0; i < slotCount; i++) {
             int x = buf.readShort();
             int y = buf.readShort();
             boolean isPlayerSlot = buf.readBoolean();
+            int origSlotIndex = buf.readVarInt();
 
             if (isPlayerSlot) {
-                int playerSlotIndex = buf.readVarInt();
-                this.addSlot(new Slot(playerInv, playerSlotIndex, x, y));
+                this.addSlot(new Slot(playerInv, origSlotIndex, x, y));
             } else {
-                int containerSlotIndex = buf.readVarInt();
-                int safeIndex = Math.min(containerSlotIndex, dummyContainer.getContainerSize() - 1);
-                this.addSlot(new Slot(dummyContainer, safeIndex, x, y));
+                // Assign sequential index to avoid collisions between
+                // different FC inventories (result vs grid vs others)
+                this.addSlot(new Slot(dummyContainer, nextContainerSlot++, x, y));
             }
         }
 
@@ -139,6 +144,10 @@ public class FCContainerMenu extends AbstractContainerMenu {
             } else {
                 InventoryAdapter adapter = adapters.computeIfAbsent(fcInv, InventoryAdapter::new);
                 this.addSlot(new ContainerMappedSlot(adapter, fcSlot));
+                if (i < 3) {
+                    LOGGER.info("mirrorFcSlots: slot {} fcInv={} adapter={} slotIndex={}",
+                            i, System.identityHashCode(fcInv), System.identityHashCode(adapter), fcSlot.slotIndex);
+                }
             }
         }
     }
@@ -161,50 +170,68 @@ public class FCContainerMenu extends AbstractContainerMenu {
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
-        if (fcContainer != null && fcPlayer != null) {
-            try {
-                btw.modern.ItemStack fcResult = fcContainer.transferStackInSlot(fcPlayer, index);
-                return ItemStackHelper.toMcStack(fcResult);
-            } catch (Exception e) {
-                LOGGER.debug("FC transferStackInSlot failed for slot {}: {}", index, e.getMessage());
+        // Use MC's native moveItemStackTo instead of FC's mergeItemStack.
+        // FC's version operates on FC slots disconnected from MC's InventoryAdapter.
+        Slot slot = this.slots.get(index);
+        if (slot == null || !slot.hasItem()) return ItemStack.EMPTY;
+
+        ItemStack slotStack = slot.getItem();
+        ItemStack originalStack = slotStack.copy();
+
+        // Determine slot ranges: container slots vs player inventory slots
+        int containerSlotCount = fcContainer != null ? 0 : 0;
+        for (int i = 0; i < this.slots.size(); i++) {
+            if (this.slots.get(i) instanceof ContainerMappedSlot) {
+                containerSlotCount++;
             }
         }
-        return ItemStack.EMPTY;
+        // Container slots are first, player slots follow
+        int playerStart = containerSlotCount;
+        int playerEnd = this.slots.size();
+
+        if (index < containerSlotCount) {
+            // Shift-click from container → player inventory
+            if (!this.moveItemStackTo(slotStack, playerStart, playerEnd, true)) {
+                return ItemStack.EMPTY;
+            }
+        } else {
+            // Shift-click from player → container
+            if (!this.moveItemStackTo(slotStack, 0, containerSlotCount, false)) {
+                return ItemStack.EMPTY;
+            }
+        }
+
+        if (slotStack.isEmpty()) {
+            slot.setByPlayer(ItemStack.EMPTY);
+        } else {
+            slot.setChanged();
+        }
+
+        if (slotStack.getCount() == originalStack.getCount()) {
+            return ItemStack.EMPTY;
+        }
+
+        slot.onTake(player, slotStack);
+        return originalStack;
     }
 
     /**
-     * All slot clicks are delegated to FC's {@code Container.slotClick()}.
+     * Slot clicks are handled by MC 1.20.1's native AbstractContainerMenu logic.
+     *
+     * <p>All MC slots are backed by {@link InventoryAdapter} (live proxy to FC
+     * inventory) or the real player {@link net.minecraft.world.entity.player.Inventory}.
+     * MC's native click/drag/shift-click logic operates directly on these proxies,
+     * which read/write to FC's inventories. No FC Container.slotClick reimplementation
+     * needed — MC's own implementation handles all interaction modes correctly.</p>
+     *
+     * <p>FC-specific slot behavior (validation, stack limits) is bridged via
+     * {@link ContainerMappedSlot#mayPlace} and {@link ContainerMappedSlot#getMaxStackSize}.</p>
      */
     @Override
     public void clicked(int slotId, int button, net.minecraft.world.inventory.ClickType type, Player player) {
-        if (fcContainer == null || fcPlayer == null) {
-            // CLIENT: let vanilla predict for instant visual feedback.
-            super.clicked(slotId, button, type, player);
-            return;
-        }
-
-        // SERVER: FC is the sole authority for all click logic.
-        try {
-            fcPlayer.syncFromReal();
-
-            // Sync MC cursor → FC cursor
-            fcPlayer.inventory.setItemStack(
-                    ItemStackHelper.toFcStack(getCarried()));
-
-            // Delegate entirely to FC
-            fcContainer.slotClick(slotId, button, type.ordinal(), fcPlayer);
-
-            // Read FC cursor → MC cursor
-            setCarried(ItemStackHelper.toMcStack(
-                    fcPlayer.inventory.getItemStack()));
-
-            // Flush player inventory
-            ((InventoryBridge) fcPlayer.inventory).writeBackAll();
-
-        } catch (Exception e) {
-            LOGGER.warn("FC slotClick failed (slot={}, button={}, mode={}): {}",
-                    slotId, button, type, e.toString(), e);
-        }
+        // Let MC 1.20.1's native AbstractContainerMenu handle ALL slot interactions.
+        // The InventoryAdapter proxy ensures MC reads/writes directly to FC's inventories.
+        super.clicked(slotId, button, type, player);
     }
 
     /**
@@ -271,8 +298,10 @@ public class FCContainerMenu extends AbstractContainerMenu {
      * </ul>
      */
     private void pushFcComputedData() {
+        // Only check enchanter-specific fields on enchanter containers
+        if (!fcContainer.getClass().getSimpleName().contains("InfernalEnchanter")) return;
+
         // Enchanter: m_CurrentEnchantmentLevels[] and m_lNameSeed
-        // Use getDeclaredField + setAccessible to access private/package-private fields
         try {
             java.lang.reflect.Field levelsField = findField(fcContainer.getClass(), "m_CurrentEnchantmentLevels");
             if (levelsField != null) {
@@ -388,6 +417,30 @@ public class FCContainerMenu extends AbstractContainerMenu {
         @Override
         public int getMaxStackSize() {
             return fcSlot.getSlotStackLimit();
+        }
+
+        @Override
+        public boolean mayPickup(Player player) {
+            PlayerBridge pb = player instanceof net.minecraft.server.level.ServerPlayer sp
+                    ? PlayerBridge.getOrCreate(sp) : null;
+            return fcSlot.canTakeStack(pb);
+        }
+
+        @Override
+        public void onTake(Player player, ItemStack stack) {
+            // Bridge FC's onPickupFromSlot — critical for crafting
+            // (consumes ingredients when result is taken)
+            PlayerBridge pb = player instanceof net.minecraft.server.level.ServerPlayer sp
+                    ? PlayerBridge.getOrCreate(sp) : null;
+            btw.modern.ItemStack fcStack = ItemStackHelper.toFcStack(stack);
+            fcSlot.onPickupFromSlot(pb, fcStack);
+            super.onTake(player, stack);
+        }
+
+        @Override
+        public void setChanged() {
+            super.setChanged();
+            fcSlot.onSlotChanged();
         }
     }
 }

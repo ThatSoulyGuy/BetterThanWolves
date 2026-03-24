@@ -9,6 +9,7 @@ public class BlockFire extends Block {
 
     protected BlockFire(int id) {
         super(id, Material.fire);
+        setTickRandomly(true);
     }
 
     @Override

@@ -9,7 +9,7 @@ public abstract class ModelBase {
     public float onGround;
     public boolean isRiding = false;
     public List boxList = new ArrayList();
-    public boolean isChild = true;
+    public boolean isChild = false;
     public int textureWidth = 64;
     public int textureHeight = 32;
 

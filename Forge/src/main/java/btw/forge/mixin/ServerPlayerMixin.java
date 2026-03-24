@@ -40,6 +40,17 @@ public abstract class ServerPlayerMixin {
         pb.m_iTicksSinceEmoteSound++;
         pb.UpdateModStatusVariables();
 
+        // Debug: log penalty levels occasionally
+        if (self.tickCount % 100 == 0) {
+            org.apache.logging.log4j.LogManager.getLogger("BTW-Penalties").info(
+                    "food={} sat={:.1f} health={} penalties: hunger={} fat={} health={} gloom={} miningMod={:.2f}",
+                    pb.foodStats.getFoodLevel(), pb.foodStats.getSaturationLevel(),
+                    pb.health,
+                    pb.GetHungerPenaltyLevel(), pb.GetFatPenaltyLevel(),
+                    pb.GetHealthPenaltyLevel(), pb.GetGloomLevel(),
+                    pb.GetMiningSpeedModifier());
+        }
+
         // Send penalty levels to the client for HUD rendering.
         // This replaces FC's DataWatcher-based sync (IDs 22-31) with a
         // dedicated network packet. Runs every tick after penalty levels
@@ -91,24 +102,28 @@ public abstract class ServerPlayerMixin {
         PlayerBridge oldBridge = PlayerBridge.getOrCreate(oldPlayer);
         PlayerBridge newBridge = PlayerBridge.getOrCreate(self);
 
-        // Clone FC state
-        newBridge.m_iHungerPenaltyLevel = oldBridge.m_iHungerPenaltyLevel;
-        newBridge.m_iFatPenaltyLevel = oldBridge.m_iFatPenaltyLevel;
-        newBridge.m_iHealthPenaltyLevel = oldBridge.m_iHealthPenaltyLevel;
-        newBridge.m_iGloomLevel = oldBridge.m_iGloomLevel;
-        newBridge.m_iInGloomCounter = oldBridge.m_iInGloomCounter;
-        newBridge.m_fCurrentMiningSpeedModifier = oldBridge.m_fCurrentMiningSpeedModifier;
+        // Always copy persistent spawn data (survives death)
         newBridge.m_HardcoreSpawnChunk = oldBridge.m_HardcoreSpawnChunk;
         newBridge.m_iSpawnDimension = oldBridge.m_iSpawnDimension;
         newBridge.m_lTimeOfLastSpawnAssignment = oldBridge.m_lTimeOfLastSpawnAssignment;
         newBridge.m_lTimeOfLastDimensionSwitch = oldBridge.m_lTimeOfLastDimensionSwitch;
         newBridge.m_lRespawnAssignmentCooldownTimer = oldBridge.m_lRespawnAssignmentCooldownTimer;
 
-        // Clone food stats if keeping everything (dimension transfer)
         if (keepEverything) {
+            // Dimension transfer: preserve ALL state
+            newBridge.m_iHungerPenaltyLevel = oldBridge.m_iHungerPenaltyLevel;
+            newBridge.m_iFatPenaltyLevel = oldBridge.m_iFatPenaltyLevel;
+            newBridge.m_iHealthPenaltyLevel = oldBridge.m_iHealthPenaltyLevel;
+            newBridge.m_iGloomLevel = oldBridge.m_iGloomLevel;
+            newBridge.m_iInGloomCounter = oldBridge.m_iInGloomCounter;
+            newBridge.m_fCurrentMiningSpeedModifier = oldBridge.m_fCurrentMiningSpeedModifier;
             newBridge.foodStats.setFoodLevel(oldBridge.foodStats.getFoodLevel());
             newBridge.foodStats.setFoodSaturationLevel(oldBridge.foodStats.getSaturationLevel());
         }
+        // Death respawn: penalty levels stay at defaults (0),
+        // food stats stay at defaults (60/0), mining speed stays at 1.0.
+        // UpdateModStatusVariables() on the next tick will recompute
+        // everything from the fresh health/food state.
     }
 
     // =========================================================================

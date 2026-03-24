@@ -28,6 +28,7 @@ import net.minecraft.world.InteractionResult;
  * through Forge's item system.
  */
 public class ProxyItem extends Item {
+    private static final org.apache.logging.log4j.Logger LOGGER = org.apache.logging.log4j.LogManager.getLogger("BTW-ProxyItem");
     private final int legacyId;
     private final String displayName;
 
@@ -121,21 +122,9 @@ public class ProxyItem extends Item {
 
     @Override
     public InteractionResult useOn(UseOnContext ctx) {
-        if (fc() == null) return super.useOn(ctx);
-        if (ctx.getLevel() instanceof ServerLevel sl) {
-            PlayerBridge pb = PlayerBridge.getOrCreate(ctx.getPlayer());
-            pb.syncFromReal();
-            btw.modern.ItemStack fcStack = pb.getCurrentEquippedItem();
-            if (fcStack != null) {
-                boolean result = fc().onItemUse(fcStack, pb, WorldBridge.getOrCreate(sl),
-                        ctx.getClickedPos().getX(), ctx.getClickedPos().getY(), ctx.getClickedPos().getZ(),
-                        ctx.getClickedFace().get3DDataValue(),
-                        (float) (ctx.getClickLocation().x - ctx.getClickedPos().getX()),
-                        (float) (ctx.getClickLocation().y - ctx.getClickedPos().getY()),
-                        (float) (ctx.getClickLocation().z - ctx.getClickedPos().getZ()));
-                if (result) return InteractionResult.SUCCESS;
-            }
-        }
+        // Handled by ServerPlayerGameModeMixin.btw$useItemOn which intercepts
+        // at HEAD, calls FC's onItemUse, syncs inventory, and cancels the
+        // original method (preventing creative-mode count restoration).
         return super.useOn(ctx);
     }
 

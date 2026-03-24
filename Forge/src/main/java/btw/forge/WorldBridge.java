@@ -70,6 +70,9 @@ public class WorldBridge extends btw.modern.World {
         // MC 1.20.1: PEACEFUL=0, EASY=1, NORMAL=2, HARD=3
         this.difficultySetting = level.getDifficulty().getId();
 
+        // WorldInfo bridge — FC code accesses world.worldInfo directly
+        this.worldInfo = new WorldInfoBridge(level);
+
         // Set up the WorldProvider so FC code can read dimensionId.
         this.provider = new btw.modern.WorldProvider() {};
         this.provider.worldObj = this;
@@ -168,6 +171,35 @@ public class WorldBridge extends btw.modern.World {
             }
         }
 
+        // Farmland: MC MOISTURE (0-7) → FC legacy metadata (0-7, >0 = hydrated)
+        if (block instanceof net.minecraft.world.level.block.FarmBlock) {
+            if (state.hasProperty(net.minecraft.world.level.block.FarmBlock.MOISTURE)) {
+                return state.getValue(net.minecraft.world.level.block.FarmBlock.MOISTURE);
+            }
+            return 0;
+        }
+
+        // Wall torches: FC uses 1=east, 2=west, 3=south, 4=north, 5=floor
+        if (block instanceof net.minecraft.world.level.block.WallTorchBlock
+                || block instanceof net.minecraft.world.level.block.RedstoneWallTorchBlock) {
+            if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+                net.minecraft.core.Direction dir = state.getValue(
+                        net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+                switch (dir) {
+                    case EAST: return 1;
+                    case WEST: return 2;
+                    case SOUTH: return 3;
+                    case NORTH: return 4;
+                    default: return 5;
+                }
+            }
+            return 5; // floor
+        }
+        // Floor torches
+        if (block instanceof net.minecraft.world.level.block.TorchBlock) {
+            return 5; // floor torch
+        }
+
         // Blocks with FACING property (furnace, dispenser, dropper, piston, chest, etc.)
         // MC 1.5.2 metadata: 0=down, 1=up, 2=north, 3=south, 4=west, 5=east
         if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING)) {
@@ -248,6 +280,169 @@ public class WorldBridge extends btw.modern.World {
         }
     }
 
+    /** Converts MC 1.5.2 facing metadata to MC 1.20.1 Direction. */
+    private static net.minecraft.core.Direction legacyFacingToDirection(int facing) {
+        switch (facing) {
+            case 0: return net.minecraft.core.Direction.DOWN;
+            case 1: return net.minecraft.core.Direction.UP;
+            case 2: return net.minecraft.core.Direction.NORTH;
+            case 3: return net.minecraft.core.Direction.SOUTH;
+            case 4: return net.minecraft.core.Direction.WEST;
+            case 5: return net.minecraft.core.Direction.EAST;
+            default: return net.minecraft.core.Direction.NORTH;
+        }
+    }
+
+    /**
+     * Applies FC metadata to a vanilla MC block state (reverse of deriveVanillaMetadata).
+     * Translates FC's integer metadata into the appropriate MC 1.20.1 BlockState properties.
+     */
+    private BlockState applyFcMetadataToVanillaBlock(BlockState current, int metadata) {
+        net.minecraft.world.level.block.Block block = current.getBlock();
+
+        // Logs: metadata bits 2-3 encode axis orientation
+        if (block instanceof net.minecraft.world.level.block.RotatedPillarBlock
+                && current.hasProperty(net.minecraft.world.level.block.RotatedPillarBlock.AXIS)) {
+            int axisBits = (metadata >> 2) & 3;
+            net.minecraft.core.Direction.Axis axis;
+            switch (axisBits) {
+                case 1: axis = net.minecraft.core.Direction.Axis.X; break;   // east-west
+                case 2: axis = net.minecraft.core.Direction.Axis.Z; break;   // north-south
+                default: axis = net.minecraft.core.Direction.Axis.Y; break;  // vertical
+            }
+            return current.setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS, axis);
+        }
+
+        // Blocks with HORIZONTAL_FACING (furnace, chest, ladder, etc.)
+        // FC metadata: 2=north, 3=south, 4=west, 5=east
+        if (current.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+            int facingBits = metadata & 7; // lower 3 bits for facing
+            net.minecraft.core.Direction dir = legacyFacingToDirection(facingBits);
+            // HORIZONTAL_FACING only accepts horizontal directions
+            if (dir.getAxis().isHorizontal()) {
+                BlockState result = current.setValue(
+                        net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, dir);
+                // Stairs: bit 2 = upside-down
+                if (current.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HALF)) {
+                    // Stairs use different facing encoding: 0=east,1=west,2=south,3=north
+                    net.minecraft.core.Direction stairDir;
+                    switch (metadata & 3) {
+                        case 0: stairDir = net.minecraft.core.Direction.EAST; break;
+                        case 1: stairDir = net.minecraft.core.Direction.WEST; break;
+                        case 2: stairDir = net.minecraft.core.Direction.SOUTH; break;
+                        case 3: stairDir = net.minecraft.core.Direction.NORTH; break;
+                        default: stairDir = net.minecraft.core.Direction.EAST;
+                    }
+                    result = current.setValue(
+                            net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, stairDir);
+                    result = result.setValue(
+                            net.minecraft.world.level.block.state.properties.BlockStateProperties.HALF,
+                            (metadata & 4) != 0
+                                    ? net.minecraft.world.level.block.state.properties.Half.TOP
+                                    : net.minecraft.world.level.block.state.properties.Half.BOTTOM);
+                }
+                return result;
+            }
+        }
+
+        // Blocks with full FACING (dispenser, dropper, piston, observer, etc.)
+        if (current.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING)) {
+            int facingBits = metadata & 7;
+            net.minecraft.core.Direction dir = legacyFacingToDirection(facingBits);
+            BlockState result = current.setValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING, dir);
+            if (current.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.EXTENDED)) {
+                result = result.setValue(
+                        net.minecraft.world.level.block.state.properties.BlockStateProperties.EXTENDED,
+                        (metadata & 8) != 0);
+            }
+            if (current.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.TRIGGERED)) {
+                result = result.setValue(
+                        net.minecraft.world.level.block.state.properties.BlockStateProperties.TRIGGERED,
+                        (metadata & 8) != 0);
+            }
+            return result;
+        }
+
+        // Torches on walls: FC metadata 1-4 maps to facing
+        // FC: 1=east(+x), 2=west(-x), 3=south(+z), 4=north(-z), 5=floor
+        if (block instanceof net.minecraft.world.level.block.WallTorchBlock
+                && current.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+            net.minecraft.core.Direction dir;
+            switch (metadata) {
+                case 1: dir = net.minecraft.core.Direction.EAST; break;
+                case 2: dir = net.minecraft.core.Direction.WEST; break;
+                case 3: dir = net.minecraft.core.Direction.SOUTH; break;
+                case 4: dir = net.minecraft.core.Direction.NORTH; break;
+                default: return current; // floor torch or unknown
+            }
+            return current.setValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, dir);
+        }
+
+        // No translation available — return unchanged
+        return current;
+    }
+
+    /**
+     * Resolves an FC block ID + metadata into the correct MC 1.20.1 BlockState.
+     * Handles split blocks (e.g., floor torch vs wall torch) and applies facing/axis.
+     */
+    private BlockState resolveVanillaBlockState(int blockID, int metadata) {
+        // Torches: FC metadata 1-4 = wall, 5 = floor
+        // ID 50 = torch, ID 75 = redstone torch off, ID 76 = redstone torch on
+        if (blockID == 50) {
+            if (metadata >= 1 && metadata <= 4) {
+                BlockState state = Blocks.WALL_TORCH.defaultBlockState();
+                return applyTorchFacing(state, metadata);
+            }
+            return Blocks.TORCH.defaultBlockState(); // floor
+        }
+        if (blockID == 75) {
+            // Redstone torch off — MC 1.20.1 doesn't have a separate block for off state
+            // Use the normal redstone torch (it manages its own state)
+            if (metadata >= 1 && metadata <= 4) {
+                BlockState state = Blocks.REDSTONE_WALL_TORCH.defaultBlockState()
+                        .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT, false);
+                return applyTorchFacing(state, metadata);
+            }
+            return Blocks.REDSTONE_TORCH.defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT, false);
+        }
+        if (blockID == 76) {
+            if (metadata >= 1 && metadata <= 4) {
+                BlockState state = Blocks.REDSTONE_WALL_TORCH.defaultBlockState();
+                return applyTorchFacing(state, metadata);
+            }
+            return Blocks.REDSTONE_TORCH.defaultBlockState();
+        }
+
+        // For other vanilla blocks, get the modern block and apply metadata
+        net.minecraft.world.level.block.Block mcBlock = ProxyRegistry.getModernBlock(blockID);
+        if (mcBlock != null) {
+            BlockState state = mcBlock.defaultBlockState();
+            return applyFcMetadataToVanillaBlock(state, metadata);
+        }
+        return null;
+    }
+
+    /** Applies FC torch metadata (1=east, 2=west, 3=south, 4=north) to a wall torch BlockState. */
+    private BlockState applyTorchFacing(BlockState state, int metadata) {
+        if (!state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+            return state;
+        }
+        net.minecraft.core.Direction dir;
+        switch (metadata) {
+            case 1: dir = net.minecraft.core.Direction.EAST; break;
+            case 2: dir = net.minecraft.core.Direction.WEST; break;
+            case 3: dir = net.minecraft.core.Direction.SOUTH; break;
+            case 4: dir = net.minecraft.core.Direction.NORTH; break;
+            default: return state;
+        }
+        return state.setValue(
+                net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, dir);
+    }
+
 
     public Material getBlockMaterial(int x, int y, int z) {
         int id = getBlockId(x, y, z);
@@ -297,6 +492,11 @@ public class WorldBridge extends btw.modern.World {
         BlockPos pos = new BlockPos(x, y, z);
         vanillaMetaOverrides.remove(pos); // clear metadata override on block change
 
+        // Block ID 0 = air — handle directly since air has no proxy/mapping
+        if (blockID == 0) {
+            return level.setBlock(pos, Blocks.AIR.defaultBlockState(), flags);
+        }
+
         // Preserve tile entity data across block changes when FC says to keep it.
         // (e.g., campfire fire level changes: block type changes but tile entity stays)
         net.minecraft.nbt.CompoundTag savedTileData = null;
@@ -320,6 +520,10 @@ public class WorldBridge extends btw.modern.World {
         if (proxy != null) {
             BlockState state = proxy.defaultBlockState()
                     .setValue(ProxyBlock.META, Math.min(Math.max(metadata, 0), 15));
+            if (blockID == 241) {
+                LOGGER.info("[PLACE-HEMP] at {} proxy={} randomTick={} state={}",
+                        pos, proxy, state.isRandomlyTicking(), state);
+            }
             boolean result = level.setBlock(pos, state, flags);
 
             // Restore saved tile entity data
@@ -339,13 +543,21 @@ public class WorldBridge extends btw.modern.World {
             return result;
         }
         // For vanilla block IDs without a ProxyBlock, try mapping to the MC block
-        net.minecraft.world.level.block.Block mcBlock = ProxyRegistry.getModernBlock(blockID);
-        if (mcBlock != null) {
-            level.setBlock(pos, mcBlock.defaultBlockState(), flags);
-            if (metadata != 0) {
-                vanillaMetaOverrides.put(pos.immutable(), metadata);
+        // and apply FC metadata → MC block state translation
+        BlockState vanillaState = resolveVanillaBlockState(blockID, metadata);
+        if (vanillaState != null) {
+            vanillaMetaOverrides.put(pos.immutable(), metadata);
+            // Use flags WITHOUT block-update bit for blocks that attach to faces
+            // (torches, levers, etc.) — FC manages its own update chain and MC's
+            // neighborChanged would break them via canSurvive checks during turntable
+            // rotation before they're fully positioned.
+            net.minecraft.world.level.block.Block vanillaBlock = vanillaState.getBlock();
+            int placeFlags = flags;
+            if (vanillaBlock instanceof net.minecraft.world.level.block.WallTorchBlock
+                    || vanillaBlock instanceof net.minecraft.world.level.block.RedstoneWallTorchBlock) {
+                placeFlags = flags & ~1; // strip BLOCK_UPDATE, keep SEND_TO_CLIENTS
             }
-            return true;
+            return level.setBlock(pos, vanillaState, placeFlags);
         }
         return false;
     }
@@ -362,13 +574,20 @@ public class WorldBridge extends btw.modern.World {
         BlockPos pos = new BlockPos(x, y, z);
         BlockState current = level.getBlockState(pos);
         if (current.hasProperty(ProxyBlock.META)) {
+            int oldMeta = current.getValue(ProxyBlock.META);
             BlockState newState = current.setValue(ProxyBlock.META, Math.min(Math.max(metadata, 0), 15));
             vanillaMetaOverrides.remove(pos); // clear any override
+            boolean result = level.setBlock(pos, newState, flags);
+            LOGGER.info("[SETMETA] at {} oldMeta={} newMeta={} flags={} result={} block={}",
+                    pos, oldMeta, metadata, flags, result, current.getBlock());
+            return result;
+        }
+        // Vanilla block without META — translate FC metadata to MC block state
+        vanillaMetaOverrides.put(pos.immutable(), metadata);
+        BlockState newState = applyFcMetadataToVanillaBlock(current, metadata);
+        if (newState != current) {
             return level.setBlock(pos, newState, flags);
         }
-        // Vanilla block without META — store FC metadata in side map
-        vanillaMetaOverrides.put(pos.immutable(), metadata);
-        // Trigger block update so neighbors react
         level.sendBlockUpdated(pos, current, current, flags);
         return true;
     }
@@ -518,12 +737,31 @@ public class WorldBridge extends btw.modern.World {
         return level.getMaxLocalRawBrightness(new BlockPos(x, y, z));
     }
 
-    
+    @Override
     public int getBlockLightValue(int x, int y, int z) {
         return level.getMaxLocalRawBrightness(new BlockPos(x, y, z));
     }
 
-    
+    @Override
+    public int getBlockLightValue_do(int x, int y, int z, boolean useNeighbors) {
+        return level.getMaxLocalRawBrightness(new BlockPos(x, y, z));
+    }
+
+    @Override
+    public int getLightBrightnessForSkyBlocks(int x, int y, int z, int lightValue) {
+        net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(x, y, z);
+        int sky = level.getBrightness(net.minecraft.world.level.LightLayer.SKY, pos);
+        int block = level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, pos);
+        if (block < lightValue) block = lightValue;
+        return (sky << 20) | (block << 4);
+    }
+
+    @Override
+    public int GetBlockNaturalLightValue(int i, int j, int k) {
+        return level.getBrightness(net.minecraft.world.level.LightLayer.SKY, new net.minecraft.core.BlockPos(i, j, k));
+    }
+
+    @Override
     public int getSavedLightValue(EnumSkyBlock enumSkyBlock, int x, int y, int z) {
         BlockPos pos = new BlockPos(x, y, z);
         if (enumSkyBlock == EnumSkyBlock.Sky) {
@@ -542,14 +780,29 @@ public class WorldBridge extends btw.modern.World {
     // Height methods
     // ================================================================
 
-    
+    @Override
     public int getHeightValue(int x, int z) {
         return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
     }
 
-    
+    @Override
     public int getTopSolidOrLiquidBlock(int x, int z) {
         return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
+    }
+
+    @Override
+    public int getPrecipitationHeight(int x, int z) {
+        return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
+    }
+
+    @Override
+    public int getFirstUncoveredBlock(int x, int z) {
+        return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
+    }
+
+    @Override
+    public int getChunkHeightMapMinimum(int x, int z) {
+        return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR, x, z);
     }
 
     // ================================================================
@@ -561,32 +814,30 @@ public class WorldBridge extends btw.modern.World {
         return level.isLoaded(new BlockPos(x, y, z));
     }
 
-    
+    @Override
     public boolean doChunksNearChunkExist(int x, int y, int z, int range) {
-        return checkChunksExist(x - range, y - range, z - range,
-                x + range, y + range, z + range);
-    }
-
-    
-    public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) {
-        // Check if chunks covering the region are loaded
-        int cx1 = x1 >> 4;
-        int cz1 = z1 >> 4;
-        int cx2 = x2 >> 4;
-        int cz2 = z2 >> 4;
-        for (int cx = cx1; cx <= cx2; cx++) {
-            for (int cz = cz1; cz <= cz2; cz++) {
-                if (!level.hasChunk(cx, cz)) {
-                    return false;
-                }
-            }
-        }
         return true;
     }
 
-    
+    @Override
+    public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) {
+        return true;
+    }
+
+
     public boolean chunkExists(int chunkX, int chunkZ) {
         return level.hasChunk(chunkX, chunkZ);
+    }
+
+    @Override
+    public btw.modern.Chunk getChunkFromChunkCoords(int chunkX, int chunkZ) {
+        // Return a lightweight Chunk that delegates to WorldBridge for block access
+        return new btw.modern.Chunk(this, chunkX, chunkZ);
+    }
+
+    @Override
+    public btw.modern.Chunk getChunkFromBlockCoords(int x, int z) {
+        return getChunkFromChunkCoords(x >> 4, z >> 4);
     }
 
     // ================================================================
@@ -983,8 +1234,33 @@ public class WorldBridge extends btw.modern.World {
     }
 
     @Override
+    public float getRainStrength(float partialTicks) {
+        return level.getRainLevel(partialTicks);
+    }
+
+    @Override
+    public float getWeightedThunderStrength(float partialTicks) {
+        return level.getThunderLevel(partialTicks);
+    }
+
+    @Override
     public boolean IsRainingAtPos(int i, int j, int k) {
-        return level.isRainingAt(new BlockPos(i, j, k));
+        return level.isRainingAt(new net.minecraft.core.BlockPos(i, j, k));
+    }
+
+    @Override
+    public boolean IsSnowingAtPos(int i, int j, int k) {
+        if (!isRaining()) return false;
+        if (!canBlockSeeTheSky(i, j, k)) return false;
+        if (getPrecipitationHeight(i, k) > j) return false;
+        net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(i, j, k);
+        net.minecraft.world.level.biome.Biome biome = level.getBiome(pos).value();
+        return biome.coldEnoughToSnow(pos);
+    }
+
+    @Override
+    public boolean IsPrecipitatingAtPos(int i, int j, int k) {
+        return IsRainingAtPos(i, j, k) || IsSnowingAtPos(i, j, k);
     }
 
     // ================================================================
@@ -1069,6 +1345,18 @@ public class WorldBridge extends btw.modern.World {
     }
 
     // ================================================================
+    // Entity lookup
+    // ================================================================
+
+    @Override
+    public btw.modern.Entity getEntityByID(int id) {
+        net.minecraft.world.entity.Entity mcEntity = level.getEntity(id);
+        if (mcEntity == null) return null;
+        // Reuse the existing extractFcEntity helper which handles all proxy types
+        return extractFcEntity(mcEntity);
+    }
+
+    // ================================================================
     // Entity state
     // ================================================================
 
@@ -1125,7 +1413,12 @@ public class WorldBridge extends btw.modern.World {
         return level.getGameTime();
     }
 
-    
+    @Override
+    public float getCelestialAngle(float partialTicks) {
+        return level.getTimeOfDay(partialTicks);
+    }
+
+    @Override
     public boolean isDaytime() {
         return level.isDay();
     }
@@ -1382,5 +1675,115 @@ public class WorldBridge extends btw.modern.World {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    // ================================================================
+    // Ray tracing
+    // ================================================================
+
+    @Override
+    public btw.modern.MovingObjectPosition rayTraceBlocks_do(btw.modern.Vec3 startVec, btw.modern.Vec3 endVec, boolean hitFluids) {
+        net.minecraft.world.phys.Vec3 mcStart = new net.minecraft.world.phys.Vec3(startVec.xCoord, startVec.yCoord, startVec.zCoord);
+        net.minecraft.world.phys.Vec3 mcEnd = new net.minecraft.world.phys.Vec3(endVec.xCoord, endVec.yCoord, endVec.zCoord);
+        net.minecraft.world.level.ClipContext ctx = new net.minecraft.world.level.ClipContext(
+                mcStart, mcEnd,
+                net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                hitFluids ? net.minecraft.world.level.ClipContext.Fluid.SOURCE_ONLY : net.minecraft.world.level.ClipContext.Fluid.NONE,
+                null);
+        net.minecraft.world.phys.BlockHitResult result = level.clip(ctx);
+        if (result == null || result.getType() == net.minecraft.world.phys.HitResult.Type.MISS) return null;
+        net.minecraft.core.BlockPos hitPos = result.getBlockPos();
+        btw.modern.MovingObjectPosition mop = new btw.modern.MovingObjectPosition(
+                hitPos.getX(), hitPos.getY(), hitPos.getZ(),
+                result.getDirection().get3DDataValue(),
+                btw.modern.Vec3.createVectorHelper(result.getLocation().x, result.getLocation().y, result.getLocation().z));
+        return mop;
+    }
+
+    @Override
+    public btw.modern.MovingObjectPosition rayTraceBlocks(btw.modern.Vec3 startVec, btw.modern.Vec3 endVec) {
+        return rayTraceBlocks_do(startVec, endVec, false);
+    }
+
+    @Override
+    public btw.modern.MovingObjectPosition rayTraceBlocks_do_do(btw.modern.Vec3 startVec, btw.modern.Vec3 endVec, boolean hitFluids, boolean ignoreNonMovement) {
+        return rayTraceBlocks_do(startVec, endVec, hitFluids);
+    }
+
+    // ================================================================
+    // Collision detection
+    // ================================================================
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public java.util.List getCollidingBoundingBoxes(btw.modern.Entity entity, btw.modern.AxisAlignedBB aabb) {
+        java.util.List list = new java.util.ArrayList();
+        int minX = btw.modern.MathHelper.floor_double(aabb.minX);
+        int maxX = btw.modern.MathHelper.floor_double(aabb.maxX + 1.0D);
+        int minY = btw.modern.MathHelper.floor_double(aabb.minY);
+        int maxY = btw.modern.MathHelper.floor_double(aabb.maxY + 1.0D);
+        int minZ = btw.modern.MathHelper.floor_double(aabb.minZ);
+        int maxZ = btw.modern.MathHelper.floor_double(aabb.maxZ + 1.0D);
+        for (int x = minX; x < maxX; x++) {
+            for (int z = minZ; z < maxZ; z++) {
+                for (int y = minY; y < maxY; y++) {
+                    int blockId = getBlockId(x, y, z);
+                    if (blockId > 0) {
+                        btw.modern.Block block = btw.modern.Block.blocksList[blockId];
+                        if (block != null) {
+                            block.addCollisionBoxesToList(this, x, y, z, aabb, list, entity);
+                        }
+                    }
+                }
+            }
+        }
+        return list;
+    }
+
+    // ================================================================
+    // Liquid / material checks
+    // ================================================================
+
+    @Override
+    public boolean isAnyLiquid(btw.modern.AxisAlignedBB aabb) {
+        int minX = btw.modern.MathHelper.floor_double(aabb.minX);
+        int maxX = btw.modern.MathHelper.floor_double(aabb.maxX + 1.0D);
+        int minY = btw.modern.MathHelper.floor_double(aabb.minY);
+        int maxY = btw.modern.MathHelper.floor_double(aabb.maxY + 1.0D);
+        int minZ = btw.modern.MathHelper.floor_double(aabb.minZ);
+        int maxZ = btw.modern.MathHelper.floor_double(aabb.maxZ + 1.0D);
+        for (int x = minX; x < maxX; x++) {
+            for (int z = minZ; z < maxZ; z++) {
+                for (int y = minY; y < maxY; y++) {
+                    btw.modern.Material mat = getBlockMaterial(x, y, z);
+                    if (mat != null && mat.isLiquid()) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isMaterialInBB(btw.modern.AxisAlignedBB aabb, btw.modern.Material material) {
+        int minX = btw.modern.MathHelper.floor_double(aabb.minX);
+        int maxX = btw.modern.MathHelper.floor_double(aabb.maxX + 1.0D);
+        int minY = btw.modern.MathHelper.floor_double(aabb.minY);
+        int maxY = btw.modern.MathHelper.floor_double(aabb.maxY + 1.0D);
+        int minZ = btw.modern.MathHelper.floor_double(aabb.minZ);
+        int maxZ = btw.modern.MathHelper.floor_double(aabb.maxZ + 1.0D);
+        for (int x = minX; x < maxX; x++) {
+            for (int z = minZ; z < maxZ; z++) {
+                for (int y = minY; y < maxY; y++) {
+                    btw.modern.Material mat = getBlockMaterial(x, y, z);
+                    if (mat == material) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isAABBInMaterial(btw.modern.AxisAlignedBB aabb, btw.modern.Material material) {
+        return isMaterialInBB(aabb, material);
     }
 }

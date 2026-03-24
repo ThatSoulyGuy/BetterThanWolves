@@ -16,6 +16,9 @@ public abstract class Render {
      * Loads the specified texture.
      */
     protected void loadTexture(String textureName) {
+        // Always record texture on Tessellator for the capture pipeline,
+        // even if renderManager is null (FC renderers created standalone).
+        Tessellator.instance.setCurrentTextureName(textureName);
         if (this.renderManager != null && this.renderManager.renderEngine != null) {
             this.renderManager.renderEngine.bindTexture(textureName);
         }

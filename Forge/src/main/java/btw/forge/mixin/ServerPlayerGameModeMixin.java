@@ -89,21 +89,26 @@ public abstract class ServerPlayerGameModeMixin {
                                 CallbackInfoReturnable<InteractionResult> cir) {
         if (mcStack.isEmpty() || !(world instanceof net.minecraft.server.level.ServerLevel sl)) return;
 
-        // Skip ProxyItems — they handle this in ProxyItem.useOn() or ProxyBlock.use()
-        if (mcStack.getItem() instanceof btw.forge.ProxyItem) return;
-
-        // Skip ProxyBlocks — ProxyBlock.use() handles both stages
         net.minecraft.core.BlockPos pos = hitResult.getBlockPos();
-        if (world.getBlockState(pos).getBlock() instanceof btw.forge.ProxyBlock) return;
 
-        // Look up FC item replacement
-        int legacyId = ProxyRegistry.getItemId(mcStack.getItem());
-        if (mcStack.getItem() instanceof net.minecraft.world.item.BlockItem bi) {
-            legacyId = ProxyRegistry.getBlockId(bi.getBlock());
-        }
+        // Look up FC item — works for both ProxyItems and vanilla items with FC replacements
         btw.modern.Item fcItem = null;
-        if (legacyId > 0 && legacyId < btw.modern.Item.itemsList.length) {
-            fcItem = btw.modern.Item.itemsList[legacyId];
+        if (mcStack.getItem() instanceof btw.forge.ProxyItem) {
+            int proxyLegacyId = ProxyRegistry.getItemId(mcStack.getItem());
+            if (proxyLegacyId > 0 && proxyLegacyId < btw.modern.Item.itemsList.length) {
+                fcItem = btw.modern.Item.itemsList[proxyLegacyId];
+            }
+        } else {
+            // Skip ProxyBlocks — ProxyBlock.use() handles both stages
+            if (world.getBlockState(pos).getBlock() instanceof btw.forge.ProxyBlock) return;
+
+            int legacyId = ProxyRegistry.getItemId(mcStack.getItem());
+            if (mcStack.getItem() instanceof net.minecraft.world.item.BlockItem bi) {
+                legacyId = ProxyRegistry.getBlockId(bi.getBlock());
+            }
+            if (legacyId > 0 && legacyId < btw.modern.Item.itemsList.length) {
+                fcItem = btw.modern.Item.itemsList[legacyId];
+            }
         }
         if (fcItem == null) return;
 
@@ -127,7 +132,7 @@ public abstract class ServerPlayerGameModeMixin {
         }
 
         if (result) {
-            cir.setReturnValue(InteractionResult.SUCCESS);
+            cir.setReturnValue(InteractionResult.CONSUME);
         }
     }
 

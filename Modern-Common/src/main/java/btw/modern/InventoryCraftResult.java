@@ -5,8 +5,22 @@ public class InventoryCraftResult implements IInventory {
 
     public int getSizeInventory() { return 1; }
     public ItemStack getStackInSlot(int slot) { return stackResult[0]; }
-    public ItemStack decrStackSize(int slot, int amount) { return null; }
-    public ItemStack getStackInSlotOnClosing(int slot) { return null; }
+    public ItemStack decrStackSize(int slot, int amount) {
+        if (stackResult[0] != null) {
+            ItemStack stack = stackResult[0];
+            stackResult[0] = null;
+            return stack;
+        }
+        return null;
+    }
+    public ItemStack getStackInSlotOnClosing(int slot) {
+        if (stackResult[0] != null) {
+            ItemStack stack = stackResult[0];
+            stackResult[0] = null;
+            return stack;
+        }
+        return null;
+    }
     public void setInventorySlotContents(int slot, ItemStack stack) { stackResult[0] = stack; }
     public String getInvName() { return "Result"; }
     public boolean isInvNameLocalized() { return false; }

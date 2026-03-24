@@ -254,6 +254,7 @@ public class FCBakedModel implements BakedModel {
 
                 List<BakedQuad> bakedQuads = new ArrayList<>();
                 for (btw.modern.Tessellator.CapturedQuad cq : captured) {
+                    if (cq == null || cq.vertices == null) continue;
                     BakedQuad bq = convertCapturedQuad(cq, fallbackTex);
                     if (bq != null) {
                         bakedQuads.add(bq);
@@ -671,6 +672,10 @@ public class FCBakedModel implements BakedModel {
         // Fire
         VANILLA_TEXTURE_MAP.put("fire_layer_0", "fire_0");
         VANILLA_TEXTURE_MAP.put("fire_layer_1", "fire_1");
+        // Stoked fire — FC used procedural animated textures (FCClientTextureFireStoked).
+        // Map to MC 1.20.1's soul fire (blue) for a visually distinct "intense" fire.
+        VANILLA_TEXTURE_MAP.put("fcblockfirestokedstub_0", "soul_fire_0");
+        VANILLA_TEXTURE_MAP.put("fcblockfirestokedstub_1", "soul_fire_1");
         VANILLA_TEXTURE_MAP.put("tallgrass", "short_grass");
         VANILLA_TEXTURE_MAP.put("musicblock", "note_block");
         VANILLA_TEXTURE_MAP.put("blockcoal", "coal_block");

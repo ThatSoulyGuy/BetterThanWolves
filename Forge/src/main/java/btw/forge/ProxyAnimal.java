@@ -21,11 +21,13 @@ import org.apache.logging.log4j.Logger;
  * {@link btw.modern.EntityAnimal} or {@link btw.modern.EntityTameable}
  * (pig, sheep, cow, chicken, wolf, ocelot, etc.).
  */
-public class ProxyAnimal extends Animal {
+public class ProxyAnimal extends Animal
+        implements net.minecraftforge.entity.IEntityAdditionalSpawnData {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-ProxyAnimal");
 
     private btw.modern.EntityLiving fcEntity;
+    private String fcClassName = "";
 
     public ProxyAnimal(EntityType<? extends Animal> type, Level level) {
         super(type, level);
@@ -37,6 +39,7 @@ public class ProxyAnimal extends Animal {
 
     public void setFcEntity(btw.modern.EntityLiving fc) {
         this.fcEntity = fc;
+        this.fcClassName = fc.getClass().getName();
         if (level() instanceof ServerLevel sl) {
             fc.worldObj = WorldBridge.getOrCreate(sl);
         }
@@ -44,7 +47,49 @@ public class ProxyAnimal extends Animal {
     }
 
     public btw.modern.EntityLiving getFcEntity() {
+        if (fcEntity == null && level().isClientSide && !fcClassName.isEmpty()) {
+            createClientFcEntity();
+        }
+        if (fcEntity != null) syncToFc();
         return fcEntity;
+    }
+
+    public String getFcClassName() {
+        if (fcClassName.isEmpty()) {
+            fcClassName = BTWEntityRegistration.getFcClassName(getType());
+        }
+        return fcClassName;
+    }
+
+    private void createClientFcEntity() {
+        if (fcClassName == null || fcClassName.isEmpty()) return;
+        btw.modern.World dummyWorld = ProxyEntity.createDummyClientWorld();
+        try {
+            Class<?> fcClass = Class.forName(fcClassName);
+            try {
+                var ctor = fcClass.getConstructor(btw.modern.World.class);
+                fcEntity = (btw.modern.EntityLiving) ctor.newInstance(dummyWorld);
+            } catch (NoSuchMethodException e) {
+                var ctor = fcClass.getDeclaredConstructor();
+                ctor.setAccessible(true);
+                fcEntity = (btw.modern.EntityLiving) ctor.newInstance();
+            }
+            if (fcEntity != null) fcEntity.worldObj = dummyWorld;
+            syncToFc();
+        } catch (Throwable e) {
+            LOGGER.info("Could not create client FC entity {}: {}", fcClassName, e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void writeSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
+        buf.writeUtf(fcClassName);
+    }
+
+    @Override
+    public void readSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
+        fcClassName = buf.readUtf();
+        if (!fcClassName.isEmpty()) createClientFcEntity();
     }
 
     // ------------------------------------------------------------------
@@ -70,6 +115,14 @@ public class ProxyAnimal extends Animal {
         fcEntity.motionZ = getDeltaMovement().z;
         fcEntity.ticksExisted = tickCount;
         fcEntity.fallDistance = fallDistance;
+        fcEntity.renderYawOffset = yBodyRot;
+        fcEntity.prevRenderYawOffset = yBodyRotO;
+        fcEntity.rotationYawHead = yHeadRot;
+        fcEntity.prevRotationYawHead = yHeadRotO;
+        float dist = walkDist - walkDistO;
+        fcEntity.limbYaw = Math.min(dist * 4.0F, 1.0F);
+        fcEntity.prevLimbYaw = fcEntity.limbYaw;
+        fcEntity.limbSwing = walkDist * 0.6662F;
     }
 
     private void syncFromFc() {
@@ -168,6 +221,12 @@ public class ProxyAnimal extends Animal {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        if (tag.contains("FCClassName")) {
+            fcClassName = tag.getString("FCClassName");
+            if (fcEntity == null && !fcClassName.isEmpty()) {
+                createClientFcEntity();
+            }
+        }
         if (fcEntity != null && tag.contains("FCData")) {
             CompoundTag fcCompound = tag.getCompound("FCData");
             ForgeNBTCompound wrapper = new ForgeNBTCompound(fcCompound);
@@ -183,6 +242,7 @@ public class ProxyAnimal extends Animal {
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+        tag.putString("FCClassName", fcClassName);
         if (fcEntity != null) {
             CompoundTag fcCompound = new CompoundTag();
             ForgeNBTCompound wrapper = new ForgeNBTCompound(fcCompound);

@@ -92,6 +92,14 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     }
 
     /**
+     * Write FC inventory changes back to the real MC inventory.
+     * Call after FC code that modifies items (stackSize, damage, etc.).
+     */
+    public void syncInventoryToReal() {
+        invBridge.writeBackAll();
+    }
+
+    /**
      * Sync state FROM FC player TO real MC player (call after FC tick).
      */
     public void syncToReal() {
@@ -179,6 +187,24 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     @Override
     public void heal(int amount) {
         realPlayer.heal((float) amount);
+        // Re-read health so syncToReal() doesn't overwrite the heal
+        this.health = (int) realPlayer.getHealth();
+    }
+
+    /**
+     * FC calls this for starvation damage, fire damage, etc.
+     * Delegates to the real MC player's hurt() method.
+     */
+    @Override
+    public boolean attackEntityFrom(btw.modern.DamageSource source, int amount) {
+        if (realPlayer instanceof net.minecraft.server.level.ServerPlayer sp) {
+            net.minecraft.world.damagesource.DamageSource mcSource =
+                    DamageSourceMapping.getModern(source, sp.serverLevel());
+            boolean result = realPlayer.hurt(mcSource, (float) amount);
+            this.health = (int) realPlayer.getHealth();
+            return result;
+        }
+        return false;
     }
 
     /**
@@ -567,6 +593,32 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     public void displayGUIChest(btw.modern.IInventory inventory) {
         ContainerBridge.openChestGUI(this, inventory);
     }
+
+    /**
+     * FC calls this to open the crafting table GUI (work stump, crafting table).
+     * Creates an FC ContainerWorkbench and opens it via the FC container bridge,
+     * ensuring FC's recipe system (CraftingManager) is used, not vanilla's.
+     */
+    @Override
+    public void displayGUIWorkbench(int x, int y, int z) {
+        // Try to create FC's FCContainerWorkbench (extends ContainerWorkbench)
+        // to get FC-specific crafting behavior and canInteractWith checks.
+        btw.modern.Container fcContainer = null;
+        try {
+            Class<?> fcClass = Class.forName("net.minecraft.src.btw.crafting.FCContainerWorkbench");
+            fcContainer = (btw.modern.Container) fcClass
+                    .getConstructor(btw.modern.InventoryPlayer.class, btw.modern.World.class, int.class, int.class, int.class)
+                    .newInstance(this.inventory, this.worldObj, x, y, z);
+        } catch (Exception e) {
+            // Fallback to base ContainerWorkbench
+            fcContainer = new btw.modern.ContainerWorkbench(this.inventory, this.worldObj, x, y, z);
+        }
+        this.openContainer = fcContainer;
+        ContainerBridge.openFCContainer(this, fcContainer, "Crafting");
+    }
+
+    private static final org.apache.logging.log4j.Logger LOGGER =
+            org.apache.logging.log4j.LogManager.getLogger("BTW-PlayerBridge");
 
     // ================================================================
     // ICrafting bridge — FC's sendProgressBarUpdate → MC DataSlots

@@ -2,7 +2,10 @@ package btw.forge.client;
 
 import btw.forge.BTWForgeMod;
 import btw.forge.NamedIcon;
+import btw.forge.ProxyAnimal;
 import btw.forge.ProxyEntity;
+import btw.forge.ProxyMob;
+import btw.forge.ProxyPathfinderMob;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -130,15 +133,38 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
     @Override
     public void render(Entity entity, float yaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
-        if (!(entity instanceof ProxyEntity proxy)) {
-            LOGGER.warn("FCEntityRenderer.render called with non-ProxyEntity: {}", entity.getClass().getName());
+        // Extract FC entity from any proxy type.
+        // IMPORTANT: call getFcClassName() FIRST — it populates fcClassName
+        // via EntityType fallback, which getFcEntity() needs to create the
+        // client-side FC entity.
+        btw.modern.Entity fcEntity = null;
+        String fcClassName = "";
+        if (entity instanceof ProxyEntity pe) {
+            fcClassName = pe.getFcClassName();
+            fcEntity = pe.getFcEntity();
+        } else if (entity instanceof ProxyMob pm) {
+            fcClassName = pm.getFcClassName();
+            fcEntity = pm.getFcEntity();
+        } else if (entity instanceof ProxyAnimal pa) {
+            fcClassName = pa.getFcClassName();
+            fcEntity = pa.getFcEntity();
+        } else if (entity instanceof ProxyPathfinderMob pp) {
+            fcClassName = pp.getFcClassName();
+            fcEntity = pp.getFcEntity();
+        } else {
             return;
         }
-        btw.modern.Entity fcEntity = proxy.getFcEntity();
-        String fcClassName = proxy.getFcClassName();
 
-        // Find the FC renderer
-        btw.modern.Render fcRenderer = fcEntity != null ? findRenderer(fcEntity.getClass()) : null;
+        // Find the FC renderer — try entity class first, fall back to className lookup
+        btw.modern.Render fcRenderer = null;
+        if (fcEntity != null) {
+            fcRenderer = findRenderer(fcEntity.getClass());
+        }
+        if (fcRenderer == null && !fcClassName.isEmpty()) {
+            try {
+                fcRenderer = findRenderer(Class.forName(fcClassName));
+            } catch (ClassNotFoundException ignored) {}
+        }
 
         if (logOnce(entity.getId())) {
             LOGGER.info("FCEntityRenderer.render: id={} fcEntity={} fcClassName='{}' fcRenderer={}",
@@ -160,15 +186,36 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
 
         try {
             fcRenderer.doRender(fcEntity, 0, 0, 0, yaw, partialTick);
-        } catch (Exception e) {
-            LOGGER.debug("FC doRender failed for {}: {}", fcEntity.getClass().getSimpleName(), e.getMessage());
+        } catch (Throwable e) {
+            if (logOnce(entity.getId() + 100000)) {
+                LOGGER.warn("FC doRender failed for {} (renderer={}): {}",
+                        fcEntity.getClass().getSimpleName(), fcRenderer.getClass().getSimpleName(),
+                        e.toString(), e);
+            }
         }
 
         List<btw.modern.Tessellator.CapturedQuad> quads = tess.stopCapturing();
         btw.modern.GL11.disableMatrixTracking();
 
+        if (logOnce(entity.getId() + 200000)) {
+            LOGGER.info("FC render result: {} quads for {} (renderer={})",
+                    quads.size(), fcEntity.getClass().getSimpleName(),
+                    fcRenderer.getClass().getSimpleName());
+            // Log first quad's vertex positions for debugging
+            for (btw.modern.Tessellator.CapturedQuad q : quads) {
+                if (q != null && q.vertices != null && q.vertices[0] != null) {
+                    LOGGER.info("  First quad v0: pos=({},{},{}) uv=({},{}) color=({},{},{},{})",
+                            String.format("%.2f", q.vertices[0].x), String.format("%.2f", q.vertices[0].y),
+                            String.format("%.2f", q.vertices[0].z),
+                            String.format("%.2f", q.vertices[0].u), String.format("%.2f", q.vertices[0].v),
+                            String.format("%.2f", q.vertices[0].r), String.format("%.2f", q.vertices[0].g),
+                            String.format("%.2f", q.vertices[0].b), String.format("%.2f", q.vertices[0].a));
+                    break;
+                }
+            }
+        }
+
         if (quads.isEmpty()) {
-            // FC renderer produced no quads — show debug box
             renderDebugBox(poseStack, bufferSource, packedLight, entity);
             return;
         }
@@ -176,11 +223,32 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
         // Render captured quads through MC's pipeline
         poseStack.pushPose();
 
-        RenderType renderType = RenderType.entityCutoutNoCull(getTextureLocation(entity));
+        // Determine texture from captured quads — FC renderers bind textures
+        // via loadTexture() which records the name on the Tessellator.
+        ResourceLocation texLoc = FALLBACK_TEXTURE;
+        String foundTex = null;
+        for (btw.modern.Tessellator.CapturedQuad q : quads) {
+            if (q != null && q.textureName != null && !q.textureName.isEmpty()) {
+                foundTex = q.textureName;
+                texLoc = resolveEntityTexture(foundTex);
+                break;
+            }
+        }
+        if (logOnce(entity.getId() + 300000)) {
+            LOGGER.info("FC entity texture: {} → {} for {}", foundTex, texLoc, fcEntity.getClass().getSimpleName());
+        }
+
+        RenderType renderType = RenderType.entityCutoutNoCull(texLoc);
         VertexConsumer consumer = bufferSource.getBuffer(renderType);
         Matrix4f mat = poseStack.last().pose();
 
         for (btw.modern.Tessellator.CapturedQuad quad : quads) {
+            if (quad == null || quad.vertices == null) continue;
+            boolean valid = true;
+            for (int i = 0; i < 4; i++) {
+                if (quad.vertices[i] == null) { valid = false; break; }
+            }
+            if (!valid) continue;
             for (int i = 0; i < 4; i++) {
                 btw.modern.Tessellator.CapturedVertex v = quad.vertices[i];
                 consumer.vertex(mat, (float) v.x, (float) v.y, (float) v.z)
@@ -225,8 +293,64 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
 
     @Override
     public ResourceLocation getTextureLocation(Entity entity) {
-        // FC renderers bind their own textures — we use a fallback
-        // The actual texture comes from the captured quad UV mapping
         return FALLBACK_TEXTURE;
+    }
+
+    /**
+     * Resolves an FC texture path (e.g. "/mob/cow.png", "/btwmodtex/fcwindmillent.png")
+     * to an MC 1.20.1 ResourceLocation.
+     */
+    private static final Map<String, ResourceLocation> textureCache = new ConcurrentHashMap<>();
+
+    private static ResourceLocation resolveEntityTexture(String fcPath) {
+        return textureCache.computeIfAbsent(fcPath, path -> {
+            // Strip leading slash
+            String clean = path.startsWith("/") ? path.substring(1) : path;
+
+            // FC BTW textures: btwmodtex/foo.png → betterthanwolves:textures/entity/foo.png
+            if (clean.startsWith("btwmodtex/")) {
+                String name = clean.substring("btwmodtex/".length());
+                return new ResourceLocation(BTWForgeMod.MOD_ID, "textures/entity/" + name);
+            }
+
+            // Vanilla mob textures: mob/cow.png → minecraft:textures/entity/cow/cow.png
+            // MC 1.20.1 moved textures to textures/entity/<mob>/<mob>.png
+            if (clean.startsWith("mob/")) {
+                String mobName = clean.substring("mob/".length()).replace(".png", "");
+                // Handle special name mappings
+                String mcPath = switch (mobName) {
+                    case "pig" -> "textures/entity/pig/pig.png";
+                    case "cow" -> "textures/entity/cow/cow.png";
+                    case "chicken" -> "textures/entity/chicken/chicken.png";
+                    case "sheep" -> "textures/entity/sheep/sheep.png";
+                    case "sheep_fur" -> "textures/entity/sheep/sheep_fur.png";
+                    case "wolf" -> "textures/entity/wolf/wolf.png";
+                    case "wolf_tame" -> "textures/entity/wolf/wolf_tame.png";
+                    case "wolf_angry" -> "textures/entity/wolf/wolf_angry.png";
+                    case "ocelot" -> "textures/entity/cat/ocelot.png";
+                    case "creeper" -> "textures/entity/creeper/creeper.png";
+                    case "skeleton" -> "textures/entity/skeleton/skeleton.png";
+                    case "zombie" -> "textures/entity/zombie/zombie.png";
+                    case "spider" -> "textures/entity/spider/spider.png";
+                    case "cavespider" -> "textures/entity/spider/cave_spider.png";
+                    case "enderman" -> "textures/entity/enderman/enderman.png";
+                    case "blaze" -> "textures/entity/blaze.png";
+                    case "ghast" -> "textures/entity/ghast/ghast.png";
+                    case "pigzombie" -> "textures/entity/zombie_pigman.png";
+                    case "slime" -> "textures/entity/slime/slime.png";
+                    case "magmacube" -> "textures/entity/slime/magmacube.png";
+                    case "villager" -> "textures/entity/villager/villager.png";
+                    case "snowman" -> "textures/entity/snow_golem.png";
+                    case "bat" -> "textures/entity/bat.png";
+                    case "witch" -> "textures/entity/witch.png";
+                    case "wither" -> "textures/entity/wither/wither.png";
+                    default -> "textures/entity/" + mobName + ".png";
+                };
+                return new ResourceLocation("minecraft", mcPath);
+            }
+
+            // Fallback: try as-is under minecraft namespace
+            return new ResourceLocation("minecraft", "textures/" + clean);
+        });
     }
 }

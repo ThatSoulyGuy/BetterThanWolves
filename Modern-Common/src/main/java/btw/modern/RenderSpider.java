@@ -1,12 +1,5 @@
 package btw.modern;
-
 public class RenderSpider extends RenderLiving {
-
-    public RenderSpider() {
-        super(new ModelBase() {}, 1.0F);
-    }
-
-    protected int setSpiderEyeBrightness(EntitySpider spider, int renderPass, float partialTickTime) {
-        return -1;
-    }
+    public RenderSpider() { super(new ModelSpider(), 1.0F); }
+    public RenderSpider(ModelBase model, float shadow) { super(model, shadow); }
 }

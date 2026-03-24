@@ -395,25 +395,101 @@ public class ProxyBlockEntity extends BlockEntity {
      * has a tile entity.
      */
     private int syncCounter = 0;
+    private boolean initialTickScheduled = false;
+
+    private int turntableLogCounter = 0;
 
     public static void tick(Level level, BlockPos pos, BlockState state, ProxyBlockEntity be) {
         if (be.fcTileEntity != null) {
-            // Ensure worldObj is set — it may be null if load() ran before setLevel()
+            // Always sync coordinates and world — they may have been wrong
+            // during initial construction (e.g., load() before setLevel())
+            be.fcTileEntity.xCoord = pos.getX();
+            be.fcTileEntity.yCoord = pos.getY();
+            be.fcTileEntity.zCoord = pos.getZ();
             if (be.fcTileEntity.worldObj == null && level != null) {
-                be.fcTileEntity.xCoord = pos.getX();
-                be.fcTileEntity.yCoord = pos.getY();
-                be.fcTileEntity.zCoord = pos.getZ();
                 if (level instanceof net.minecraft.server.level.ServerLevel sl) {
                     be.fcTileEntity.setWorldObj(WorldBridge.getOrCreate(sl));
                 } else {
                     be.fcTileEntity.setWorldObj(createClientWorld(level));
                 }
             }
+
+            // On first tick, schedule a block update so the FC block's updateTick
+            // fires. This is critical for blocks loaded from saved worlds — their
+            // onBlockAdded never fires, so mechanical power detection, fire checks,
+            // etc. never initialize without this kick.
+            if (!be.initialTickScheduled && level instanceof net.minecraft.server.level.ServerLevel sl) {
+                be.initialTickScheduled = true;
+                if (state.getBlock() instanceof ProxyBlock pb) {
+                    int legacyId = pb.getLegacyId();
+                    btw.modern.Block fcBlock = btw.modern.Block.blocksList[legacyId];
+                    if (fcBlock != null) {
+                        int tickRate = fcBlock.tickRate(null);
+                        if (tickRate <= 0) tickRate = 1;
+                        sl.scheduleTick(pos, pb, tickRate);
+                    }
+                }
+            }
+
+            // Turntable diagnostics: log once per second with internal state
+            boolean isTurntable = be.fcTileEntity.getClass().getSimpleName().contains("Turntable");
+            if (isTurntable && !level.isClientSide()) {
+                be.turntableLogCounter++;
+                if (be.turntableLogCounter >= 20) {
+                    be.turntableLogCounter = 0;
+                    int meta = state.hasProperty(ProxyBlock.META) ? state.getValue(ProxyBlock.META) : -1;
+                    // Read internal fields via reflection
+                    int rotCount = -1;
+                    try {
+                        var f = be.fcTileEntity.getClass().getDeclaredField("m_iRotationTickCount");
+                        f.setAccessible(true);
+                        rotCount = f.getInt(be.fcTileEntity);
+                    } catch (Exception ignored) {}
+                    // Check what IsBlockMechanicalOn returns via worldObj
+                    boolean mechOn = (meta & 1) > 0;
+                    // Log all 4 side blocks with their MC identity
+                    if (be.turntableLogCounter == 0) { // only log first time after counter reset
+                        for (int side = 2; side <= 5; side++) {
+                            int dx = btw.modern.Facing.offsetsXForSide[side];
+                            int dz = btw.modern.Facing.offsetsZForSide[side];
+                            net.minecraft.core.BlockPos sidePos = pos.above().offset(dx, 0, dz);
+                            net.minecraft.world.level.block.state.BlockState sideState = level.getBlockState(sidePos);
+                            int sideId = ProxyRegistry.getBlockId(sideState.getBlock());
+                            String mcName = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(sideState.getBlock()) + "";
+                            btw.modern.Block fcSide = sideId > 0 && sideId < btw.modern.Block.blocksList.length ? btw.modern.Block.blocksList[sideId] : null;
+                            LOGGER.info("[SIDE-BLOCK] side={} pos={} mcBlock={} fcId={} fcClass={}",
+                                    side, sidePos, mcName, sideId,
+                                    fcSide != null ? fcSide.getClass().getSimpleName() : "null");
+                        }
+                    }
+                    // Check block above — show BOTH FC id and MC block name
+                    int aboveId = 0;
+                    String aboveBlock = "none";
+                    String mcBlockName = "?";
+                    if (be.fcTileEntity.worldObj != null) {
+                        aboveId = be.fcTileEntity.worldObj.getBlockId(pos.getX(), pos.getY() + 1, pos.getZ());
+                        btw.modern.Block aboveFc = aboveId > 0 && aboveId < btw.modern.Block.blocksList.length ? btw.modern.Block.blocksList[aboveId] : null;
+                        aboveBlock = aboveFc != null ? aboveFc.getClass().getSimpleName() : "null(id=" + aboveId + ")";
+                    }
+                    // Read MC block directly
+                    net.minecraft.core.BlockPos abovePos = pos.above();
+                    net.minecraft.world.level.block.state.BlockState aboveState = level.getBlockState(abovePos);
+                    mcBlockName = aboveState.getBlock().getClass().getSimpleName() + "=" + net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(aboveState.getBlock());
+                    LOGGER.info("[TURNTABLE-TICK] pos={} meta={} mechOn={} rotCount={} fcId={} fcBlock={} mcBlock={}",
+                            pos, meta, mechOn, rotCount, aboveId, aboveBlock, mcBlockName);
+                }
+            }
+
             try {
                 be.fcTileEntity.updateEntity();
             } catch (Exception e) {
-                LOGGER.debug("FC tile entity tick failed at {}: {}",
-                        pos, e.getMessage());
+                // Log with stack trace so we can diagnose turntable/mechanical failures
+                if (isTurntable) {
+                    LOGGER.error("Turntable tile entity tick FAILED at {}: {}", pos, e.getMessage(), e);
+                } else {
+                    LOGGER.debug("FC tile entity tick failed at {}: {}",
+                            pos, e.getMessage());
+                }
             }
 
             // Sync tile entity data to clients every 20 ticks (1 second)
