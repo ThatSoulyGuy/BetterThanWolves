@@ -655,4 +655,19 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     public void sendContainerAndContentsToPlayer(btw.modern.Container container, java.util.List items) {
         // No-op — MC handles slot sync
     }
+
+    @Override
+    public void displayGUIEditSign(btw.modern.TileEntity tileEntity) {
+        if (realPlayer instanceof net.minecraft.server.level.ServerPlayer sp) {
+            // Sign editing is handled client-side in 1.20.1 via SignEditPacket
+            int x = tileEntity.xCoord;
+            int y = tileEntity.yCoord;
+            int z = tileEntity.zCoord;
+            net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(x, y, z);
+            net.minecraft.world.level.block.entity.BlockEntity be = sp.level().getBlockEntity(pos);
+            if (be instanceof net.minecraft.world.level.block.entity.SignBlockEntity sign) {
+                sp.openTextEdit(sign, true);
+            }
+        }
+    }
 }

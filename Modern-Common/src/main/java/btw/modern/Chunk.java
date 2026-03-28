@@ -45,6 +45,9 @@ public class Chunk {
     }
 
     public int getBlockLightValue(int x, int y, int z, int skySubtracted) {
+        if (worldObj != null) {
+            return worldObj.getBlockLightValue(xPosition * 16 + x, y, zPosition * 16 + z);
+        }
         return 15;
     }
 
@@ -63,10 +66,20 @@ public class Chunk {
     public void onChunkUnload() {}
     public void generateHeightMap() {}
     public void generateSkylightMap() {}
-    public int getSavedLightValue(EnumSkyBlock type, int x, int y, int z) { return 15; }
+    public int getSavedLightValue(EnumSkyBlock type, int x, int y, int z) {
+        if (worldObj != null) {
+            return worldObj.getSavedLightValue(type, xPosition * 16 + x, y, zPosition * 16 + z);
+        }
+        return 15;
+    }
     public void setLightValue(EnumSkyBlock type, int x, int y, int z, int value) {}
     public BiomeGenBase getBiomeGenForWorldCoords(int x, int z, WorldChunkManager manager) { return null; }
     public void getEntitiesWithinAABBForEntity(Entity excluded, AxisAlignedBB bb, List list, IEntitySelector selector) {}
     public void getEntitiesOfTypeWithinAAAB(Class clazz, AxisAlignedBB bb, List list, IEntitySelector selector) {}
-    public int getTopFilledSegment() { return 0; }
+    public int getTopFilledSegment() {
+        // Return a reasonable Y for the top non-empty section.
+        // Beacon uses this for random Y targeting. Default to 128 (section 8)
+        // which covers most overworld terrain.
+        return 128;
+    }
 }

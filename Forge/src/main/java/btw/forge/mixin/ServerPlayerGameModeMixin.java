@@ -89,13 +89,7 @@ public abstract class ServerPlayerGameModeMixin {
                                 CallbackInfoReturnable<InteractionResult> cir) {
         if (mcStack.isEmpty() || !(world instanceof net.minecraft.server.level.ServerLevel sl)) return;
 
-        // Skip ALL BlockItem placement — let MC handle natively via
-        // getStateForPlacement + setPlacedBy. This ensures correct facing
-        // for furnaces, pistons, dispensers, etc.
-        LOGGER.info("[MIXIN-USE-ITEM] item={} isBlockItem={} thread={}",
-                mcStack.getItem().getClass().getSimpleName(),
-                mcStack.getItem() instanceof net.minecraft.world.item.BlockItem,
-                Thread.currentThread().getName());
+        // BlockItems: let MC handle placement, we fix facing in the TAIL injection
         if (mcStack.getItem() instanceof net.minecraft.world.item.BlockItem) return;
 
         net.minecraft.core.BlockPos pos = hitResult.getBlockPos();
@@ -140,6 +134,43 @@ public abstract class ServerPlayerGameModeMixin {
 
         if (result) {
             cir.setReturnValue(InteractionResult.CONSUME);
+        }
+    }
+
+    /**
+     * Runs AFTER vanilla useItemOn completes. For BlockItem placements on
+     * integrated server, the client prediction places the block with correct
+     * facing, but the server's BlockItem.place() fails canPlace() because
+     * the block is already there. This ensures blocks always get the correct
+     * facing from the server player's look direction.
+     */
+    @Inject(method = "useItemOn", at = @At("RETURN"))
+    private void btw$fixBlockFacing(ServerPlayer serverPlayer, Level world,
+                                     ItemStack mcStack, InteractionHand hand,
+                                     net.minecraft.world.phys.BlockHitResult hitResult,
+                                     CallbackInfoReturnable<InteractionResult> cir) {
+        if (!(mcStack.getItem() instanceof net.minecraft.world.item.BlockItem bi)) return;
+        if (!(world instanceof ServerLevel)) return;
+
+        net.minecraft.core.BlockPos placePos = hitResult.getBlockPos().relative(hitResult.getDirection());
+        net.minecraft.world.level.block.state.BlockState placed = world.getBlockState(placePos);
+
+        if (!placed.is(bi.getBlock())) return;
+
+        if (placed.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING)) {
+            net.minecraft.core.Direction correct = net.minecraft.core.Direction.orderedByNearest(serverPlayer)[0].getOpposite();
+            net.minecraft.world.level.block.state.BlockState fixed = placed.setValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING, correct);
+            if (!fixed.equals(placed)) {
+                world.setBlock(placePos, fixed, 2);
+            }
+        } else if (placed.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+            net.minecraft.core.Direction correct = serverPlayer.getDirection().getOpposite();
+            net.minecraft.world.level.block.state.BlockState fixed = placed.setValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, correct);
+            if (!fixed.equals(placed)) {
+                world.setBlock(placePos, fixed, 2);
+            }
         }
     }
 

@@ -364,23 +364,8 @@ public class ProxyBlock extends Block implements EntityBlock {
             if (level instanceof ServerLevel sl) {
                 btw.modern.World world = WorldBridge.getOrCreate(sl);
                 fc().onBlockAdded(world, pos.getX(), pos.getY(), pos.getZ());
-
-                // Defer onBlockPlacedBy to next tick — calling setBlockMetadata
-                // during onPlace triggers nested level.setBlock which MC rejects.
-                final btw.modern.World fWorld = world;
-                final int fx = pos.getX(), fy = pos.getY(), fz = pos.getZ();
-                sl.getServer().execute(() -> {
-                    net.minecraft.world.entity.player.Player nearest = sl.getNearestPlayer(
-                            fx + 0.5, fy + 0.5, fz + 0.5, 10, false);
-                    if (nearest != null) {
-                        PlayerBridge fcPlayer = PlayerBridge.getOrCreate(nearest);
-                        fcPlayer.syncFromReal();
-                        btw.modern.ItemStack fcStack = fcPlayer.getCurrentEquippedItem();
-                        fc().onBlockPlacedBy(fWorld, fx, fy, fz, fcPlayer, fcStack);
-                        LOGGER.info("[DEFERRED-PLACED] block={} pos={},{},{} yaw={}",
-                                legacyId, fx, fy, fz, fcPlayer.rotationYaw);
-                    }
-                });
+                // onBlockPlacedBy is called by setPlacedBy() which MC fires
+                // synchronously with the correct placer entity and rotation.
             }
         }
     }

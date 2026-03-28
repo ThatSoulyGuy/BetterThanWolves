@@ -124,6 +124,9 @@ public class ProxyPathfinderMob extends PathfinderMob
         fcEntity.limbYaw = Math.min(dist * 4.0F, 1.0F);
         fcEntity.prevLimbYaw = fcEntity.limbYaw;
         fcEntity.limbSwing = walkDist * 0.6662F;
+
+        fcEntity.inWater = isInWater();
+        fcEntity.fire = getRemainingFireTicks();
     }
 
     private void syncFromFc() {

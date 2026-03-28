@@ -158,14 +158,28 @@ public abstract class Entity {
     }
 
     public boolean handleLavaMovement() {
-        return false;
+        return false; // Lava state not synced from proxy yet - override in bridge classes
     }
 
     public boolean handleWaterMovement() {
-        return false;
+        return this.inWater;
     }
 
     public boolean isInsideOfMaterial(Material material) {
+        if (this.worldObj == null) return false;
+        double eyeY = this.posY + (double)this.getEyeHeight();
+        int x = MathHelper.floor_double(this.posX);
+        int y = MathHelper.floor_double(eyeY);
+        int z = MathHelper.floor_double(this.posZ);
+        int blockId = this.worldObj.getBlockId(x, y, z);
+        if (blockId != 0) {
+            Block block = Block.blocksList[blockId];
+            if (block != null && block.blockMaterial == material) {
+                float fluidHeight = BlockFluid.getFluidHeightPercent(this.worldObj.getBlockMetadata(x, y, z)) - 0.11111111F;
+                float blockTop = (float)(y + 1) - fluidHeight;
+                return eyeY < (double)blockTop;
+            }
+        }
         return false;
     }
 
@@ -174,12 +188,22 @@ public abstract class Entity {
     }
 
     public boolean canBePushed() {
-        return false;
+        return !this.isDead;
     }
 
     // --- Riding ---
 
-    public void mountEntity(Entity entity) {}
+    public void mountEntity(Entity entity) {
+        if (entity == null) {
+            if (this.ridingEntity != null) {
+                this.ridingEntity.riddenByEntity = null;
+            }
+            this.ridingEntity = null;
+        } else {
+            this.ridingEntity = entity;
+            entity.riddenByEntity = this;
+        }
+    }
     public void unmountEntity(Entity entity) {}
     public void updateRidden() {}
     public void updateRiderPosition() {}
@@ -205,11 +229,15 @@ public abstract class Entity {
 
     public void setSprinting(boolean sprinting) {}
 
+    private boolean invisible;
+
     public boolean isInvisible() {
-        return false;
+        return this.invisible;
     }
 
-    public void setInvisible(boolean invisible) {}
+    public void setInvisible(boolean invisible) {
+        this.invisible = invisible;
+    }
 
     public void setEating(boolean eating) {}
 
@@ -223,7 +251,11 @@ public abstract class Entity {
     public void setAir(int air) { this.air = air; }
 
     public float getBrightness(float partialTicks) {
-        return 0;
+        if (this.worldObj == null) return 0;
+        int x = MathHelper.floor_double(this.posX);
+        int y = MathHelper.floor_double(this.posY + (double)this.getEyeHeight());
+        int z = MathHelper.floor_double(this.posZ);
+        return this.worldObj.getLightBrightness(x, y, z);
     }
 
     public double getDistance(double x, double y, double z) {
@@ -234,7 +266,7 @@ public abstract class Entity {
     }
 
     public float getEyeHeight() {
-        return 0;
+        return this.height * 0.85F;
     }
 
     public Vec3 getLookVec() {
@@ -339,6 +371,7 @@ public abstract class Entity {
     // --- Attack ---
 
     public boolean attackEntityFrom(DamageSource damageSource, int amount) {
+        this.setBeenAttacked();
         return false;
     }
 
@@ -490,7 +523,13 @@ public abstract class Entity {
     // --- Client-side rendering ---
 
     public int getBrightnessForRender(float partialTicks) {
-        return 0;
+        if (this.worldObj == null) return 0;
+        int x = MathHelper.floor_double(this.posX);
+        int y = MathHelper.floor_double(this.posY + (double)this.getEyeHeight());
+        int z = MathHelper.floor_double(this.posZ);
+        if (y < 0) y = 0;
+        if (y > 255) y = 255;
+        return this.worldObj.getLightBrightnessForSkyBlocks(x, y, z, 0);
     }
 
     public float getShadowSize() {

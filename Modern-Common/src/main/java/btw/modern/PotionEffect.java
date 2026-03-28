@@ -36,7 +36,16 @@ public class PotionEffect {
     public void setSplashPotion(boolean splash) { this.isSplashPotion = splash; }
     public boolean getIsAmbient() { return this.isAmbient; }
 
-    public boolean onUpdate(EntityLiving entity) { return this.duration > 0; }
+    /**
+     * Ticks this effect. Returns true if the effect is still active.
+     * Mirrors vanilla 1.5.2 PotionEffect.onUpdate().
+     */
+    public boolean onUpdate(EntityLiving entity) {
+        if (this.duration > 0) {
+            this.duration--;
+        }
+        return this.duration > 0;
+    }
     public void performEffect(EntityLiving entity) {}
     public String getEffectName() { return ""; }
 

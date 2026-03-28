@@ -46,6 +46,7 @@ import java.util.Random;
 @Mixin(BlockBehaviour.class)
 public abstract class BlockBehaviorMixin {
 
+
     // ================================================================
     // Helper: get FC block for this BlockBehaviour instance
     // ================================================================
@@ -168,7 +169,8 @@ public abstract class BlockBehaviorMixin {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
             int neighborId = ProxyRegistry.getBlockId(neighborBlock);
             fcBlock.onNeighborBlockChange(world, pos.getX(), pos.getY(), pos.getZ(), neighborId);
-            ci.cancel();
+            // Don't cancel neighborChanged for vanilla blocks — MC needs its own
+            // neighbor logic (redstone, dropper triggering, etc.) to run.
         }
     }
 
@@ -176,7 +178,7 @@ public abstract class BlockBehaviorMixin {
     // onPlace -> FC onBlockAdded
     // ================================================================
 
-    @Inject(method = "onPlace", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "onPlace", at = @At("HEAD"))
     private void btw$onPlace(BlockState state, Level level, BlockPos pos,
                               BlockState oldState, boolean moving, CallbackInfo ci) {
         btw.modern.Block fcBlock = btw$getFcBlock();
@@ -185,7 +187,6 @@ public abstract class BlockBehaviorMixin {
         if (!state.is(oldState.getBlock()) && level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
             fcBlock.onBlockAdded(world, pos.getX(), pos.getY(), pos.getZ());
-            ci.cancel();
         }
     }
 

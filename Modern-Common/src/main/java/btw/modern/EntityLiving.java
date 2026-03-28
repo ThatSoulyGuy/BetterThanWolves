@@ -1,6 +1,8 @@
 package btw.modern;
 
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 public abstract class EntityLiving extends Entity {
 
@@ -63,13 +65,20 @@ public abstract class EntityLiving extends Entity {
 
     public abstract int getMaxHealth();
 
-    public void jump() {}
+    public void jump() {
+        this.motionY = 0.41999998688697815;
+        if (this.isPotionActive(Potion.jump)) {
+            this.motionY += (double)((float)(this.getActivePotionEffect(Potion.jump).getAmplifier() + 1) * 0.1F);
+        }
+    }
 
     public ItemStack getHeldItem() {
         return getCurrentItemOrArmor(0);
     }
 
-    public void swingItem() {}
+    public void swingItem() {
+        this.swingProgress = 0.0F;
+    }
 
     public EntityLiving getAttackTarget() {
         return this.attackTarget;
@@ -94,6 +103,19 @@ public abstract class EntityLiving extends Entity {
             lookHelper = new EntityLookHelper();
         }
         return lookHelper;
+    }
+
+    /**
+     * Called by the proxy each tick. In vanilla 1.5.2, EntityLiving.onUpdate()
+     * called onLivingUpdate(). We replicate that call chain so FC entities
+     * that override onLivingUpdate() have their behavior fire.
+     *
+     * Movement physics, collision, pathfinding, and AI goals are handled by
+     * MC 1.20.1 via the proxy's super.tick() — do NOT replicate those here.
+     */
+    @Override
+    public void onUpdate() {
+        onLivingUpdate();
     }
 
     public void onLivingUpdate() {}
@@ -182,10 +204,16 @@ public abstract class EntityLiving extends Entity {
         return getCurrentItemOrArmor(slot + 1);
     }
 
-    public void setCurrentItemOrArmor(int slot, ItemStack stack) {}
+    public void setCurrentItemOrArmor(int slot, ItemStack stack) {
+        this.equipment[slot] = stack;
+    }
 
     public boolean isOnLadder() {
-        return false;
+        int x = MathHelper.floor_double(this.posX);
+        int y = MathHelper.floor_double(this.boundingBox.minY);
+        int z = MathHelper.floor_double(this.posZ);
+        Block block = Block.blocksList[this.worldObj.getBlockId(x, y, z)];
+        return block != null && block.IsBlockClimbable(this.worldObj, x, y, z);
     }
 
     public boolean isEntityAlive() {
@@ -193,7 +221,12 @@ public abstract class EntityLiving extends Entity {
     }
 
     public String getTranslatedEntityName() {
-        return "";
+        String name = getClass().getSimpleName();
+        if (name.startsWith("FCEntity")) name = name.substring(8);
+        else if (name.startsWith("Entity")) name = name.substring(6);
+        String key = "entity." + name + ".name";
+        String translated = StatCollector.translateToLocal(key);
+        return translated.equals(key) ? name : translated;
     }
 
     public boolean isAIEnabled() {
@@ -256,17 +289,28 @@ public abstract class EntityLiving extends Entity {
 
     // --- BTW-added methods ---
 
-    public void dropFewItems(boolean bKilledByPlayer, int iLootingModifier) {}
+    public void dropFewItems(boolean bKilledByPlayer, int iLootingModifier) {
+        EntityLivingDropFewItems(bKilledByPlayer, iLootingModifier);
+    }
     public int getDropItemId() { return 0; }
     public String getLivingSound() { return null; }
     public String getHurtSound() { return null; }
     public String getDeathSound() { return null; }
     public float getSoundVolume() { return 1.0F; }
-    public float getSoundPitch() { return 1.0F; }
+    public float getSoundPitch() {
+        return this.isChild()
+            ? (this.rand.nextFloat() - this.rand.nextFloat()) * 0.2F + 1.5F
+            : (this.rand.nextFloat() - this.rand.nextFloat()) * 0.2F + 1.0F;
+    }
     public void initCreature() {}
     public void SpawnerInitCreature() {}
     public boolean interact(EntityPlayer player) { return false; }
-    public boolean getCanSpawnHere() { return false; }
+    public boolean getCanSpawnHere() {
+        return this.worldObj != null
+            && this.worldObj.checkNoEntityCollision(this.boundingBox)
+            && this.worldObj.getCollidingBoundingBoxes(this, this.boundingBox).isEmpty()
+            && !this.worldObj.isAnyLiquid(this.boundingBox);
+    }
     public void updateEntityActionState() {}
     public void fall(float fFallDistance) {}
     public void dropHead() {}
@@ -278,7 +322,29 @@ public abstract class EntityLiving extends Entity {
     public boolean getCanPickUpLoot() { return false; }
     public void setEntityHealth(int health) { this.health = health; }
     public int getHealth() { return this.health; }
-    public void faceEntity(Entity entity, float maxYawChange, float maxPitchChange) {}
+    public void faceEntity(Entity entity, float maxYawChange, float maxPitchChange) {
+        double dx = entity.posX - this.posX;
+        double dz = entity.posZ - this.posZ;
+        double dy;
+        if (entity instanceof EntityLiving) {
+            dy = entity.posY + (double)entity.getEyeHeight() - (this.posY + (double)this.getEyeHeight());
+        } else {
+            dy = (entity.boundingBox.minY + entity.boundingBox.maxY) / 2.0 - (this.posY + (double)this.getEyeHeight());
+        }
+        double dist = MathHelper.sqrt_double(dx * dx + dz * dz);
+        float targetYaw = (float)(Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0F;
+        float targetPitch = (float)(-(Math.atan2(dy, dist) * 180.0 / Math.PI));
+        this.rotationPitch = updateRotation(this.rotationPitch, targetPitch, maxPitchChange);
+        this.rotationYaw = updateRotation(this.rotationYaw, targetYaw, maxYawChange);
+    }
+
+    private float updateRotation(float current, float target, float maxChange) {
+        float delta = MathHelper.wrapAngleTo180_float(target - current);
+        if (delta > maxChange) delta = maxChange;
+        if (delta < -maxChange) delta = -maxChange;
+        return current + delta;
+    }
+
     public void setHomeArea(int x, int y, int z, int radius) {}
     public boolean hasHome() { return false; }
     public ChunkCoordinates getHomePosition() { return null; }
@@ -293,8 +359,23 @@ public abstract class EntityLiving extends Entity {
     public java.util.Random getRNG() { return this.rand; }
 
     // --- BTW-added: entity methods ---
-    public void EntityMobOnLivingUpdate() {}
-    public boolean EntityMobAttackEntityFrom(DamageSource source, int amount) { return false; }
+    /**
+     * "super.super()" bridge: FC entities (Zombie, Skeleton, Enderman) call
+     * this to invoke EntityMob.onLivingUpdate(), which in vanilla called
+     * EntityLivingOnLivingUpdate() (i.e., EntityLiving.onLivingUpdate()).
+     */
+    public void EntityMobOnLivingUpdate() {
+        EntityLivingOnLivingUpdate();
+    }
+
+    /**
+     * "super.super()" bridge: FC entities (Enderman, PigZombie) call this to
+     * invoke EntityMob.attackEntityFrom(), which in vanilla just delegated to
+     * EntityLiving.attackEntityFrom().
+     */
+    public boolean EntityMobAttackEntityFrom(DamageSource source, int amount) {
+        return attackEntityFrom(source, amount);
+    }
     public boolean EntityAnimalInteract(EntityPlayer player) { return false; }
     // Removed: void MeleeAttack(EntityLiving) - vanilla has boolean MeleeAttack(Entity) instead
     public void SetHungerLevel(int level) {}
@@ -302,8 +383,11 @@ public abstract class EntityLiving extends Entity {
     public void SetGrowthLevelNoNotify(int level) {}
     public void InitHungerWithVariance() {}
     public boolean GetIsUpsideDown() { return false; }
-    public boolean GetIsPersistent() { return false; }
-    public void SetPersistent(boolean persistent) {}
+    public boolean GetIsPersistent() { return this.persistenceRequired; }
+    public boolean persistenceRequired;
+    public void SetPersistent(boolean persistent) {
+        this.persistenceRequired = persistent;
+    }
     public void CheckForCatchFireInSun() {}
 
     // BTW creature state
@@ -454,21 +538,100 @@ public abstract class EntityLiving extends Entity {
     public int attacker;
 
     // Missing methods
-    public Vec3 getLook(float partialTicks) { return null; }
-    public void knockBack(Entity entity, int damage, double motionX, double motionY) {}
-    public int getVerticalFaceSpeed() { return 10; }
+    public Vec3 getLook(float partialTicks) {
+        float yaw, pitch;
+        if (partialTicks == 1.0F) {
+            yaw = this.rotationYaw;
+            pitch = this.rotationPitch;
+        } else {
+            yaw = this.prevRotationYaw + (this.rotationYaw - this.prevRotationYaw) * partialTicks;
+            pitch = this.prevRotationPitch + (this.rotationPitch - this.prevRotationPitch) * partialTicks;
+        }
+        float cosYaw = MathHelper.cos(-yaw * 0.017453292F - (float)Math.PI);
+        float sinYaw = MathHelper.sin(-yaw * 0.017453292F - (float)Math.PI);
+        float cosPitch = -MathHelper.cos(-pitch * 0.017453292F);
+        float sinPitch = MathHelper.sin(-pitch * 0.017453292F);
+        return Vec3.createVectorHelper(sinYaw * cosPitch, sinPitch, cosYaw * cosPitch);
+    }
+    public void knockBack(Entity entity, int damage, double motionXParam, double motionZParam) {
+        this.isAirBorne = true;
+        float magnitude = MathHelper.sqrt_double(motionXParam * motionXParam + motionZParam * motionZParam);
+        float knockbackMag = KnockbackMagnitude();
+        this.motionX /= 2.0;
+        this.motionY /= 2.0;
+        this.motionZ /= 2.0;
+        this.motionX -= motionXParam / (double)magnitude * (double)knockbackMag;
+        this.motionY += (double)knockbackMag;
+        this.motionZ -= motionZParam / (double)magnitude * (double)knockbackMag;
+        if (this.motionY > 0.4) {
+            this.motionY = 0.4;
+        }
+    }
+    public int getVerticalFaceSpeed() { return 40; }
     public void spawnExplosionParticle() {}
-    public boolean canSee(EntityLiving entity) { return false; }
+    public boolean canSee(EntityLiving entity) {
+        return canEntityBeSeen(entity);
+    }
     public void addOrRenewAgressor(EntityLiving entity) {
         this.lastAttackingEntity = entity;
     }
-    public void dealFireDamage(int amount) {}
+    public void dealFireDamage(int amount) {
+        this.attackEntityFrom(DamageSource.onFire, amount);
+    }
     public void TransmitAttackTargetToClients() {}
-    public void EntityLivingSetAttackTarget(EntityLiving target) {}
-    public void EntityLivingOnLivingUpdate() {}
-    public void EntityLivingOnDeath(DamageSource source) {}
-    public void EntityLivingFall(float distance) {}
-    public void EntityLivingDropFewItems(boolean recentlyHit, int lootingLevel) {}
+    public void EntityLivingSetAttackTarget(EntityLiving target) {
+        this.setAttackTarget(target);
+    }
+    /**
+     * "super.super()" bridge: FC entities call this to invoke the base
+     * EntityLiving.onLivingUpdate() logic. In vanilla 1.5.2, this contained
+     * position interpolation, potion ticking, AI ticking, jump logic, and
+     * movement physics.
+     *
+     * We implement only the parts NOT handled by MC 1.20.1:
+     * - Potion duration ticking (expiry and removal)
+     * - Entity age increment (for despawn timing)
+     *
+     * Movement, physics, AI goals, and pathfinding are handled by MC 1.20.1
+     * via the proxy's super.tick().
+     */
+    public void EntityLivingOnLivingUpdate() {
+        // Tick active potion effects and remove expired ones
+        Iterator<Map.Entry<Integer, PotionEffect>> it = this.activePotionsMap.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Integer, PotionEffect> entry = it.next();
+            PotionEffect effect = entry.getValue();
+            if (!effect.onUpdate(this)) {
+                it.remove();
+            }
+        }
+
+        // Increment entity age (used for despawn timing)
+        this.entityAge++;
+    }
+    public void EntityLivingOnDeath(DamageSource source) {
+        this.isLivingDead = true;
+        this.EntityLivingDropFewItems(this.recentlyHit > 0, 0);
+        this.setDead();
+    }
+    public void EntityLivingFall(float distance) {
+        int damage = MathHelper.ceiling_float_int(distance - 3.0F);
+        if (damage > 0) {
+            this.attackEntityFrom(DamageSource.fall, damage);
+        }
+    }
+    public void EntityLivingDropFewItems(boolean recentlyHit, int lootingLevel) {
+        int itemId = this.getDropItemId();
+        if (itemId > 0) {
+            int count = this.rand.nextInt(3);
+            if (lootingLevel > 0) {
+                count += this.rand.nextInt(lootingLevel + 1);
+            }
+            for (int i = 0; i < count; i++) {
+                this.dropItem(itemId, 1);
+            }
+        }
+    }
     public void EntityLivingAddRandomArmor() {}
     public void EntityMobAttackEntity(Entity target, float distance) {}
     public void EntityCreatureEntityInit() {}

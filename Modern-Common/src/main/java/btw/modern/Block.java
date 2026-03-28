@@ -801,7 +801,16 @@ public abstract class Block {
     public boolean CanNetherWartGrowOnBlock(World world, int i, int j, int k) { return false; }
     public boolean CanCactusGrowOnBlock(World world, int i, int j, int k) { return false; }
     public boolean IsBlockHydratedForPlantGrowthOn(World world, int i, int j, int k) { return false; }
-    public boolean IsConsideredNeighbouringWaterForReedGrowthOn(World world, int i, int j, int k) { return false; }
+    public boolean IsConsideredNeighbouringWaterForReedGrowthOn(World world, int i, int j, int k) {
+        for (int x = i - 1; x <= i + 1; x++) {
+            for (int z = k - 1; z <= k + 1; z++) {
+                if (world.getBlockMaterial(x, j, z) == Material.water) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     public float GetPlantGrowthOnMultiplier(World world, int i, int j, int k, Block plantBlock) { return 1.0F; }
     public boolean GetIsFertilizedForPlantGrowth(World world, int i, int j, int k) { return false; }
     public void NotifyOfFullStagePlantGrowthOn(World world, int i, int j, int k, Block plantBlock) {}
@@ -1243,7 +1252,9 @@ public abstract class Block {
     public boolean GetDoesFireDamageToEntities(World world, int i, int j, int k, Entity entity) { return false; }
     public boolean GetDoesFireDamageToEntities(World world, int i, int j, int k) { return false; }
     public boolean GetCanBlockBeIncinerated(World world, int i, int j, int k) { return false; }
-    public boolean GetCanBlockBeReplacedByFire(World world, int i, int j, int k) { return false; }
+    public boolean GetCanBlockBeReplacedByFire(World world, int i, int j, int k) {
+        return IsAirBlock();
+    }
     public boolean IsIncineratedInCrucible() { return false; }
 
     // --- BTW-added: Pathing ---
@@ -1345,11 +1356,20 @@ public abstract class Block {
     // --- BTW-added: Piston ---
 
     public int OnPreBlockPlacedByPiston(World world, int i, int j, int k, int iMetadata, int iDirectionMoved) { return iMetadata; }
-    public boolean CanBlockBePulledByPiston(World world, int i, int j, int k, int iToFacing) { return false; }
+    public boolean CanBlockBePulledByPiston(World world, int i, int j, int k, int iToFacing) {
+        if (getMobilityFlag() != 1) {
+            return CanBlockBePushedByPiston(world, i, j, k, iToFacing);
+        }
+        return false;
+    }
     public boolean CanBlockBePushedByPiston(World world, int i, int j, int k, int iToFacing) { return true; }
-    public boolean CanBePistonShoveled(World world, int i, int j, int k) { return false; }
+    public boolean CanBePistonShoveled(World world, int i, int j, int k) {
+        return AreShovelsEffectiveOn();
+    }
     public int GetPistonShovelEjectDirection(World world, int i, int j, int k, int iToFacing) { return -1; }
-    public AxisAlignedBB GetAsPistonMovingBoundingBox(World world, int i, int j, int k) { return null; }
+    public AxisAlignedBB GetAsPistonMovingBoundingBox(World world, int i, int j, int k) {
+        return getCollisionBoundingBoxFromPool(world, i, j, k);
+    }
     public int AdjustMetadataForPistonMove(int iMetadata) { return iMetadata; }
     public boolean CanContainPistonPackingToFacing(World world, int i, int j, int k, int iFacing) { return false; }
     public boolean IsPistonPackable(ItemStack stack) { return false; }

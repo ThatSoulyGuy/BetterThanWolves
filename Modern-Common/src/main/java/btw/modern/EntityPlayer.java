@@ -66,7 +66,11 @@ public abstract class EntityPlayer extends EntityLiving {
         return null;
     }
 
-    public void playSound(String name, float volume, float pitch) {}
+    public void playSound(String name, float volume, float pitch) {
+        if (this.worldObj != null) {
+            this.worldObj.playSoundAtEntity(this, name, volume, pitch);
+        }
+    }
 
     public void addChatMessage(String message) {}
 
@@ -282,7 +286,12 @@ public abstract class EntityPlayer extends EntityLiving {
         }
     }
 
-    public void addExperienceLevel(int levels) {}
+    public void addExperienceLevel(int levels) {
+        this.experienceLevel += levels;
+        if (this.experienceLevel < 0) {
+            this.experienceLevel = 0;
+        }
+    }
     public void setLevelsServerSafe(int levels) {}
     public int getFoodLevel() {
         return this.foodStats != null ? this.foodStats.getFoodLevel() : 0;
@@ -297,7 +306,11 @@ public abstract class EntityPlayer extends EntityLiving {
     }
     public void displayGUIEditSign(TileEntity sign) {}
     public void addStats(int stat, float amount) {}
-    public int IncrementAndGetWindowID() { return 0; }
+    private int currentWindowId;
+    public int IncrementAndGetWindowID() {
+        this.currentWindowId = this.currentWindowId % 100 + 1;
+        return this.currentWindowId;
+    }
     public void HandleStartBlockHarvest(Object packet) {}
     public boolean IsLocalPlayerAndHittingBlock() { return false; }
     public void OnNearbyFireStartAttempt(EntityPlayer player) {}
@@ -507,7 +520,16 @@ public abstract class EntityPlayer extends EntityLiving {
      * TODO: Needs inventory bridge to access armorInventory and FCItemArmorRefined
      */
     public boolean IsWearingFullSuitSoulforgedArmor() {
-        return false;
+        if (inventory == null) return false;
+        for (int i = 0; i < inventory.armorInventory.length; i++) {
+            ItemStack armorStack = inventory.armorInventory[i];
+            if (armorStack == null || armorStack.getItem() == null) return false;
+            // FCItemArmorRefined is the soulforged plate armor base class
+            // After shadow remapping, it lives in btw.modern package
+            String className = armorStack.getItem().getClass().getSimpleName();
+            if (!className.contains("ArmorRefined") && !className.contains("ArmorSoulforged")) return false;
+        }
+        return true;
     }
 
     /**
@@ -515,7 +537,11 @@ public abstract class EntityPlayer extends EntityLiving {
      * TODO: Needs inventory bridge to access armorInventory[3]
      */
     public boolean IsWearingSoulforgedHelm() {
-        return false;
+        if (inventory == null) return false;
+        ItemStack helm = inventory.armorInventory[3];
+        if (helm == null || helm.getItem() == null) return false;
+        String className = helm.getItem().getClass().getSimpleName();
+        return className.contains("ArmorRefined") || className.contains("ArmorSoulforged");
     }
 
     /**
@@ -523,7 +549,11 @@ public abstract class EntityPlayer extends EntityLiving {
      * TODO: Needs inventory bridge to access armorInventory[0]
      */
     public boolean IsWearingSoulforgedBoots() {
-        return false;
+        if (inventory == null) return false;
+        ItemStack boots = inventory.armorInventory[0];
+        if (boots == null || boots.getItem() == null) return false;
+        String className = boots.getItem().getClass().getSimpleName();
+        return className.contains("ArmorRefined") || className.contains("ArmorSoulforged");
     }
 
     // =========================================================================
@@ -715,7 +745,13 @@ public abstract class EntityPlayer extends EntityLiving {
      * TODO: Needs world access for playAuxSFX and FCBetterThanWolves.m_iEatFailAuxFXID
      */
     public void OnCantConsume() {
-        // stub: real implementation plays eat-fail sound effect via worldObj.playAuxSFX
+        if (this.worldObj != null && m_iTicksSinceEmoteSound >= m_iTicksBetweenEmoteSounds) {
+            this.worldObj.playAuxSFX(2285,
+                MathHelper.floor_double(posX),
+                MathHelper.floor_double(posY),
+                MathHelper.floor_double(posZ), 0);
+            m_iTicksSinceEmoteSound = 0;
+        }
     }
 
     /**

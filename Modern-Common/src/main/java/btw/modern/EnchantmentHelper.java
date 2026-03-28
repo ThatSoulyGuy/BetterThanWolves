@@ -83,7 +83,22 @@ public class EnchantmentHelper {
     }
 
     public static int func_92098_i(EntityLiving entity) { return 0; }
-    public static ItemStack addRandomEnchantment(Random rand, ItemStack stack, int level) { return stack; }
+    public static ItemStack addRandomEnchantment(Random rand, ItemStack stack, int level) {
+        // Simplified enchantment: pick a random valid enchantment and apply it
+        List<Enchantment> valid = new java.util.ArrayList<>();
+        for (int i = 0; i < Enchantment.enchantmentsList.length; i++) {
+            Enchantment ench = Enchantment.enchantmentsList[i];
+            if (ench != null && ench.canApply(stack)) {
+                valid.add(ench);
+            }
+        }
+        if (!valid.isEmpty()) {
+            Enchantment chosen = valid.get(rand.nextInt(valid.size()));
+            int enchLevel = 1 + rand.nextInt(chosen.getMaxLevel());
+            stack.addEnchantment(chosen, enchLevel);
+        }
+        return stack;
+    }
     public static List buildEnchantmentList(Random rand, ItemStack stack, int level) { return null; }
     public static int calcItemStackEnchantability(Random rand, int enchSlot, int power, ItemStack stack) { return 0; }
     public static ItemStack func_92099_a(Enchantment ench, EntityLiving entity) { return null; }
