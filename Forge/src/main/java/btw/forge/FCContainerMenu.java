@@ -54,6 +54,22 @@ public class FCContainerMenu extends AbstractContainerMenu {
 
     public String getContainerType() { return containerType; }
 
+    /** Returns the number of container rows for chest-like GUIs. */
+    public int getFcNumRows() {
+        // Server side: use FC container's slot list
+        if (fcContainer != null && fcContainer.inventorySlots != null) {
+            int chestSlots = fcContainer.inventorySlots.size() - 36;
+            if (chestSlots > 0) return Math.max(1, (chestSlots + 8) / 9);
+        }
+        // Client side: use MC menu's slot list (populated from network)
+        int totalSlots = this.slots.size();
+        if (totalSlots > 36) {
+            int chestSlots = totalSlots - 36;
+            return Math.max(1, (chestSlots + 8) / 9);
+        }
+        return 3;
+    }
+
     /** Read a synced FC data value (available on both server and client). */
     public int getFcData(int id) {
         return id >= 0 && id < fcData.length ? fcData[id] : 0;

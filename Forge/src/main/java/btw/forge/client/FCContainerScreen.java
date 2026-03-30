@@ -53,12 +53,23 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
 
     private final ResourceLocation guiTexture;
     private final boolean isEnchanter;
+    private final int chestRows;
 
     public FCContainerScreen(FCContainerMenu menu, Inventory playerInv, Component title) {
         super(menu, playerInv, title);
 
         String type = menu.getContainerType();
         GuiInfo info = GUI_MAP.getOrDefault(type, FALLBACK);
+
+        // For chest containers, calculate height based on actual row count
+        int rows = 0;
+        if ("SimpleChestContainer".equals(type)) {
+            rows = menu.getFcNumRows();
+            int height = 114 + rows * 18;
+            info = new GuiInfo(new ResourceLocation("textures/gui/container/generic_54.png"), 176, height);
+        }
+
+        this.chestRows = rows;
         this.guiTexture = info.texture;
         this.imageWidth = info.width;
         this.imageHeight = info.height;
@@ -78,7 +89,18 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
-        graphics.blit(this.guiTexture, x, y, 0, 0, this.imageWidth, this.imageHeight);
+
+        if (chestRows > 0 && chestRows < 6) {
+            // Chest GUI: blit in two parts from generic_54.png
+            // Top: header (17px) + chest rows
+            int topHeight = 17 + chestRows * 18;
+            graphics.blit(this.guiTexture, x, y, 0, 0, this.imageWidth, topHeight);
+            // Bottom: player inventory (96px) from the bottom of the texture
+            int playerInvTexY = 126; // where player inventory starts in generic_54.png
+            graphics.blit(this.guiTexture, x, y + topHeight, 0, playerInvTexY, this.imageWidth, 96);
+        } else {
+            graphics.blit(this.guiTexture, x, y, 0, 0, this.imageWidth, this.imageHeight);
+        }
 
         if (isEnchanter) {
             renderEnchanterButtons(graphics, x, y, mouseX, mouseY);

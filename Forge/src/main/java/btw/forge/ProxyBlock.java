@@ -63,27 +63,12 @@ public class ProxyBlock extends Block implements EntityBlock {
      * returns a non-null value, meaning this block needs a BlockEntity.
      * Computed once in the constructor and never changes.
      */
-    private final boolean hasTileEntity;
-
     public ProxyBlock(int legacyId, btw.modern.Block fcBlock) {
         super(initAndBuildProperties(fcBlock));
         this.legacyId = legacyId;
         this.fcBlock = fcBlock;
         CONSTRUCTING.remove();
         this.registerDefaultState(this.stateDefinition.any().setValue(META, 0));
-
-        // Probe the FC block to see if it creates a tile entity
-        boolean needsTe = false;
-        try {
-            btw.modern.TileEntity te = fcBlock.createNewTileEntity(null);
-            needsTe = (te != null);
-        } catch (Throwable e) {
-            // Some FC blocks may NPE when passed null world; treat as no tile entity
-        }
-        this.hasTileEntity = needsTe;
-        if (legacyId >= 1013 && legacyId <= 1016) {
-            LOGGER.info("Campfire block {} ({}) hasTileEntity={}", legacyId, fcBlock.getClass().getSimpleName(), needsTe);
-        }
     }
 
     private static BlockBehaviour.Properties initAndBuildProperties(btw.modern.Block fcBlock) {
@@ -121,9 +106,12 @@ public class ProxyBlock extends Block implements EntityBlock {
             props = props.randomTicks();
         }
 
-        if (!fcBlock.isOpaqueCube()) {
-            props = props.noOcclusion();
-        }
+        // Always disable occlusion for FC ProxyBlocks. The FC block instance
+        // in blocksList[] may not be the final replaced version yet at this point
+        // (BTWLifecycle replaces stubs after registration), so we can't trust
+        // isOpaqueCube()/renderAsNormalBlock() here. The VoxelShape from
+        // getOcclusionShape() handles actual occlusion correctly at runtime.
+        props = props.noOcclusion();
 
         return props;
     }
@@ -259,7 +247,11 @@ public class ProxyBlock extends Block implements EntityBlock {
                     return level.canSeeSky(new BlockPos(x, y, z));
                 }
                 public boolean setBlock(int x, int y, int z, int id, int meta, int flags) { return false; }
-                public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) { return null; }
+                public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {
+                    net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(new BlockPos(x, y, z));
+                    if (be instanceof ProxyBlockEntity pbe) return pbe.getFcTileEntity();
+                    return null;
+                }
                 public boolean canPlaceEntityOnSide(int id, int x, int y, int z, boolean b, int s, btw.modern.Entity e, btw.modern.ItemStack st) { return false; }
                 public java.util.List getEntitiesWithinAABB(Class c, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
                 public java.util.List getEntitiesWithinAABBExcludingEntity(btw.modern.Entity e, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
@@ -329,6 +321,7 @@ public class ProxyBlock extends Block implements EntityBlock {
         // FC custom particles
         if (name.equals("fcwhitesmoke")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
         if (name.equals("fccinders")) return net.minecraft.core.particles.ParticleTypes.FLAME;
+        if (name.equals("fcwhitecloud")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
         return null;
     }
 
@@ -471,11 +464,9 @@ public class ProxyBlock extends Block implements EntityBlock {
             // This prevents MC from calling use() again for the off hand
             return (result || containerOpened) ? InteractionResult.SUCCESS : InteractionResult.PASS;
         }
-        // CLIENT: return SUCCESS to prevent MC from predicting item use
-        // (eating animation, bow draw, etc.) before the server's block
-        // activation runs. If FC doesn't handle it, the server returns
-        // PASS and the client's prediction is harmlessly overridden.
-        return InteractionResult.sidedSuccess(level.isClientSide());
+        // CLIENT: return SUCCESS so MC sends the interaction packet to the server.
+        // Returning PASS causes MC to skip the server-side block activation entirely.
+        return InteractionResult.SUCCESS;
     }
 
     // --- attack (onBlockClicked) ---
@@ -835,7 +826,11 @@ public class ProxyBlock extends Block implements EntityBlock {
      * Returns whether this ProxyBlock's FC block creates a tile entity.
      */
     public boolean hasFcTileEntity() {
-        return hasTileEntity;
+        try {
+            return fc().createNewTileEntity(null) != null;
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     /**
@@ -847,7 +842,7 @@ public class ProxyBlock extends Block implements EntityBlock {
      */
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        if (!hasTileEntity) return null;
+        if (!hasFcTileEntity()) return null;
         if (ProxyBlockEntity.TYPE == null) return null; // not yet registered
         try {
             btw.modern.TileEntity fcTe = fc().createNewTileEntity(null);
@@ -872,7 +867,7 @@ public class ProxyBlock extends Block implements EntityBlock {
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level,
             BlockState state, BlockEntityType<T> type) {
-        if (!hasTileEntity) return null;
+        if (!hasFcTileEntity()) return null;
         // Tick on BOTH server and client — FC tile entities check worldObj.isRemote
         // internally (server: cooking/crafting, client: particle spawning)
         if (type == ProxyBlockEntity.TYPE) {

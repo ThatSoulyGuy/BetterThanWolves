@@ -604,6 +604,9 @@ public class WorldBridge extends btw.modern.World {
     
     public void setBlockTileEntity(int x, int y, int z, TileEntity tileEntity) {
         BlockPos pos = new BlockPos(x, y, z);
+        LOGGER.info("[SET-TE] pos={} fcTe={} burnTime={}",
+                pos, tileEntity != null ? tileEntity.getClass().getSimpleName() : "null",
+                tileEntity instanceof btw.modern.TileEntityFurnace f ? f.furnaceBurnTime : "N/A");
         if (tileEntity instanceof TileEntityBridge bridge) {
             // Re-use the real BlockEntity wrapped by the bridge
             level.setBlockEntity(bridge.getBlockEntity());

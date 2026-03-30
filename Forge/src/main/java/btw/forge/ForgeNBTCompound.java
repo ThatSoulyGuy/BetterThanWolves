@@ -158,6 +158,22 @@ public class ForgeNBTCompound extends btw.modern.NBTTagCompound {
     }
 
     @Override
+    public btw.modern.NBTTagList getTagList(String key) {
+        // First check FC's tagMap (for data written during this session)
+        btw.modern.NBTTagList fromMap = super.getTagList(key);
+        if (fromMap != null && fromMap.tagCount() > 0) return fromMap;
+        // Fall back to MC CompoundTag (for data loaded from disk)
+        if (!tag.contains(key, 9)) return new btw.modern.NBTTagList(); // 9 = list type
+        net.minecraft.nbt.ListTag mcList = tag.getList(key, 10); // 10 = compound elements
+        btw.modern.NBTTagList result = new btw.modern.NBTTagList();
+        for (int i = 0; i < mcList.size(); i++) {
+            CompoundTag mcSub = mcList.getCompound(i);
+            result.appendTag(new ForgeNBTCompound(mcSub));
+        }
+        return result;
+    }
+
+    @Override
     public btw.modern.NBTTagCompound getCompoundTag(String key) {
         if (!tag.contains(key, 10)) return null; // 10 = compound tag type
         CompoundTag sub = tag.getCompound(key);

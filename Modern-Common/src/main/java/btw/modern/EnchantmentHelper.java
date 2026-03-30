@@ -7,6 +7,8 @@ import java.util.Random;
 
 public class EnchantmentHelper {
 
+    private static final Random enchantmentRand = new Random();
+
     public static int getEnchantmentLevel(int enchId, ItemStack stack) {
         if (stack == null) return 0;
         NBTTagList enchList = stack.getEnchantmentTagList();
@@ -42,9 +44,97 @@ public class EnchantmentHelper {
 
     public static int getMaxEnchantmentLevel(int enchId, ItemStack[] stacks) { return 0; }
 
-    public static int getEnchantmentModifierDamage(ItemStack[] stacks, DamageSource source) { return 0; }
+    /**
+     * Returns the modifier of protection enchantments on armors.
+     * Reimplements vanilla 1.5.2 EnchantmentHelper + EnchantmentProtection logic.
+     */
+    public static int getEnchantmentModifierDamage(ItemStack[] stacks, DamageSource source) {
+        if (stacks == null) return 0;
 
-    public static int getEnchantmentModifierLiving(EntityLiving attacker, EntityLiving target) { return 0; }
+        int totalModifier = 0;
+
+        for (ItemStack stack : stacks) {
+            if (stack == null) continue;
+            NBTTagList enchList = stack.getEnchantmentTagList();
+            if (enchList == null) continue;
+
+            for (int i = 0; i < enchList.tagCount(); i++) {
+                NBTTagCompound tag = (NBTTagCompound) enchList.tagAt(i);
+                short id = tag.getShort("id");
+                short lvl = tag.getShort("lvl");
+                totalModifier += calcProtectionModifier(id, lvl, source);
+            }
+        }
+
+        if (totalModifier > 25) {
+            totalModifier = 25;
+        }
+
+        return (totalModifier + 1 >> 1) + enchantmentRand.nextInt((totalModifier >> 1) + 1);
+    }
+
+    /**
+     * Calculates protection modifier for a single enchantment.
+     * Mirrors EnchantmentProtection.calcModifierDamage from vanilla 1.5.2.
+     */
+    private static int calcProtectionModifier(int enchId, int level, DamageSource source) {
+        if (source.canHarmInCreative()) return 0;
+
+        // Determine protection type from enchantment ID
+        // 0 = protection (all), 1 = fire protection, 2 = feather falling, 3 = blast protection, 4 = projectile protection
+        int protectionType;
+        if (enchId == 0) protectionType = 0;      // protection
+        else if (enchId == 1) protectionType = 1;  // fire protection
+        else if (enchId == 2) protectionType = 2;  // feather falling
+        else if (enchId == 3) protectionType = 3;  // blast protection
+        else if (enchId == 4) protectionType = 4;  // projectile protection
+        else return 0; // not a protection enchantment
+
+        float base = (float)(6 + level * level) / 3.0F;
+        if (protectionType == 0) return MathHelper.floor_float(base * 0.75F);
+        if (protectionType == 1 && source.isFireDamage()) return MathHelper.floor_float(base * 1.25F);
+        if (protectionType == 2 && source == DamageSource.fall) return MathHelper.floor_float(base * 2.5F);
+        if (protectionType == 3 && source.isExplosion()) return MathHelper.floor_float(base * 1.5F);
+        if (protectionType == 4 && source.isProjectile()) return MathHelper.floor_float(base * 1.5F);
+        return 0;
+    }
+
+    /**
+     * Returns the (magic) extra damage of enchantments on the attacker's held item.
+     * Reimplements vanilla 1.5.2 EnchantmentHelper + EnchantmentDamage logic.
+     */
+    public static int getEnchantmentModifierLiving(EntityLiving attacker, EntityLiving target) {
+        ItemStack held = attacker.getHeldItem();
+        if (held == null) return 0;
+
+        NBTTagList enchList = held.getEnchantmentTagList();
+        if (enchList == null) return 0;
+
+        int totalModifier = 0;
+
+        for (int i = 0; i < enchList.tagCount(); i++) {
+            NBTTagCompound tag = (NBTTagCompound) enchList.tagAt(i);
+            short id = tag.getShort("id");
+            short lvl = tag.getShort("lvl");
+            totalModifier += calcDamageModifier(id, lvl, target);
+        }
+
+        return totalModifier > 0 ? 1 + enchantmentRand.nextInt(totalModifier) : 0;
+    }
+
+    /**
+     * Calculates damage modifier for a single enchantment.
+     * Mirrors EnchantmentDamage.calcModifierLiving from vanilla 1.5.2.
+     */
+    private static int calcDamageModifier(int enchId, int level, EntityLiving target) {
+        // 16 = sharpness (all), 17 = smite (undead), 18 = bane of arthropods
+        if (enchId == 16) return MathHelper.floor_float((float) level * 2.75F);
+        if (enchId == 17 && target.getCreatureAttribute() == EnumCreatureAttribute.UNDEAD)
+            return MathHelper.floor_float((float) level * 4.5F);
+        if (enchId == 18 && target.getCreatureAttribute() == EnumCreatureAttribute.ARTHROPOD)
+            return MathHelper.floor_float((float) level * 4.5F);
+        return 0;
+    }
 
     public static int getKnockbackModifier(EntityLiving attacker, EntityLiving target) {
         return attacker.getKnockbackEnchantLevel();

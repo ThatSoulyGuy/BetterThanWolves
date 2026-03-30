@@ -86,6 +86,16 @@ public class GL11 {
         return new float[]{rx, ry, rz};
     }
 
+    /** Returns true if the current matrix has a negative determinant (odd number of axis flips). */
+    public static boolean hasNegativeDeterminant() {
+        float[] m = matrixStack[stackPointer];
+        // 3x3 upper-left determinant (rotation+scale part)
+        float det = m[0] * (m[5] * m[10] - m[6] * m[9])
+                  - m[4] * (m[1] * m[10] - m[2] * m[9])
+                  + m[8] * (m[1] * m[6]  - m[2] * m[5]);
+        return det < 0;
+    }
+
     /** Transforms a normal (x,y,z) by the current matrix (no translation). */
     public static float[] transformNormal(float nx, float ny, float nz) {
         float[] m = matrixStack[stackPointer];

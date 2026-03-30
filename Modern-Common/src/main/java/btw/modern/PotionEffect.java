@@ -28,7 +28,20 @@ public class PotionEffect {
         this.amplifier = other.amplifier;
     }
 
-    public void combine(PotionEffect other) {}
+    public void combine(PotionEffect other) {
+        if (this.potionID != other.potionID) {
+            System.err.println("This method should only be called for matching effects!");
+        }
+
+        if (other.amplifier > this.amplifier) {
+            this.amplifier = other.amplifier;
+            this.duration = other.duration;
+        } else if (other.amplifier == this.amplifier && this.duration < other.duration) {
+            this.duration = other.duration;
+        } else if (!other.isAmbient && this.isAmbient) {
+            this.isAmbient = other.isAmbient;
+        }
+    }
     public int getPotionID() { return this.potionID; }
     public int getDuration() { return this.duration; }
     public int getAmplifier() { return this.amplifier; }
@@ -42,15 +55,39 @@ public class PotionEffect {
      */
     public boolean onUpdate(EntityLiving entity) {
         if (this.duration > 0) {
-            this.duration--;
+            if (Potion.potionTypes[this.potionID] != null
+                    && Potion.potionTypes[this.potionID].isReady(this.duration, this.amplifier)) {
+                this.performEffect(entity);
+            }
+            --this.duration;
         }
         return this.duration > 0;
     }
-    public void performEffect(EntityLiving entity) {}
-    public String getEffectName() { return ""; }
 
-    public NBTTagCompound writeCustomPotionEffectToNBT(NBTTagCompound tag) { return tag; }
+    public void performEffect(EntityLiving entity) {
+        if (this.duration > 0 && Potion.potionTypes[this.potionID] != null) {
+            Potion.potionTypes[this.potionID].performEffect(entity, this.amplifier);
+        }
+    }
+
+    public String getEffectName() {
+        Potion potion = Potion.potionTypes[this.potionID];
+        return potion != null ? potion.getName() : "";
+    }
+
+    public NBTTagCompound writeCustomPotionEffectToNBT(NBTTagCompound tag) {
+        tag.setByte("Id", (byte) this.getPotionID());
+        tag.setByte("Amplifier", (byte) this.getAmplifier());
+        tag.setInteger("Duration", this.getDuration());
+        tag.setBoolean("Ambient", this.getIsAmbient());
+        return tag;
+    }
+
     public static PotionEffect readCustomPotionEffectFromNBT(NBTTagCompound tag) {
-        return new PotionEffect(0, 0);
+        byte id = tag.getByte("Id");
+        byte amplifier = tag.getByte("Amplifier");
+        int duration = tag.getInteger("Duration");
+        boolean ambient = tag.getBoolean("Ambient");
+        return new PotionEffect(id, duration, amplifier, ambient);
     }
 }

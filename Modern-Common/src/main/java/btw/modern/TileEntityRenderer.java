@@ -23,7 +23,9 @@ public class TileEntityRenderer {
 
     private FontRenderer fontRenderer;
 
-    public TileEntityRenderer() {}
+    public TileEntityRenderer() {
+        this.renderEngine = new RenderEngine();
+    }
 
     public TileEntitySpecialRenderer getSpecialRendererForClass(Class clazz) {
         TileEntitySpecialRenderer renderer = (TileEntitySpecialRenderer) this.specialRendererMap.get(clazz);

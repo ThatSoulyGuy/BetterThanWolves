@@ -169,19 +169,19 @@ public class ModelRenderer {
         // Top face (y1 side — model top) — quadList[2]
         tess.startDrawingQuads();
         tess.setNormal(0, -1, 0);
-        tess.addVertexWithUV(x2, y1, z2, (u+d)/tw,     v/th);
-        tess.addVertexWithUV(x1, y1, z2, (u+d+w)/tw,   v/th);
-        tess.addVertexWithUV(x1, y1, z1, (u+d+w)/tw,   (v+d)/th);
-        tess.addVertexWithUV(x2, y1, z1, (u+d)/tw,     (v+d)/th);
+        tess.addVertexWithUV(x2, y1, z2, (u+d+w)/tw,   v/th);
+        tess.addVertexWithUV(x1, y1, z2, (u+d)/tw,     v/th);
+        tess.addVertexWithUV(x1, y1, z1, (u+d)/tw,     (v+d)/th);
+        tess.addVertexWithUV(x2, y1, z1, (u+d+w)/tw,   (v+d)/th);
         tess.draw();
 
         // Bottom face (y2 side — model bottom) — quadList[3]
         tess.startDrawingQuads();
         tess.setNormal(0, 1, 0);
-        tess.addVertexWithUV(x2, y2, z1, (u+d+w)/tw,     (v+d)/th);
-        tess.addVertexWithUV(x1, y2, z1, (u+d+w+w)/tw,   (v+d)/th);
-        tess.addVertexWithUV(x1, y2, z2, (u+d+w+w)/tw,   v/th);
-        tess.addVertexWithUV(x2, y2, z2, (u+d+w)/tw,     v/th);
+        tess.addVertexWithUV(x2, y2, z1, (u+d+w+w)/tw,   (v+d)/th);
+        tess.addVertexWithUV(x1, y2, z1, (u+d+w)/tw,     (v+d)/th);
+        tess.addVertexWithUV(x1, y2, z2, (u+d+w)/tw,     v/th);
+        tess.addVertexWithUV(x2, y2, z2, (u+d+w+w)/tw,   v/th);
         tess.draw();
 
         // Front face (z1 side — north) — quadList[4]

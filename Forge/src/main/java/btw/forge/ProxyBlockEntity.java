@@ -133,6 +133,11 @@ public class ProxyBlockEntity extends BlockEntity {
      * Copies all entries from an FC NBTTagCompound to a ForgeNBTCompound.
      * Uses reflection to access the FC tag's internal Map.
      */
+    /**
+     * Deep-copies an FC NBTTagCompound into a ForgeNBTCompound, including
+     * nested compounds and lists. Uses FC's own writeToNBT/readFromNBT
+     * round-trip to ensure all data types are preserved.
+     */
     @SuppressWarnings("unchecked")
     private static void copyFcTagToForge(btw.modern.NBTTagCompound fcTag, ForgeNBTCompound target) {
         try {
@@ -151,6 +156,16 @@ public class ProxyBlockEntity extends BlockEntity {
                     else if (val instanceof String s) target.setString(key, s);
                     else if (val instanceof Short sh) target.setShort(key, sh);
                     else if (val instanceof Byte by) target.setByte(key, by);
+                    else if (val instanceof btw.modern.NBTTagCompound compound) {
+                        // Nested compound tag — recursively copy
+                        CompoundTag nested = new CompoundTag();
+                        ForgeNBTCompound nestedWrapper = new ForgeNBTCompound(nested);
+                        copyFcTagToForge(compound, nestedWrapper);
+                        target.setCompoundTag(key, nestedWrapper);
+                    }
+                    else if (val instanceof btw.modern.NBTTagList list) {
+                        target.setTag(key, list);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -175,7 +190,11 @@ public class ProxyBlockEntity extends BlockEntity {
                 if (p != null) level.addParticle(p, x, y, z, vx, vy, vz);
             }
             public boolean setBlock(int x, int y, int z, int id, int meta, int flags) { return false; }
-            public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) { return null; }
+            public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {
+                net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(new net.minecraft.core.BlockPos(x, y, z));
+                if (be instanceof ProxyBlockEntity pbe) return pbe.getFcTileEntity();
+                return null;
+            }
             public boolean canPlaceEntityOnSide(int id, int x, int y, int z, boolean b, int s, btw.modern.Entity e, btw.modern.ItemStack st) { return false; }
             public java.util.List getEntitiesWithinAABB(Class c, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
             public java.util.List getEntitiesWithinAABBExcludingEntity(btw.modern.Entity e, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
@@ -319,7 +338,9 @@ public class ProxyBlockEntity extends BlockEntity {
      */
     @Override
     public net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket getUpdatePacket() {
-        return net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket.create(this);
+        // Use getUpdateTag() which includes both saveAdditional data AND fcSync data
+        return net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket.create(this,
+                be -> ((ProxyBlockEntity) be).getUpdateTag());
     }
 
     /**
@@ -331,8 +352,18 @@ public class ProxyBlockEntity extends BlockEntity {
                               net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket pkt) {
         CompoundTag tag = pkt.getTag();
         if (tag != null) {
+            LOGGER.info("[CLIENT-RECV] block={} pos={} hasFcSync={} keys={}",
+                    tag.getInt(TAG_FC_BLOCK_ID), getBlockPos(), tag.contains("fcSync"), tag.getAllKeys());
             load(tag);
             applySyncData(tag);
+            // Verify cook stack after sync
+            if (fcTileEntity != null) {
+                try {
+                    var m = fcTileEntity.getClass().getMethod("GetCookStack");
+                    var cookStack = m.invoke(fcTileEntity);
+                    LOGGER.info("[CLIENT-RECV] cookStack after sync: {}", cookStack);
+                } catch (Exception ignored) {}
+            }
         }
     }
 
@@ -379,9 +410,20 @@ public class ProxyBlockEntity extends BlockEntity {
      * cooking state, etc.).
      */
     public void syncToClients() {
-        if (level != null && !level.isClientSide()) {
+        if (level != null && !level.isClientSide() && level instanceof net.minecraft.server.level.ServerLevel sl) {
             setChanged();
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+            var tag = getUpdateTag();
+            LOGGER.info("[SYNC] block={} pos={} hasFcSync={} tagKeys={}",
+                    fcBlockId, getBlockPos(), tag.contains("fcSync"),
+                    tag.getAllKeys());
+            // Send tile entity data packet to all tracking players
+            var packet = getUpdatePacket();
+            if (packet != null) {
+                for (net.minecraft.server.level.ServerPlayer player : sl.players()) {
+                    player.connection.send(packet);
+                }
+            }
+            sl.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
 
@@ -480,15 +522,35 @@ public class ProxyBlockEntity extends BlockEntity {
                 }
             }
 
+            // Debug furnace brick ticking
+            boolean isFurnaceBrick = be.fcTileEntity.getClass().getSimpleName().contains("FurnaceBrick");
+            if (isFurnaceBrick && be.syncCounter % 100 == 0) {
+                try {
+                    var bt = be.fcTileEntity.getClass().getField("furnaceBurnTime");
+                    var ct = be.fcTileEntity.getClass().getField("furnaceCookTime");
+                    var cs = be.fcTileEntity.getClass().getMethod("canSmelt");
+                    var slot0 = be.fcTileEntity.getClass().getField("furnaceItemStacks");
+                    btw.modern.ItemStack[] stacks = (btw.modern.ItemStack[]) slot0.get(be.fcTileEntity);
+                    LOGGER.info("[FURNACE-TICK] pos={} burnTime={} cookTime={} canSmelt={} slot0={} slot1={} slot2={} worldRemote={}",
+                            pos, bt.getInt(be.fcTileEntity), ct.getInt(be.fcTileEntity),
+                            cs.invoke(be.fcTileEntity),
+                            stacks[0] != null ? stacks[0].itemID + "x" + stacks[0].stackSize : "null",
+                            stacks[1] != null ? stacks[1].itemID + "x" + stacks[1].stackSize : "null",
+                            stacks[2] != null ? stacks[2].itemID + "x" + stacks[2].stackSize : "null",
+                            be.fcTileEntity.worldObj != null ? be.fcTileEntity.worldObj.isRemote : "null-world");
+                } catch (Exception ignored) {}
+            }
+
             try {
                 be.fcTileEntity.updateEntity();
             } catch (Exception e) {
-                // Log with stack trace so we can diagnose turntable/mechanical failures
                 if (isTurntable) {
                     LOGGER.error("Turntable tile entity tick FAILED at {}: {}", pos, e.getMessage(), e);
+                } else if (isFurnaceBrick) {
+                    LOGGER.error("Furnace brick tick FAILED at {}: {}", pos, e.getMessage(), e);
                 } else {
-                    LOGGER.debug("FC tile entity tick failed at {}: {}",
-                            pos, e.getMessage());
+                    LOGGER.info("FC tile entity tick failed at {}: {} ({})",
+                            pos, e.getMessage(), e.getClass().getSimpleName());
                 }
             }
 

@@ -504,7 +504,15 @@ public abstract class EntityLiving extends Entity {
     public void useRecipe(MerchantRecipe recipe) {}
     public MerchantRecipeList getRecipes(EntityPlayer player) { return null; }
     public void setAngry(boolean angry) {}
-    public void setAggressive(boolean aggressive) {}
+    /**
+     * In vanilla 1.5.2 EntityWitch, this sets DataWatcher flag 21 bit 0x01 to
+     * indicate whether the witch is currently drinking a potion. FCEntityWitch
+     * overrides this to play a sound when the witch starts consuming a potion.
+     * We store the value in a field so getAggressive() can return it.
+     */
+    public void setAggressive(boolean aggressive) {
+        this.isAggressive = aggressive;
+    }
     public void setFleeceColor(int color) {}
     public int getRandomFleeceColor() { return 0; }
     public static int getRandomFleeceColor(java.util.Random rand) { return 0; }
@@ -638,8 +646,20 @@ public abstract class EntityLiving extends Entity {
     public boolean EntityAgeableInteract(EntityPlayer player) { return false; }
     public void addRandomArmor() {}
     public int getAttackStrength() { return 0; }
-    public boolean getAggressive() { return false; }
-    public void func_82206_m() {}
+    private boolean isAggressive;
+    public boolean getAggressive() { return this.isAggressive; }
+    /**
+     * Vanilla 1.5.2: Sets the wither's invulnerability timer when first spawned.
+     * Called by FCEntityWitherPersistent.SummonWitherAtLocation().
+     * On the real Wither entity, this sets the invulnerability countdown to 220 ticks,
+     * during which the wither plays its spawn animation and is immune to damage.
+     */
+    public void func_82206_m() {
+        // Default: set invulnerability time on EntityWither subclasses
+        if (this instanceof EntityWither) {
+            ((EntityWither) this).setInvulTime(220);
+        }
+    }
     public void func_82187_q() {}
     public int func_82784_g() { return 0; }
     public boolean func_98041_l() { return false; }

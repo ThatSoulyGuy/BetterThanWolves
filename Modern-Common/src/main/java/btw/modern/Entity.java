@@ -157,8 +157,20 @@ public abstract class Entity {
         return false;
     }
 
+    /**
+     * Returns true if the entity is currently touching lava.
+     * In vanilla 1.5.2, this checked if the entity's bounding box (shrunk
+     * slightly) intersects any lava blocks. Bridge classes override to
+     * delegate to the real MC entity's isInLava(). This base implementation
+     * checks via the world's isMaterialInBB so FC entities that run their
+     * own code (e.g., FCEntitySheep checking lava for grazing) get correct
+     * results when the worldObj is a WorldBridge.
+     */
     public boolean handleLavaMovement() {
-        return false; // Lava state not synced from proxy yet - override in bridge classes
+        if (this.worldObj == null || this.boundingBox == null) return false;
+        return this.worldObj.isMaterialInBB(
+                this.boundingBox.contract(0.10000000149011612D, 0.4000000059604645D, 0.10000000149011612D),
+                Material.lava);
     }
 
     public boolean handleWaterMovement() {
@@ -223,11 +235,22 @@ public abstract class Entity {
 
     public void setSneaking(boolean sneaking) {}
 
+    private boolean sprinting;
+
+    /**
+     * Returns whether this entity is sprinting.
+     * Bridge classes (PlayerBridge, EntityBridge, LivingEntityBridge) override
+     * this to query the real MC entity. The base implementation stores the flag
+     * locally so FC code calling setSprinting/isSprinting on Modern-Common
+     * entities works correctly.
+     */
     public boolean isSprinting() {
-        return false;
+        return this.sprinting;
     }
 
-    public void setSprinting(boolean sprinting) {}
+    public void setSprinting(boolean sprinting) {
+        this.sprinting = sprinting;
+    }
 
     private boolean invisible;
 

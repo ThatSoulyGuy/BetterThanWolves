@@ -24,6 +24,11 @@ public class TileEntity {
         return this.worldObj;
     }
 
+    /** MCP name: hasWorldObj. Returns true if worldObj is not null. */
+    public boolean func_70309_m() {
+        return this.worldObj != null;
+    }
+
     public void setWorldObj(World world) {
         this.worldObj = world;
     }

@@ -48,6 +48,13 @@ public abstract class EntityPlayer extends EntityLiving {
     }
 
     public void displayGUIChest(IInventory inventory) {}
+    public void displayGUIFurnace(TileEntity tileEntity) {}
+    public void displayGUIDispenser(TileEntity tileEntity) {}
+    public void displayGUIHopper(TileEntity tileEntity) {}
+    public void displayGUIBrewingStand(TileEntity tileEntity) {}
+    public void displayGUIBeacon(TileEntity tileEntity) {}
+    public void displayGUIAnvil(int x, int y, int z) {}
+    public void displayGUIEnchantment(int x, int y, int z, String name) {}
 
     public void addExhaustion(float exhaustion) {}
 

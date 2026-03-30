@@ -64,6 +64,9 @@ public class BTWClientEvents {
             // from FC's ClientAddEntityRenderers registration)
             FCEntityRenderer.initFcRenderers();
 
+            // Register FC tile entity special renderers (lost from vanilla patch)
+            registerFcTileEntityRenderers();
+
             // Also register BlockEntityRenderer here (belt-and-suspenders with RegisterRenderers)
             registerBlockEntityRendererSafe();
         });
@@ -85,6 +88,45 @@ public class BTWClientEvents {
         } catch (Exception e) {
             LOGGER.warn("BTW: Failed to register BlockEntityRenderer: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Registers FC's TileEntitySpecialRenderers into btw.modern.TileEntityRenderer.
+     * These were originally registered in the vanilla TileEntityRenderer constructor
+     * patch but lost due to the Modern-Common stub replacement.
+     */
+    private static void registerFcTileEntityRenderers() {
+        var map = btw.modern.TileEntityRenderer.instance.GetSpecialRendererMap();
+        // FC TESR classes live at net.minecraft.src.btw.tileentity.* (not remapped)
+        // Tile entity classes may be at same package or btw.modern.*
+        String fcPkg = "net.minecraft.src.btw.tileentity.";
+        String modernPkg = "btw.modern.";
+        String[][] registrations = {
+            // {tile entity class, renderer class}
+            // Try FC package first for both, fall back to modern package for TE class
+            {fcPkg + "FCTileEntityCampfire",      fcPkg + "FCTileEntityCampfireRenderer"},
+            {fcPkg + "FCTileEntityFurnaceBrick",  fcPkg + "FCTileEntityFurnaceBrickRenderer"},
+            {fcPkg + "FCTileEntityToolPlaced",    fcPkg + "FCTileEntityToolPlacedRenderer"},
+            {fcPkg + "FCTileEntityHamper",        fcPkg + "FCTileEntityBasketRenderer"},
+            // Vanilla chest TESR — TE class is in FC, renderer is in Modern-Common
+            // Vanilla chest — TE stub in btw.modern, renderer compiled from vanilla source in Client module
+            {modernPkg + "TileEntityChest",       "net.minecraft.src.TileEntityChestRenderer"},
+        };
+        int count = 0;
+        for (String[] reg : registrations) {
+            try {
+                Class<?> teClass = Class.forName(reg[0]);
+                Class<?> rendererClass = Class.forName(reg[1]);
+                btw.modern.TileEntitySpecialRenderer renderer =
+                        (btw.modern.TileEntitySpecialRenderer) rendererClass.getConstructor().newInstance();
+                renderer.setTileEntityRenderer(btw.modern.TileEntityRenderer.instance);
+                map.put(teClass, renderer);
+                count++;
+            } catch (Exception e) {
+                LOGGER.info("BTW: Could not register FC TESR {} → {}: {}", reg[0], reg[1], e.getMessage());
+            }
+        }
+        LOGGER.info("BTW: Registered {} FC tile entity special renderers.", count);
     }
 
     /**

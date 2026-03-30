@@ -83,6 +83,13 @@ public abstract class EntityPlayer extends EntityLiving {
     }
 
     public void displayGUIChest(IInventory inventory) {}
+    public void displayGUIFurnace(TileEntity tileEntity) {}
+    public void displayGUIDispenser(TileEntity tileEntity) {}
+    public void displayGUIHopper(TileEntity tileEntity) {}
+    public void displayGUIBrewingStand(TileEntity tileEntity) {}
+    public void displayGUIBeacon(TileEntity tileEntity) {}
+    public void displayGUIAnvil(int x, int y, int z) {}
+    public void displayGUIEnchantment(int x, int y, int z, String name) {}
 
     /** Set to true when exhaustion is added; read by HUD rendering to trigger food pip shake. */
     public boolean m_bExhaustionAddedSinceLastGuiUpdate = false;
@@ -252,7 +259,19 @@ public abstract class EntityPlayer extends EntityLiving {
         }
         return this.capabilities != null && this.capabilities.allowEdit;
     }
-    public EntityItem dropPlayerItem(ItemStack stack) { return null; }
+    /**
+     * Drops an item from the player's inventory at their position.
+     * In vanilla 1.5.2, this called dropPlayerItemWithRandomChoice(stack, false)
+     * which spawned an EntityItem with a slight random velocity.
+     *
+     * PlayerBridge overrides this to delegate to the real MC player's drop()
+     * method. This base implementation provides a fallback using entityDropItem
+     * so that items are not silently lost if called on a non-bridged instance.
+     */
+    public EntityItem dropPlayerItem(ItemStack stack) {
+        if (stack == null) return null;
+        return this.entityDropItem(stack, 0.0F);
+    }
     public InventoryEnderChest getInventoryEnderChest() { return theInventoryEnderChest; }
     public void SetItemInUseCount(int count) { this.itemInUseCount = count; }
     public ItemStack getCurrentArmor(int slot) {

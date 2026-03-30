@@ -182,6 +182,9 @@ public class FCBakedModel implements BakedModel {
                 renderer.blockAccess = new btw.modern.IBlockAccess() {
                     @Override public int getBlockId(int x, int y, int z) {
                         if (x == 0 && y == 0 && z == 0) return capturedBlock.blockID;
+                        // Return same block ID for y±1 so multi-block structures
+                        // (doors, beds, tall plants) detect their other half
+                        if (x == 0 && z == 0 && (y == 1 || y == -1)) return capturedBlock.blockID;
                         return 0; // air for all other positions
                     }
                     @Override public int getBlockMetadata(int x, int y, int z) {
@@ -221,6 +224,8 @@ public class FCBakedModel implements BakedModel {
 
                 // Call FC's in-world RenderBlock which uses FCModelBlock for
                 // correct shapes. GL11 calls are no-ops via btw.modern.GL11.
+                // RenderBlock returns false for TESR blocks (chest, ender chest, end portal)
+                // — those are rendered by FCBlockEntityRenderer via the TESR capture pipeline.
                 block.RenderBlock(renderer, 0, 0, 0);
                 // Second pass: overlays (cook speckles, etc.)
                 block.RenderBlockSecondPass(renderer, 0, 0, 0, true);

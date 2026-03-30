@@ -218,6 +218,9 @@ public class Tessellator {
         // Every 4 vertices = one quad
         if (currentVertices.size() == 4) {
             CapturedQuad quad = new CapturedQuad();
+            // When the GL matrix has negative determinant (odd number of axis flips,
+            // e.g. glScalef(1,-1,-1)), the face winding order is reversed. MC uses
+            // winding to determine front/back faces. Reverse vertex order to fix.
             for (int i = 0; i < 4; i++) {
                 quad.vertices[i] = currentVertices.get(i);
             }

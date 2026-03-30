@@ -42,6 +42,10 @@ public class TileEntity {
         return this.worldObj;
     }
 
+    public boolean func_70309_m() {
+        return this.worldObj != null;
+    }
+
     public void setWorldObj(World world) {
         this.worldObj = world;
     }

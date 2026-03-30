@@ -25,4 +25,21 @@ public class BlockPistonBase extends Block {
     public static int getOrientation(int metadata) {
         return metadata & 7;
     }
+
+    public static int determineOrientation(World world, int x, int y, int z, EntityLiving placer) {
+        if (MathHelper.abs((float)placer.posX - (float)x) < 2.0F
+                && MathHelper.abs((float)placer.posZ - (float)z) < 2.0F) {
+            double eyeY = placer.posY + 1.82 - (double)placer.yOffset;
+            if (eyeY - (double)y > 2.0) return 1; // up
+            if ((double)y - eyeY > 0.0) return 0; // down
+        }
+        int dir = MathHelper.floor_double((double)(placer.rotationYaw * 4.0F / 360.0F) + 0.5) & 3;
+        return dir == 0 ? 2 : (dir == 1 ? 5 : (dir == 2 ? 3 : (dir == 3 ? 4 : 0)));
+    }
+
+    @Override
+    public void onBlockPlacedBy(World world, int x, int y, int z, EntityLiving placer, ItemStack stack) {
+        int facing = determineOrientation(world, x, y, z, placer);
+        world.setBlockMetadataWithNotify(x, y, z, facing);
+    }
 }

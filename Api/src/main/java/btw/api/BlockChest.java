@@ -16,4 +16,6 @@ public class BlockChest extends BlockContainer {
     public TileEntity createNewTileEntity(World world) {
         return null;
     }
+
+    public void unifyAdjacentChests(World world, int x, int y, int z) {}
 }

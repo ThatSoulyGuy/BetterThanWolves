@@ -51,13 +51,69 @@ public class Potion {
 
     public int getId() { return this.id; }
 
-    public void performEffect(EntityLiving entity, int amplifier) {}
+    /**
+     * Applies the potion effect to the entity. Matches vanilla 1.5.2 with FC modifications
+     * (removed undead special-casing for heal/harm).
+     */
+    public void performEffect(EntityLiving entity, int amplifier) {
+        if (this.id == regeneration.id) {
+            if (entity.getHealth() < entity.getMaxHealth()) {
+                entity.heal(1);
+            }
+        } else if (this.id == poison.id) {
+            if (entity.getHealth() > 1) {
+                entity.attackEntityFrom(DamageSource.magic, 1);
+            }
+        } else if (this.id == wither.id) {
+            entity.attackEntityFrom(DamageSource.wither, 1);
+        } else if (this.id == hunger.id && entity instanceof EntityPlayer) {
+            ((EntityPlayer) entity).addExhaustion(0.025F * (float)(amplifier + 1));
+        }
+        // FC mod: simplified heal/harm without undead special-casing
+        else if (this.id == harm.id) {
+            entity.attackEntityFrom(DamageSource.magic, 6 << amplifier);
+        } else if (this.id == heal.id) {
+            entity.heal(6 << amplifier);
+        }
+    }
 
-    public void affectEntity(EntityLiving source, EntityLiving target, int amplifier, double effectiveness) {}
+    /**
+     * Hits the provided entity with this potion's instant effect.
+     * Matches vanilla 1.5.2 with FC modifications (removed undead special-casing).
+     */
+    public void affectEntity(EntityLiving source, EntityLiving target, int amplifier, double effectiveness) {
+        int amount;
+
+        if (this.id == harm.id) {
+            amount = (int)(effectiveness * (double)(6 << amplifier) + 0.5D);
+            if (source == null) {
+                target.attackEntityFrom(DamageSource.magic, amount);
+            } else {
+                target.attackEntityFrom(DamageSource.causeIndirectMagicDamage(target, source), amount);
+            }
+        } else if (this.id == heal.id) {
+            amount = (int)(effectiveness * (double)(6 << amplifier) + 0.5D);
+            target.heal(amount);
+        }
+    }
 
     public boolean isInstant() { return false; }
 
-    public boolean isReady(int duration, int amplifier) { return false; }
+    /**
+     * Checks if the potion effect is ready to be applied this tick.
+     * Matches vanilla 1.5.2 timing for regeneration, poison, wither, and hunger.
+     */
+    public boolean isReady(int duration, int amplifier) {
+        if (this.id == regeneration.id || this.id == poison.id) {
+            int interval = 25 >> amplifier;
+            return interval > 0 ? duration % interval == 0 : true;
+        } else if (this.id == wither.id) {
+            int interval = 40 >> amplifier;
+            return interval > 0 ? duration % interval == 0 : true;
+        } else {
+            return this.id == hunger.id;
+        }
+    }
 
     public Potion setPotionName(String name) {
         this.name = name;

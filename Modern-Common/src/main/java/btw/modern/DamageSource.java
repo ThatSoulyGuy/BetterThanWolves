@@ -91,6 +91,10 @@ public class DamageSource {
         return this.explosion;
     }
 
+    public boolean canHarmInCreative() {
+        return false;
+    }
+
     public String getDamageType() {
         return this.damageType;
     }
