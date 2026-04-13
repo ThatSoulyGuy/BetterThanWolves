@@ -229,8 +229,19 @@ public class ItemStackHelper {
             if (tag instanceof btw.modern.NBTTagCompound sub) {
                 CompoundTag mcSub = toMcTag(sub);
                 if (mcSub != null) result.add(mcSub);
+            } else if (tag instanceof btw.modern.NBTTagDouble d) {
+                // Vanilla 1.5.2 Entity.writeToNBT stores Pos and Motion as
+                // a list of NBTTagDouble. Without this branch they would be
+                // silently dropped, breaking entity load (Pos/Motion become
+                // empty lists, vanilla readFromNBT throws when indexing them).
+                result.add(net.minecraft.nbt.DoubleTag.valueOf(d.data));
+            } else if (tag instanceof btw.modern.NBTTagFloat f) {
+                // Vanilla 1.5.2 Entity.writeToNBT stores Rotation as a list
+                // of NBTTagFloat. Same fix as above.
+                result.add(net.minecraft.nbt.FloatTag.valueOf(f.data));
+            } else if (tag instanceof btw.modern.NBTTagString s) {
+                result.add(net.minecraft.nbt.StringTag.valueOf(s.data));
             }
-            // Extend for other tag types as needed
         }
         return result;
     }

@@ -22,6 +22,29 @@ public class DataWatcher {
         data.put(id, value);
     }
 
+    /**
+     * Vanilla 1.5.2 DataWatcher.addObjectByDataType — declares a typed slot
+     * with no initial value. Type IDs (from vanilla 1.5.2 Watchable):
+     *   0 = byte, 1 = short, 2 = int, 3 = float, 4 = string,
+     *   5 = ItemStack, 6 = ChunkCoordinates.
+     * Called by vanilla EntityItem.entityInit (slot 10, type 5) and
+     * other entity init methods. We back this with a sensible-default
+     * value so the typed getters don't NPE.
+     */
+    public void addObjectByDataType(int id, int type) {
+        Object initial;
+        switch (type) {
+            case 0 -> initial = (byte) 0;
+            case 1 -> initial = (short) 0;
+            case 2 -> initial = 0;
+            case 3 -> initial = 0.0F;
+            case 4 -> initial = "";
+            case 5 -> initial = null; // ItemStack — caller will set later
+            default -> initial = null;
+        }
+        data.put(id, initial);
+    }
+
     public void updateObject(int id, Object value) {
         data.put(id, value);
     }
@@ -71,4 +94,25 @@ public class DataWatcher {
     public java.util.List getChanged() { return null; }
 
     public java.util.List getAllWatched() { return null; }
+
+    /**
+     * Returns a snapshot of all stored id → value pairs.
+     * Used by the Forge bridge to serialize DataWatcher state
+     * for server→client sync.
+     */
+    public Map<Integer, Object> snapshot() {
+        return new HashMap<>(data);
+    }
+
+    /**
+     * Replaces all stored values with the contents of {@code values}.
+     * Existing keys not present in {@code values} are preserved so that
+     * partial snapshots do not wipe client-side defaults.
+     */
+    public void applySnapshot(Map<Integer, Object> values) {
+        if (values == null) return;
+        for (Map.Entry<Integer, Object> e : values.entrySet()) {
+            data.put(e.getKey(), e.getValue());
+        }
+    }
 }

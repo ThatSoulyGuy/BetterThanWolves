@@ -26,7 +26,21 @@ public class DamageSourceMapping {
 
         if (type == null) return sources.generic();
 
+        // For entity-sourced damage, resolve the MC proxy entity so MC's
+        // knockback, death messages, and combat tracker work correctly.
+        net.minecraft.world.entity.Entity mcAttacker = null;
+        if (fcSource instanceof btw.modern.EntityDamageSource eds) {
+            btw.modern.Entity fcAttacker = eds.getEntity();
+            if (fcAttacker != null) {
+                mcAttacker = resolveProxy(fcAttacker, level);
+            }
+        }
+
         return switch (type) {
+            case "mob" -> sources.mobAttack(mcAttacker instanceof net.minecraft.world.entity.LivingEntity le
+                    ? le : null);
+            case "player" -> sources.playerAttack(mcAttacker instanceof net.minecraft.world.entity.player.Player p
+                    ? p : null);
             case "starve" -> sources.starve();
             case "inFire" -> sources.inFire();
             case "onFire" -> sources.onFire();
@@ -42,15 +56,16 @@ public class DamageSourceMapping {
             case "fallingBlock" -> sources.fallingBlock(null);
             case "cactus" -> sources.cactus();
             case "lightningBolt" -> sources.lightningBolt();
-            // FC custom damage types — fcGloom is BTW's "gloom" darkness damage.
-            // Mapped to generic() because registering a custom MC DamageType requires
-            // a datapack JSON + DamageType registry entry. Generic works for now since
-            // the damage amount and bypass logic are handled on the FC side; the MC
-            // DamageSource only controls the death message and armor interaction.
-            // To add a proper death message, register a custom DamageType in a datapack
-            // under data/btw/damage_type/gloom.json and reference it here.
             case "fcGloom" -> sources.generic();
             default -> sources.generic();
         };
+    }
+
+    /**
+     * Finds the MC proxy entity for an FC entity.
+     */
+    private static net.minecraft.world.entity.Entity resolveProxy(btw.modern.Entity fcEntity, ServerLevel level) {
+        // Search by entity ID — the proxy and FC entity share the same ID.
+        return level.getEntity(fcEntity.entityId);
     }
 }

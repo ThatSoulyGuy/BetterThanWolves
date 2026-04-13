@@ -15,8 +15,37 @@ import java.util.List;
  */
 public class Tessellator {
 
-    /** The static instance of the Tessellator. */
-    public static final Tessellator instance = new Tessellator();
+    /** Thread-local Tessellator instance — prevents race conditions between
+     *  Render thread (entity/block entity capture) and Worker threads (block model capture). */
+    private static final ThreadLocal<Tessellator> THREAD_LOCAL = ThreadLocal.withInitial(Tessellator::new);
+
+    /** The static instance — returns the thread-local Tessellator for the current thread. */
+    public static final Tessellator instance = new Tessellator() {
+        private Tessellator local() { return THREAD_LOCAL.get(); }
+        @Override public void startCapturing() { local().startCapturing(); }
+        @Override public java.util.List<CapturedQuad> stopCapturing() { return local().stopCapturing(); }
+        @Override public int getCurrentVertexCount() { return local().getCurrentVertexCount(); }
+        @Override public int getCapturedQuadCount() { return local().getCapturedQuadCount(); }
+        @Override public boolean isCapturing() { return local().isCapturing(); }
+        @Override public int draw() { return local().draw(); }
+        @Override public void startDrawingQuads() { local().startDrawingQuads(); }
+        @Override public void startDrawing(int drawMode) { local().startDrawing(drawMode); }
+        @Override public void setTextureUV(double u, double v) { local().setTextureUV(u, v); }
+        @Override public void setBrightness(int brightness) { local().setBrightness(brightness); }
+        @Override public void setColorOpaque_F(float r, float g, float b) { local().setColorOpaque_F(r, g, b); }
+        @Override public void setColorRGBA_F(float r, float g, float b, float a) { local().setColorRGBA_F(r, g, b, a); }
+        @Override public void setColorOpaque(int r, int g, int b) { local().setColorOpaque(r, g, b); }
+        @Override public void setColorRGBA(int r, int g, int b, int a) { local().setColorRGBA(r, g, b, a); }
+        @Override public void setColorOpaque_I(int color) { local().setColorOpaque_I(color); }
+        @Override public void setColorRGBA_I(int color, int alpha) { local().setColorRGBA_I(color, alpha); }
+        @Override public void disableColor() { local().disableColor(); }
+        @Override public void setNormal(float x, float y, float z) { local().setNormal(x, y, z); }
+        @Override public void setTranslation(double x, double y, double z) { local().setTranslation(x, y, z); }
+        @Override public void addTranslation(float x, float y, float z) { local().addTranslation(x, y, z); }
+        @Override public void setCurrentTextureName(String name) { local().setCurrentTextureName(name); }
+        @Override public void addVertexWithUV(double x, double y, double z, double u, double v) { local().addVertexWithUV(x, y, z, u, v); }
+        @Override public void addVertex(double x, double y, double z) { local().addVertex(x, y, z); }
+    };
 
     /** Whether vertex capture is active. */
     private boolean capturing = false;

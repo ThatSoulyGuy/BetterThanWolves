@@ -103,9 +103,6 @@ public abstract class ServerPlayerGameModeMixin {
                 fcItem = btw.modern.Item.itemsList[proxyLegacyId];
             }
         } else {
-            // Skip ProxyBlocks — ProxyBlock.use() handles activation
-            if (world.getBlockState(pos).getBlock() instanceof btw.forge.ProxyBlock) return;
-
             int legacyId = ProxyRegistry.getItemId(mcStack.getItem());
             if (legacyId > 0 && legacyId < btw.modern.Item.itemsList.length) {
                 fcItem = btw.modern.Item.itemsList[legacyId];

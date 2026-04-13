@@ -11,6 +11,7 @@ public abstract class EntityLiving extends Entity {
 
     public int health;
     public float landMovementFactor;
+    public float jumpMovementFactor = 0.02F;
     public boolean isLivingDead;
     public int deathTime;
     public int attackTime;
@@ -26,7 +27,7 @@ public abstract class EntityLiving extends Entity {
     public float moveStrafing;
     public float moveForward;
     public boolean isJumping;
-    public float moveSpeed;
+    public float moveSpeed = 0.7F;
     public int attackCounter;
     public EntityAITasks tasks;
     public EntityAITasks targetTasks;
@@ -56,12 +57,27 @@ public abstract class EntityLiving extends Entity {
     protected PathNavigate navigator;
     protected EntityLookHelper lookHelper;
     protected EntitySenses senses;
+    protected EntityMoveHelper moveHelper;
+    protected EntityJumpHelper jumpHelper;
 
     protected EntityLiving(World world) {
         super(world);
         this.tasks = new EntityAITasks();
         this.targetTasks = new EntityAITasks();
     }
+
+    /**
+     * Concrete override of Entity.entityInit() so subclasses don't
+     * AbstractMethodError. Vanilla 1.5.2 Entity declares entityInit
+     * as abstract — once we swap Entity to the vanilla version at
+     * runtime, Modern-Common's EntityLiving needs to provide a
+     * concrete implementation or every concrete mob subclass fails.
+     * Vanilla EntityLiving.entityInit just registers a couple of
+     * dataWatcher slots; we no-op since Modern-Common's dataWatcher
+     * is a stub anyway.
+     */
+    @Override
+    public void entityInit() {}
 
     public abstract int getMaxHealth();
 
@@ -105,22 +121,56 @@ public abstract class EntityLiving extends Entity {
         return lookHelper;
     }
 
+    public EntityMoveHelper getMoveHelper() {
+        if (moveHelper == null) {
+            moveHelper = new EntityMoveHelper(this);
+        }
+        return moveHelper;
+    }
+
+    public EntityJumpHelper getJumpHelper() {
+        if (jumpHelper == null) {
+            jumpHelper = new EntityJumpHelper(this);
+        }
+        return jumpHelper;
+    }
+
     /**
-     * Called by the proxy each tick. In vanilla 1.5.2, EntityLiving.onUpdate()
-     * called onLivingUpdate(). We replicate that call chain so FC entities
-     * that override onLivingUpdate() have their behavior fire.
-     *
-     * Movement physics, collision, pathfinding, and AI goals are handled by
-     * MC 1.20.1 via the proxy's super.tick() — do NOT replicate those here.
+     * Called by the proxy each tick. Calls onLivingUpdate() which FC
+     * entities override for per-tick behavior.
      */
     @Override
     public void onUpdate() {
         onLivingUpdate();
     }
 
-    public void onLivingUpdate() {}
+    /**
+     * Vanilla 1.5.2 EntityLiving.onLivingUpdate (line 1842) is a one-line
+     * trampoline that calls the FC-extracted base method
+     * EntityLivingOnLivingUpdate(). FC subclasses (EntityCreature,
+     * EntityAnimal, EntityMob, etc.) override onLivingUpdate to add their
+     * own behavior, then call super.onLivingUpdate() to invoke the base.
+     *
+     * Our previous empty stub meant super.onLivingUpdate() did nothing —
+     * pigs/cows/sheep/chickens (which use EntityCreature's super chain
+     * rather than the EntityMobOnLivingUpdate bridge) silently ran no AI
+     * at all. Hostile mobs worked because they call EntityMobOnLivingUpdate
+     * directly via FC's super.super pattern.
+     */
+    public void onLivingUpdate() {
+        EntityLivingOnLivingUpdate();
+    }
 
     public boolean attackEntityFrom(DamageSource source, int amount) {
+        return entityLivingBaseAttackEntityFrom(source, amount);
+    }
+
+    /**
+     * Base damage application logic. Used directly by the super.super()
+     * bridge methods (EntityMobAttackEntityFrom, etc.) to avoid recursing
+     * back into FC subclass overrides.
+     */
+    private boolean entityLivingBaseAttackEntityFrom(DamageSource source, int amount) {
         if (this.isEntityInvulnerable()) {
             return false;
         }
@@ -152,6 +202,18 @@ public abstract class EntityLiving extends Entity {
 
     public boolean canEntityBeSeen(Entity entity) {
         return true; // TODO: implement ray tracing
+    }
+
+    /**
+     * Vanilla 1.5.2: returns true if this entity is allowed to target the
+     * given entity class. Most living entities just return true; only a
+     * few subclasses (creeper -> ocelot) restrict it. Used by
+     * EntityAITarget.isSuitableTarget — without this method existing,
+     * EntityAINearestAttackableTarget.shouldExecute() throws
+     * NoSuchMethodError every tick and target acquisition is dead.
+     */
+    public boolean canAttackClass(Class targetClass) {
+        return true;
     }
 
     public int getTotalArmorValue() {
@@ -200,6 +262,17 @@ public abstract class EntityLiving extends Entity {
         return (slot >= 0 && slot < equipment.length) ? equipment[slot] : null;
     }
 
+    /**
+     * Vanilla 1.5.2 EntityLiving exposes the held item + four armor slots
+     * via this method. Used by EnchantmentHelper to walk all worn enchanted
+     * gear (e.g. respiration on a helmet). Stub-side definition only — at
+     * runtime the real vanilla method overrides this and returns the live
+     * equipment array.
+     */
+    public ItemStack[] getLastActiveItems() {
+        return equipment;
+    }
+
     public ItemStack getCurrentArmor(int slot) {
         return getCurrentItemOrArmor(slot + 1);
     }
@@ -229,8 +302,17 @@ public abstract class EntityLiving extends Entity {
         return translated.equals(key) ? name : translated;
     }
 
+    /**
+     * Vanilla 1.5.2: returns true for entities that use the EntityAITasks
+     * system. moveEntityWithHeading branches on this — when true, the
+     * acceleration comes from getAIMoveSpeed() (set by the move helper);
+     * when false, it falls back to landMovementFactor (which our stub
+     * leaves at 0). Without this returning true for AI-driven mobs,
+     * accel = 0 and the entity cannot push itself forward, so AI sets
+     * moveForward=0.7 but the entity never actually moves.
+     */
     public boolean isAIEnabled() {
-        return false;
+        return this.tasks != null && !this.tasks.taskEntries().isEmpty();
     }
 
     public void setRevengeTarget(EntityLiving target) {
@@ -311,8 +393,64 @@ public abstract class EntityLiving extends Entity {
             && this.worldObj.getCollidingBoundingBoxes(this, this.boundingBox).isEmpty()
             && !this.worldObj.isAnyLiquid(this.boundingBox);
     }
-    public void updateEntityActionState() {}
-    public void fall(float fFallDistance) {}
+    /**
+     * Base AI tick. Matches vanilla 1.5.2 EntityCreature's override of
+     * updateEntityActionState(), which ran the full AI pipeline:
+     * tasks → navigation → moveHelper → lookHelper → jumpHelper.
+     *
+     * FC entities override this and call super first, then add custom
+     * movement logic.
+     */
+    private static final org.apache.logging.log4j.Logger AI_TRACE_LOG =
+        org.apache.logging.log4j.LogManager.getLogger("BTW-AI-TRACE");
+    private int aiDiagTick = 0;
+
+    public void updateEntityActionState() {
+        boolean willLog = (aiDiagTick++ % 60 == 0);
+        if (willLog) {
+            AI_TRACE_LOG.info("updateEntityActionState ENTRY {} worldObj={} isRemote={} tasks={}",
+                getClass().getSimpleName(),
+                worldObj != null ? worldObj.getClass().getSimpleName() : "null",
+                worldObj != null ? worldObj.isRemote : "n/a",
+                tasks != null ? tasks.taskEntries().size() : -1);
+        }
+
+        boolean tasksHasWork = tasks != null && !tasks.taskEntries().isEmpty();
+        targetTasks.onUpdateTasks();
+        float mfAfterTargetTasks = moveForward;
+
+        tasks.onUpdateTasks();
+        float mfAfterTasks = moveForward;
+        boolean navHasPath = !getNavigator().noPath();
+
+        getNavigator().onUpdateNavigation();
+        float mfAfterNav = moveForward;
+        boolean mhUpdating = getMoveHelper().isUpdating();
+        float mhSpeed = getMoveHelper().getSpeed();
+
+        updateAITick();
+        getMoveHelper().onUpdateMoveHelper();
+        float mfAfterMH = moveForward;
+
+        getLookHelper().onUpdateLook();
+        getJumpHelper().doJump();
+
+        if (willLog) {
+            AI_TRACE_LOG.info("{} pos=({},{},{}) tasksReg={} tasksAct={} navHasPath={} mhUpd={} mhSpeed={} | mf: targetTasks={} tasks={} nav={} moveHelper={}",
+                getClass().getSimpleName(),
+                (int)posX, (int)posY, (int)posZ,
+                tasksHasWork, tasks.areTasksExecuting(), navHasPath, mhUpdating, mhSpeed,
+                mfAfterTargetTasks, mfAfterTasks, mfAfterNav, mfAfterMH);
+        }
+    }
+
+    public void setAIMoveSpeed(float speed) {
+        this.moveForward = speed;
+    }
+    @Override
+    public void fall(float fFallDistance) {
+        this.EntityLivingFall(fFallDistance);
+    }
     public void dropHead() {}
     public boolean canTriggerWalking() { return true; }
     public AxisAlignedBB getCollisionBox(Entity entity) { return null; }
@@ -374,7 +512,10 @@ public abstract class EntityLiving extends Entity {
      * EntityLiving.attackEntityFrom().
      */
     public boolean EntityMobAttackEntityFrom(DamageSource source, int amount) {
-        return attackEntityFrom(source, amount);
+        // super.super() bridge — call the base EntityLiving damage logic
+        // directly, NOT this.attackEntityFrom(), to avoid recursing back
+        // into the FC subclass override that called us.
+        return entityLivingBaseAttackEntityFrom(source, amount);
     }
     public boolean EntityAnimalInteract(EntityPlayer player) { return false; }
     // Removed: void MeleeAttack(EntityLiving) - vanilla has boolean MeleeAttack(Entity) instead
@@ -468,6 +609,18 @@ public abstract class EntityLiving extends Entity {
     public void playLivingSound() {}
     public void playStepSound(int iBlockI, int iBlockJ, int iBlockK, int iBlockID) {}
     public void updateAITick() {}
+
+    public void setMoveForward(float value) {
+        this.moveForward = value;
+    }
+
+    public void setJumping(boolean value) {
+        this.isJumping = value;
+    }
+
+    public float getAIMoveSpeed() {
+        return this.moveForward;
+    }
     public void setCombatTask() {}
     public void setTarget(Entity targetEntity) {}
     public boolean AddArrowToPlayerInv(EntityPlayer player) { return false; }
@@ -535,7 +688,128 @@ public abstract class EntityLiving extends Entity {
     public void PreInitCreature() {}
     public void attackEntityWithRangedAttack(EntityLiving target, float damageModifier) {}
     public void func_82162_bC() {}
-    public void moveEntityWithHeading(float strafe, float forward) {}
+    /**
+     * Vanilla 1.5.2 / FC port of EntityLiving.moveEntityWithHeading.
+     * Translates the entity's strafe/forward intent (set by AI tasks via
+     * the move helper) into world-space motionX/Y/Z, runs the standard
+     * collision-clip via Entity.moveEntity, then applies friction and
+     * gravity for the next tick.
+     *
+     * Stripped from vanilla for the bridge:
+     *  - Player-flying capability check (only matters for player)
+     *  - Lava swimming branch (TODO if needed)
+     *  - Ladder climbing branch (TODO; mob ladder use is rare)
+     *  - Client-side chunk-not-loaded edge case
+     *  - FC slipperiness customizations (uses vanilla 0.546 for now)
+     */
+    public void moveEntityWithHeading(float strafe, float forward) {
+        if (this.isInWater()) {
+            this.moveFlying(strafe, forward, this.isAIEnabled() ? 0.04F : 0.02F);
+            this.moveEntity(this.motionX, this.motionY, this.motionZ);
+            this.motionX *= 0.8D;
+            this.motionY *= 0.8D;
+            this.motionZ *= 0.8D;
+            this.motionY -= 0.02D;
+            return;
+        }
+        if (this.handleLavaMovement()) {
+            this.moveFlying(strafe, forward, 0.02F);
+            this.moveEntity(this.motionX, this.motionY, this.motionZ);
+            this.motionX *= 0.5D;
+            this.motionY *= 0.5D;
+            this.motionZ *= 0.5D;
+            this.motionY -= 0.02D;
+            return;
+        }
+
+        // Ground / air branch.
+        float friction = 0.91F;
+        if (this.onGround) {
+            friction = 0.546F; // vanilla default ground friction (0.6 * 0.91)
+            int groundBlockId = this.worldObj.getBlockId(
+                MathHelper.floor_double(this.posX),
+                MathHelper.floor_double(this.boundingBox.minY - 0.25D),
+                MathHelper.floor_double(this.posZ));
+            if (groundBlockId > 0) {
+                Block groundBlock = Block.blocksList[groundBlockId];
+                if (groundBlock != null) {
+                    // Many bridge Block stubs leave slipperiness at 0;
+                    // fall back to vanilla default 0.6 (friction 0.546)
+                    // so entities don't slide infinitely on uninitialized
+                    // block instances.
+                    float slip = groundBlock.slipperiness > 0.0F ? groundBlock.slipperiness : 0.6F;
+                    friction = slip * 0.91F;
+                }
+            }
+        }
+
+        float speedFactor = 0.16277136F / (friction * friction * friction);
+        float accel;
+        if (this.onGround) {
+            accel = (this.isAIEnabled() ? this.getAIMoveSpeed() : this.landMovementFactor) * speedFactor;
+        } else {
+            accel = this.jumpMovementFactor;
+        }
+
+        this.moveFlying(strafe, forward, accel);
+
+        // Recompute friction post-moveFlying (vanilla does this; mirrors above).
+        friction = 0.91F;
+        if (this.onGround) {
+            friction = 0.546F;
+            int groundBlockId = this.worldObj.getBlockId(
+                MathHelper.floor_double(this.posX),
+                MathHelper.floor_double(this.boundingBox.minY - 0.25D),
+                MathHelper.floor_double(this.posZ));
+            if (groundBlockId > 0) {
+                Block groundBlock = Block.blocksList[groundBlockId];
+                if (groundBlock != null) {
+                    // Many bridge Block stubs leave slipperiness at 0;
+                    // fall back to vanilla default 0.6 (friction 0.546)
+                    // so entities don't slide infinitely on uninitialized
+                    // block instances.
+                    float slip = groundBlock.slipperiness > 0.0F ? groundBlock.slipperiness : 0.6F;
+                    friction = slip * 0.91F;
+                }
+            }
+        }
+
+        this.moveEntity(this.motionX, this.motionY, this.motionZ);
+
+        // Apply gravity, then friction.
+        this.motionY -= 0.08D;
+        this.motionY *= 0.98D;
+        this.motionX *= (double) friction;
+        this.motionZ *= (double) friction;
+
+        // Limb-swing animation update so the renderer animates legs.
+        this.prevLimbYaw = this.limbYaw;
+        double dx = this.posX - this.prevPosX;
+        double dz = this.posZ - this.prevPosZ;
+        float swing = MathHelper.sqrt_double(dx * dx + dz * dz) * 4.0F;
+        if (swing > 1.0F) swing = 1.0F;
+        this.limbYaw += (swing - this.limbYaw) * 0.4F;
+        this.limbSwing += this.limbYaw;
+    }
+
+    /**
+     * Vanilla Entity.moveFlying — converts local strafe/forward intent at
+     * the given acceleration into world-space motion deltas using the
+     * entity's current rotationYaw. Identical math to vanilla 1.5.2.
+     */
+    public void moveFlying(float strafe, float forward, float accel) {
+        float magSq = strafe * strafe + forward * forward;
+        if (magSq < 1.0E-4F) return;
+        float mag = MathHelper.sqrt_float(magSq);
+        if (mag < 1.0F) mag = 1.0F;
+        mag = accel / mag;
+        strafe *= mag;
+        forward *= mag;
+        float sinYaw = MathHelper.sin(this.rotationYaw * (float) Math.PI / 180.0F);
+        float cosYaw = MathHelper.cos(this.rotationYaw * (float) Math.PI / 180.0F);
+        this.motionX += (double) (strafe * cosYaw - forward * sinYaw);
+        this.motionZ += (double) (forward * cosYaw + strafe * sinYaw);
+    }
     public void CheckForLooseFood() {}
     public void InitiatePossession() {}
     public void setHomeArea(ChunkCoordinates pos, int radius) {}
@@ -592,18 +866,33 @@ public abstract class EntityLiving extends Entity {
     }
     /**
      * "super.super()" bridge: FC entities call this to invoke the base
-     * EntityLiving.onLivingUpdate() logic. In vanilla 1.5.2, this contained
-     * position interpolation, potion ticking, AI ticking, jump logic, and
-     * movement physics.
+     * EntityLiving.onLivingUpdate() logic. Matches vanilla 1.5.2's
+     * EntityLiving.onLivingUpdate() call order:
      *
-     * We implement only the parts NOT handled by MC 1.20.1:
-     * - Potion duration ticking (expiry and removal)
-     * - Entity age increment (for despawn timing)
+     * <ol>
+     *   <li>Tick potion effects</li>
+     *   <li>Increment entity age</li>
+     *   <li>Reset moveForward/moveStrafing to 0</li>
+     *   <li>Call updateEntityActionState() — FC overrides add AI-driven
+     *       movement, which internally calls tasks.onUpdateTasks(),
+     *       navigator, and look helpers, then sets moveForward</li>
+     *   <li>Dampen moveForward/moveStrafing by 0.98</li>
+     *   <li>Handle jumping</li>
+     * </ol>
      *
-     * Movement, physics, AI goals, and pathfinding are handled by MC 1.20.1
-     * via the proxy's super.tick().
+     * Movement physics (moveEntityWithHeading) is handled by MC 1.20.1's
+     * LivingEntity.travel() via the proxy's super.tick() — NOT replicated
+     * here. The net effect is that moveForward/moveStrafing are set by FC
+     * AI, then syncFromFc copies them to MC's zza/xxa, then MC applies physics.
      */
+    private int olDiagTick = 0;
     public void EntityLivingOnLivingUpdate() {
+        if (olDiagTick++ % 60 == 0) {
+            AI_TRACE_LOG.info("EntityLivingOnLivingUpdate ENTRY {} worldObj={} isRemote={}",
+                getClass().getSimpleName(),
+                worldObj != null ? worldObj.getClass().getSimpleName() : "null",
+                worldObj != null ? worldObj.isRemote : "n/a");
+        }
         // Tick active potion effects and remove expired ones
         Iterator<Map.Entry<Integer, PotionEffect>> it = this.activePotionsMap.entrySet().iterator();
         while (it.hasNext()) {
@@ -616,6 +905,40 @@ public abstract class EntityLiving extends Entity {
 
         // Increment entity age (used for despawn timing)
         this.entityAge++;
+
+        // Server-side only: AI + movement processing
+        if (worldObj != null && !worldObj.isRemote) {
+            // Reset movement — updateEntityActionState will set it from AI
+            this.moveStrafing = 0.0F;
+            this.moveForward = 0.0F;
+
+            // FC entities override updateEntityActionState to add their
+            // own AI logic. The BASE implementation runs task ticking +
+            // navigation. FC overrides typically call super first, then
+            // add custom movement.
+            this.updateEntityActionState();
+
+            // Dampen movement slightly
+            this.moveStrafing *= 0.98F;
+            this.moveForward *= 0.98F;
+
+            // Handle jumping
+            if (this.isJumping) {
+                if (this.inWater || this.handleLavaMovement()) {
+                    this.motionY += 0.04;
+                } else if (this.onGround) {
+                    this.motionY = 0.42;
+                }
+            }
+
+            // FC physics: convert moveStrafing/moveForward into motion via
+            // moveEntityWithHeading -> moveEntity (vanilla 1.5.2 collision
+            // clip + step-up + gravity + friction + fall damage). At runtime
+            // moveEntity is FC's vanilla 1.5.2 implementation (Forge build
+            // includes net.minecraft.src.Entity remapped to btw.modern.Entity
+            // and excludes Modern-Common's stub).
+            this.moveEntityWithHeading(this.moveStrafing, this.moveForward);
+        }
     }
     public void EntityLivingOnDeath(DamageSource source) {
         this.isLivingDead = true;

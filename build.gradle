@@ -5,10 +5,12 @@ buildscript {
         mavenCentral()
         gradlePluginPortal()
         maven { url = 'https://maven.minecraftforge.net/' }
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
     }
     dependencies {
         classpath 'com.github.johnrengelman:shadow:8.1.1'
         classpath 'net.minecraftforge.gradle:ForgeGradle:6.0.+'
+        classpath 'org.spongepowered:mixingradle:0.7.+'
     }
 }
 

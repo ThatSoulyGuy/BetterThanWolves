@@ -21,6 +21,10 @@ public class EntityBridge extends btw.modern.Entity {
     private final Entity realEntity;
     private static final WeakHashMap<Entity, EntityBridge> cache = new WeakHashMap<>();
 
+    /** Concrete override of abstract Entity.entityInit() — see EntityLiving for rationale. */
+    @Override
+    public void entityInit() {}
+
     /**
      * Returns (or creates) the EntityBridge for the given Entity.
      */

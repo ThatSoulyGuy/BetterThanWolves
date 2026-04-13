@@ -38,7 +38,9 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
      * Works for both ServerPlayer and client-side LocalPlayer.
      */
     public static PlayerBridge getOrCreate(Player player) {
-        return cache.computeIfAbsent(player, PlayerBridge::new);
+        PlayerBridge bridge = cache.computeIfAbsent(player, PlayerBridge::new);
+        bridge.syncFromReal();
+        return bridge;
     }
 
     /**
@@ -72,6 +74,11 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
         this.posX = realPlayer.getX();
         this.posY = realPlayer.getY();
         this.posZ = realPlayer.getZ();
+        // Rebuild bounding box from position — FC's melee attack checks
+        // target.boundingBox for Y overlap (EntityMob line 185).
+        this.width = realPlayer.getBbWidth();
+        this.height = realPlayer.getBbHeight();
+        this.setPosition(this.posX, this.posY, this.posZ);
         this.motionX = realPlayer.getDeltaMovement().x;
         this.motionY = realPlayer.getDeltaMovement().y;
         this.motionZ = realPlayer.getDeltaMovement().z;
@@ -137,7 +144,11 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
 
     @Override
     public int getMaxHealth() {
-        return (int) realPlayer.getMaxHealth();
+        // Called virtually by vanilla 1.5.2 EntityLiving.<init>, which runs
+        // BEFORE our constructor assigns {@code realPlayer}. Return the
+        // vanilla default in that case; the actual value is refreshed by
+        // {@link #syncFromReal()} once construction completes.
+        return realPlayer == null ? 20 : (int) realPlayer.getMaxHealth();
     }
 
     /**

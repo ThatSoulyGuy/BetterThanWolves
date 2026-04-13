@@ -47,11 +47,22 @@ public class AxisAlignedBB extends FCUtilsPrimitiveGeometric {
         );
     }
 
+    /**
+     * Vanilla 1.5.2 AxisAlignedBB.offset MUTATES the box in place and
+     * returns `this`. This is critical for Entity.moveEntity, which calls
+     * `boundingBox.offset(0, dy, 0)` and expects the box to actually move.
+     * The previous "return new AxisAlignedBB" stub was a phantom op — the
+     * new box was thrown away and the original never moved, so positions
+     * never updated and gravity could not pull entities down.
+     */
     public AxisAlignedBB offset(double x, double y, double z) {
-        return new AxisAlignedBB(
-            this.minX + x, this.minY + y, this.minZ + z,
-            this.maxX + x, this.maxY + y, this.maxZ + z
-        );
+        this.minX += x;
+        this.minY += y;
+        this.minZ += z;
+        this.maxX += x;
+        this.maxY += y;
+        this.maxZ += z;
+        return this;
     }
 
     public boolean intersectsWith(AxisAlignedBB other) {
@@ -395,4 +406,28 @@ public class AxisAlignedBB extends FCUtilsPrimitiveGeometric {
     public int GetAssemblyID() { return m_iAssemblyID; }
 
     public void SetAssemblyID(int id) { m_iAssemblyID = id; }
+
+    /**
+     * Vanilla 1.5.2 AxisAlignedBB.getAverageEdgeLength — returns the
+     * arithmetic mean of the box's three edge lengths. Used by
+     * {@link World#func_85174_u} to detect "full cube" collision boxes.
+     */
+    public double getAverageEdgeLength() {
+        return ((maxX - minX) + (maxY - minY) + (maxZ - minZ)) / 3.0D;
+    }
+
+    /**
+     * Vanilla 1.5.2 AxisAlignedBB.setBB — copies the bounds from another
+     * box into this one in place. Called by Entity.moveEntity to swap the
+     * entity's bounding box with a swept/clipped one without allocating
+     * a new instance.
+     */
+    public void setBB(AxisAlignedBB other) {
+        this.minX = other.minX;
+        this.minY = other.minY;
+        this.minZ = other.minZ;
+        this.maxX = other.maxX;
+        this.maxY = other.maxY;
+        this.maxZ = other.maxZ;
+    }
 }

@@ -1,3 +1,8 @@
 {
-  "itemGroup.betterthanwolves": "Better Than Wolves"
+  "itemGroup.betterthanwolves": "Better Than Wolves",
+  "jei.betterthanwolves.category.cauldron": "Cauldron",
+  "jei.betterthanwolves.category.cauldron_stoked": "Stoked Cauldron",
+  "jei.betterthanwolves.category.crucible": "Crucible",
+  "jei.betterthanwolves.category.crucible_stoked": "Stoked Crucible",
+  "jei.betterthanwolves.category.millstone": "Mill Stone"
 }

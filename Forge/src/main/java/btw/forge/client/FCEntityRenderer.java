@@ -223,6 +223,11 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
         // Render captured quads through MC's pipeline
         poseStack.pushPose();
 
+        // FC models are authored facing south (+Z in 1.5.2's GL coordinate
+        // system). MC 1.20.1's entity render pipeline faces north. Rotate
+        // 180° around Y to flip the model to face the correct direction.
+        poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(180.0F));
+
         // Determine texture from captured quads — FC renderers bind textures
         // via loadTexture() which records the name on the Tessellator.
         ResourceLocation texLoc = FALLBACK_TEXTURE;
@@ -313,44 +318,10 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
                 return new ResourceLocation(BTWForgeMod.MOD_ID, "textures/entity/" + name);
             }
 
-            // Vanilla mob textures: mob/cow.png → minecraft:textures/entity/cow/cow.png
-            // MC 1.20.1 moved textures to textures/entity/<mob>/<mob>.png
-            if (clean.startsWith("mob/")) {
-                String mobName = clean.substring("mob/".length()).replace(".png", "");
-                // Handle special name mappings
-                String mcPath = switch (mobName) {
-                    case "pig" -> "textures/entity/pig/pig.png";
-                    case "cow" -> "textures/entity/cow/cow.png";
-                    case "chicken" -> "textures/entity/chicken/chicken.png";
-                    case "sheep" -> "textures/entity/sheep/sheep.png";
-                    case "sheep_fur" -> "textures/entity/sheep/sheep_fur.png";
-                    case "wolf" -> "textures/entity/wolf/wolf.png";
-                    case "wolf_tame" -> "textures/entity/wolf/wolf_tame.png";
-                    case "wolf_angry" -> "textures/entity/wolf/wolf_angry.png";
-                    case "ocelot" -> "textures/entity/cat/ocelot.png";
-                    case "creeper" -> "textures/entity/creeper/creeper.png";
-                    case "skeleton" -> "textures/entity/skeleton/skeleton.png";
-                    case "zombie" -> "textures/entity/zombie/zombie.png";
-                    case "spider" -> "textures/entity/spider/spider.png";
-                    case "cavespider" -> "textures/entity/spider/cave_spider.png";
-                    case "enderman" -> "textures/entity/enderman/enderman.png";
-                    case "blaze" -> "textures/entity/blaze.png";
-                    case "ghast" -> "textures/entity/ghast/ghast.png";
-                    case "pigzombie" -> "textures/entity/zombie_pigman.png";
-                    case "slime" -> "textures/entity/slime/slime.png";
-                    case "magmacube" -> "textures/entity/slime/magmacube.png";
-                    case "villager" -> "textures/entity/villager/villager.png";
-                    case "snowman" -> "textures/entity/snow_golem.png";
-                    case "bat" -> "textures/entity/bat.png";
-                    case "witch" -> "textures/entity/witch.png";
-                    case "wither" -> "textures/entity/wither/wither.png";
-                    default -> "textures/entity/" + mobName + ".png";
-                };
-                return new ResourceLocation("minecraft", mcPath);
-            }
-
-            // Fallback: try as-is under minecraft namespace
-            return new ResourceLocation("minecraft", "textures/" + clean);
+            // All FC texture paths (mob/, armor/, item/, etc.) use bundled
+            // 1.5.2 originals. MC 1.20.1 textures have different dimensions
+            // (64x64 vs 64x32) and reorganized paths that break FC's UV maps.
+            return new ResourceLocation(BTWForgeMod.MOD_ID, "textures/" + clean);
         });
     }
 }

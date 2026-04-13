@@ -5,12 +5,16 @@ import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Abstract representation of a game world.
  * Mirrors net.minecraft.src.World with identical field/method names.
  */
 public abstract class World implements IBlockAccess {
+
+    /** Debug counter: increments every time getEntityPathToXYZ is called. */
+    public static final AtomicInteger pathfindCallCount = new AtomicInteger(0);
 
     // --- Instance fields ---
 
@@ -39,10 +43,24 @@ public abstract class World implements IBlockAccess {
     public List worldAccesses = new ArrayList();
     public IChunkProvider chunkProvider;
     public ISaveHandler saveHandler;
-    public WorldInfo worldInfo;
+    /**
+     * Vanilla 1.5.2 EntityCreature.HandlePossession (and other FCMOD code)
+     * dereferences {@code worldObj.getWorldInfo().getGameType()} during
+     * tick. The server-side WorldBridge overwrites this with the real
+     * MC WorldInfo, but the client default needed a non-null sentinel
+     * to avoid per-tick NPEs across every entity.
+     */
+    public WorldInfo worldInfo = new WorldInfo();
     public boolean findingSpawnPoint;
     public MapStorage mapStorage;
-    public Profiler theProfiler;
+    /**
+     * Vanilla 1.5.2 Entity.onEntityUpdate dereferences {@code worldObj.theProfiler}
+     * unconditionally on every tick. Field-initialised here so every World
+     * subclass (server WorldBridge, client world stub, etc.) starts with a
+     * working no-op profiler instead of NPEing on the first entity tick.
+     * Subclasses are free to overwrite this with the real MC profiler.
+     */
+    public Profiler theProfiler = new Profiler();
     public Scoreboard worldScoreboard;
     public boolean spawnHostileMobs = true;
     public boolean spawnPeacefulMobs = true;
@@ -68,6 +86,89 @@ public abstract class World implements IBlockAccess {
 
     public boolean isBlockNormalCube(int x, int y, int z) {
         return Block.isNormalCube(getBlockId(x, y, z));
+    }
+
+    /**
+     * Vanilla 1.5.2 World.isBoundingBoxBurning — returns true if the
+     * entity's bounding box intersects fire or lava. Called by vanilla
+     * Entity.moveEntity. Default stub returns false; WorldBridge
+     * overrides to check the live MC level.
+     */
+    public boolean isBoundingBoxBurning(Entity entity) {
+        return false;
+    }
+
+    /**
+     * Overload used by some FC code paths that want to check a specific
+     * AABB (e.g., looking ahead for movement). Same behavior as above.
+     */
+    public boolean isBoundingBoxBurning(AxisAlignedBB aabb) {
+        return false;
+    }
+
+    /**
+     * Vanilla 1.5.2 World.handleMaterialAcceleration — scans every block
+     * intersecting {@code aabb}, and for each one whose block material
+     * equals {@code material}, nudges {@code entity}'s motion in the
+     * direction of the liquid's flow.  Called from {@code Entity.handleWaterMovement}
+     * and {@code Entity.handleLavaMovement}.  Returns true if any matching
+     * block was found.
+     *
+     * <p>This is the exact algorithm from vanilla 1.5.2, needed so FC's
+     * canonical Entity.moveEntity recognizes entities as being in water/
+     * lava for drag, buoyancy, and flow-push physics.</p>
+     */
+    /**
+     * Vanilla 1.5.2 World.func_85174_u — returns true if the block at
+     * (x,y,z) has a full-cube collision box (average AABB edge length
+     * >= 1.0). Used by entity collision logic to decide whether the
+     * block is something a mob can stand on or be pushed against.
+     * Mirrors the vanilla MCP-named method exactly.
+     */
+    public boolean func_85174_u(int x, int y, int z) {
+        int id = getBlockId(x, y, z);
+        if (id != 0 && Block.blocksList[id] != null) {
+            AxisAlignedBB aabb = Block.blocksList[id].getCollisionBoundingBoxFromPool(this, x, y, z);
+            return aabb != null && aabb.getAverageEdgeLength() >= 1.0D;
+        }
+        return false;
+    }
+
+    public boolean handleMaterialAcceleration(AxisAlignedBB aabb, Material material, Entity entity) {
+        int minX = (int) Math.floor(aabb.minX);
+        int maxX = (int) Math.floor(aabb.maxX + 1.0D);
+        int minY = (int) Math.floor(aabb.minY);
+        int maxY = (int) Math.floor(aabb.maxY + 1.0D);
+        int minZ = (int) Math.floor(aabb.minZ);
+        int maxZ = (int) Math.floor(aabb.maxZ + 1.0D);
+        for (int x = minX; x < maxX; ++x) {
+            for (int y = minY; y < maxY; ++y) {
+                for (int z = minZ; z < maxZ; ++z) {
+                    int id = getBlockId(x, y, z);
+                    if (id <= 0) continue;
+                    Block block = Block.blocksList[id];
+                    if (block == null) continue;
+                    if (block.blockMaterial == material) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Vanilla 1.5.2 World.blockGetRenderType — returns the vanilla
+     * render type ID of the block at the given coordinates (used by
+     * Entity.moveEntity to decide footstep sounds for fence/slab/
+     * non-full blocks). Default returns -1 (unknown); WorldBridge
+     * can override if a more accurate value is needed.
+     */
+    public int blockGetRenderType(int x, int y, int z) {
+        int id = getBlockId(x, y, z);
+        if (id <= 0) return -1;
+        Block block = Block.blocksList[id];
+        return block == null ? -1 : block.getRenderType();
     }
 
     /**
@@ -256,12 +357,31 @@ public abstract class World implements IBlockAccess {
         return false;
     }
 
+    /**
+     * Lazily-allocated, shared "always loaded" sentinel chunk. Vanilla 1.5.2
+     * Entity / EntityLiving code dereferences {@code getChunkFromBlockCoords(...).isChunkLoaded}
+     * unconditionally during movement. The server-side WorldBridge overrides
+     * these methods with real chunk lookups, but the client side reaches the
+     * default impl. Returning null caused per-tick NPEs across every entity;
+     * a sentinel chunk with {@code isChunkLoaded=true} matches the bridge's
+     * "if the entity is being ticked, its chunk must be loaded" invariant.
+     */
+    private Chunk loadedSentinelChunk;
+
     public Chunk getChunkFromBlockCoords(int x, int z) {
-        return null;
+        return getLoadedSentinelChunk();
     }
 
     public Chunk getChunkFromChunkCoords(int chunkX, int chunkZ) {
-        return null;
+        return getLoadedSentinelChunk();
+    }
+
+    private Chunk getLoadedSentinelChunk() {
+        if (loadedSentinelChunk == null) {
+            loadedSentinelChunk = new Chunk(this, 0, 0);
+            loadedSentinelChunk.isChunkLoaded = true;
+        }
+        return loadedSentinelChunk;
     }
 
     // --- Biome ---
@@ -288,13 +408,111 @@ public abstract class World implements IBlockAccess {
 
     public abstract List getEntitiesWithinAABB(Class entityClass, AxisAlignedBB aabb);
 
+    public List selectEntitiesWithinAABB(Class entityClass, AxisAlignedBB aabb, IEntitySelector selector) {
+        List all = getEntitiesWithinAABB(entityClass, aabb);
+        if (selector == null || all == null) return all;
+        List filtered = new ArrayList();
+        for (Object e : all) {
+            if (e instanceof Entity && selector.isEntityApplicable((Entity) e)) {
+                filtered.add(e);
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * Vanilla 1.5.2 World.getEntityPathToXYZ — creates a ChunkCache around
+     * the entity and delegates to PathFinder for real A* pathfinding.
+     * Copied verbatim from vanilla so FC's PathNavigate calls this directly.
+     */
+    private static final java.util.Set<String> LOGGED_PATHFIND = new java.util.HashSet<>();
+
+    public PathEntity getEntityPathToXYZ(Entity entity, int x, int y, int z, float range,
+                                         boolean canBreakDoors, boolean canEnterDoors,
+                                         boolean avoidsWater, boolean canSwim) {
+        pathfindCallCount.incrementAndGet();
+        this.theProfiler.startSection("pathfind");
+        int ex = MathHelper.floor_double(entity.posX);
+        int ey = MathHelper.floor_double(entity.posY);
+        int ez = MathHelper.floor_double(entity.posZ);
+        int pad = (int)(range + 8.0F);
+        ChunkCache cache = new ChunkCache(this, ex - pad, ey - pad, ez - pad,
+                ex + pad, ey + pad, ez + pad, 0);
+        PathEntity result = (new PathFinder(cache, canBreakDoors, canEnterDoors,
+                avoidsWater, canSwim)).createEntityPathTo(entity, x, y, z, range);
+        this.theProfiler.endSection();
+
+        // Diagnostic: log pathfinding results (once per entity class)
+        String key = entity.getClass().getSimpleName() + "|" + (result != null);
+        if (LOGGED_PATHFIND.add(key) || pathfindCallCount.get() % 20 == 0) {
+            int blockAtFeet = getBlockId(ex, ey, ez);
+            int blockBelow = getBlockId(ex, ey - 1, ez);
+            Block bFeet = (blockAtFeet >= 0 && blockAtFeet < Block.blocksList.length) ? Block.blocksList[blockAtFeet] : null;
+            Block bBelow = (blockBelow >= 0 && blockBelow < Block.blocksList.length) ? Block.blocksList[blockBelow] : null;
+            org.apache.logging.log4j.LogManager.getLogger("BTW-Pathfind").info(
+                "[PATH] {} from ({},{},{}) to ({},{},{}) range={} result={} pathLen={} | blockAtFeet={}({}) blockBelow={}({}) bb.minY={} width={} height={}",
+                entity.getClass().getSimpleName(),
+                ex, ey, ez, x, y, z, range,
+                result != null ? "OK" : "NULL",
+                result != null ? result.getCurrentPathLength() : 0,
+                blockAtFeet, bFeet != null ? bFeet.getClass().getSimpleName() : "null",
+                blockBelow, bBelow != null ? bBelow.getClass().getSimpleName() : "null",
+                String.format("%.2f", entity.boundingBox != null ? entity.boundingBox.minY : -999),
+                String.format("%.2f", entity.width), String.format("%.2f", entity.height));
+        }
+        return result;
+    }
+
+    /**
+     * Vanilla 1.5.2 World.getPathEntityToEntity — delegates to getEntityPathToXYZ.
+     */
+    public PathEntity getPathEntityToEntity(Entity source, Entity target, float range,
+                                             boolean canBreakDoors, boolean canEnterDoors,
+                                             boolean avoidsWater, boolean canSwim) {
+        if (target == null) return null;
+        return getEntityPathToXYZ(source,
+                MathHelper.floor_double(target.posX),
+                (int)target.posY,
+                MathHelper.floor_double(target.posZ),
+                range, canBreakDoors, canEnterDoors, avoidsWater, canSwim);
+    }
+
     public abstract List getEntitiesWithinAABBExcludingEntity(Entity entity, AxisAlignedBB aabb);
 
     public List getEntitiesWithinAABBExcludingEntity(Entity entity, AxisAlignedBB aabb, IEntitySelector selector) {
         return new ArrayList();
     }
 
+    public Entity findNearestEntityWithinAABB(Class entityClass, AxisAlignedBB aabb, Entity exclude) {
+        List list = this.getEntitiesWithinAABB(entityClass, aabb);
+        Entity nearest = null;
+        double nearestDistSq = Double.MAX_VALUE;
+        for (int i = 0; i < list.size(); i++) {
+            Entity candidate = (Entity) list.get(i);
+            if (candidate != exclude) {
+                double distSq = exclude.getDistanceSqToEntity(candidate);
+                if (distSq <= nearestDistSq) {
+                    nearest = candidate;
+                    nearestDistSq = distSq;
+                }
+            }
+        }
+        return nearest;
+    }
+
+    private static boolean loggedBaseCollision = false;
     public List getCollidingBoundingBoxes(Entity entity, AxisAlignedBB aabb) {
+        if (!loggedBaseCollision && entity != null) {
+            loggedBaseCollision = true;
+            org.apache.logging.log4j.LogManager.getLogger("BTW-World").error(
+                "[BASE-COLLISION] Base World.getCollidingBoundingBoxes called! entity={} worldClass={} aabb=({},{},{})",
+                entity.getClass().getSimpleName(), this.getClass().getName(),
+                aabb != null ? aabb.minX : "null", aabb != null ? aabb.minY : "null", aabb != null ? aabb.minZ : "null");
+            StackTraceElement[] st = new Throwable().getStackTrace();
+            for (int i = 0; i < Math.min(15, st.length); i++) {
+                org.apache.logging.log4j.LogManager.getLogger("BTW-World").error("    at {}", st[i]);
+            }
+        }
         return new ArrayList();
     }
 
@@ -617,8 +835,21 @@ public abstract class World implements IBlockAccess {
     public void AddAreaAroundChunkToActiveChunkMap(int iChunkX, int iChunkZ) {}
     public void ClearActiveChunkMap() {}
     public void AddToActiveChunkMap(int iChunkX, int iChunkZ) {}
-    public boolean IsChunkActive(int iChunkX, int iChunkZ) { return false; }
-    public boolean IsBlockPosActive(int i, int j, int k) { return false; }
+
+    /**
+     * FC's "active chunk map" is its own caching layer separate from MC's
+     * chunk loading. Vanilla 1.5.2 EntityLiving.despawnEntity() calls
+     * {@code IsChunkActive} and immediately {@link Entity#setDead() setDead()}'s
+     * the entity if it returns false. Returning false on every call meant
+     * EVERY despawnable hostile mob died on its first tick.
+     *
+     * Bridge invariant: if MC is ticking the entity through ProxyMob/
+     * ProxyAnimal, by definition its chunk is loaded by MC, so we can
+     * report it as active. MC owns chunk loading and despawn lifecycle;
+     * FC's chunk-activity tracking is simply not relevant in the bridge.
+     */
+    public boolean IsChunkActive(int iChunkX, int iChunkZ) { return true; }
+    public boolean IsBlockPosActive(int i, int j, int k) { return true; }
     public LinkedList<ChunkCoordIntPair> GetActiveChunksCoordsList() { return m_activeChunksCoordsList; }
 
     public static final int m_iLoadedChunksUpdateRange = 32;
@@ -716,7 +947,7 @@ public abstract class World implements IBlockAccess {
 
     // --- Village ---
 
-    public VillageCollection villageCollectionObj;
+    public VillageCollection villageCollectionObj = new VillageCollection();
 
     public static boolean InstallationIntegrityTest() { return true; }
 }

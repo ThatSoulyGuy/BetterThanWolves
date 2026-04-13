@@ -76,6 +76,18 @@ public class Chunk {
     public BiomeGenBase getBiomeGenForWorldCoords(int x, int z, WorldChunkManager manager) { return null; }
     public void getEntitiesWithinAABBForEntity(Entity excluded, AxisAlignedBB bb, List list, IEntitySelector selector) {}
     public void getEntitiesOfTypeWithinAAAB(Class clazz, AxisAlignedBB bb, List list, IEntitySelector selector) {}
+    /**
+     * Vanilla 1.5.2 ChunkCache calls this to decide whether the chunk
+     * region has any non-air content. If it returns true ("levels ARE
+     * empty"), ChunkCache sets hasExtendedLevels=true which makes ALL
+     * block queries return 0 (air) — PathFinder sees an empty world
+     * and returns null paths. Returning false ("no, levels are NOT
+     * empty") forces ChunkCache to query blocks normally.
+     */
+    public boolean getAreLevelsEmpty(int minY, int maxY) {
+        return false;
+    }
+
     public int getTopFilledSegment() {
         // Return a reasonable Y for the top non-empty section.
         // Beacon uses this for random Y targeting. Default to 128 (section 8)

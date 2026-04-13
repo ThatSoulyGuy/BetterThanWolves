@@ -5,7 +5,13 @@ public class PathFinder {
     private boolean canPathThroughOpenWoodDoor;
     private boolean canPathThroughWater;
 
-    public PathFinder(Object... args) {}
+    /**
+     * Must match vanilla 1.5.2's exact constructor signature so the
+     * compiler generates bytecode that resolves against the real class
+     * at runtime (the stub is deleted post-compile).
+     */
+    public PathFinder(IBlockAccess blockAccess, boolean canBreakDoors,
+                      boolean canEnterDoors, boolean avoidsWater, boolean canSwim) {}
 
     public PathEntity createEntityPathTo(Entity entity, Entity target, float maxDist) { return null; }
     public PathEntity createEntityPathTo(Entity entity, int x, int y, int z, float maxDist) { return null; }

@@ -30,20 +30,26 @@ public class RecipeBridge {
     public static void injectRecipes(net.minecraft.server.MinecraftServer server) {
         RecipeManager recipeManager = server.getRecipeManager();
 
-        // Get the mutable recipe map — Forge makes this accessible
+        // Get the mutable recipe map. The field is named `recipes` in MCP
+        // mappings and `f_44007_` in SRG; use Forge's ObfuscationReflectionHelper
+        // which accepts the MCP name and resolves to the runtime obf name.
         Map<RecipeType<?>, Map<ResourceLocation, Recipe<?>>> recipesByType;
         try {
-            // RecipeManager.recipes is a Map<RecipeType, Map<ResourceLocation, Recipe>>
-            var field = RecipeManager.class.getDeclaredField("recipes");
-            field.setAccessible(true);
-            var immutableMap = (Map<RecipeType<?>, Map<ResourceLocation, Recipe<?>>>) field.get(recipeManager);
+            Map<RecipeType<?>, Map<ResourceLocation, Recipe<?>>> immutableMap =
+                    net.minecraftforge.fml.util.ObfuscationReflectionHelper.getPrivateValue(
+                            RecipeManager.class, recipeManager, "recipes");
+            if (immutableMap == null) {
+                LOGGER.error("RecipeManager.recipes was null — FC recipes will not be injected");
+                return;
+            }
 
             // Make mutable copies
             recipesByType = new HashMap<>();
             for (var entry : immutableMap.entrySet()) {
                 recipesByType.put(entry.getKey(), new HashMap<>(entry.getValue()));
             }
-            field.set(recipeManager, recipesByType);
+            net.minecraftforge.fml.util.ObfuscationReflectionHelper.setPrivateValue(
+                    RecipeManager.class, recipeManager, recipesByType, "recipes");
         } catch (Exception e) {
             LOGGER.error("Failed to access RecipeManager.recipes — FC recipes will not be injected", e);
             return;

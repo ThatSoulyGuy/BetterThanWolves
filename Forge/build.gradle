@@ -1,11 +1,37 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.ow2.asm:asm:9.6'
+    }
+}
+
 apply plugin: 'java'
 apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'org.spongepowered.mixin'
 apply plugin: 'com.github.johnrengelman.shadow'
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.Opcodes
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.FieldVisitor
+import org.objectweb.asm.MethodVisitor
 
 evaluationDependsOn(':Api')
 evaluationDependsOn(':Modern-Common')
+
+// ---- Port version wiring ------------------------------------
+// The Forge module has its own SemVer (the "port" version), distinct
+// from the upstream BTW / 1.5.2 modVersion. Jar name and mods.toml both
+// read from this.
+version = project.portVersion
+// Jar layout: BetterThanWolves-1.20.1-0.1.0-alpha.1.jar
+base {
+    archivesName = "${project.portArchiveName}-${project.portMcVersion}"
+}
 
 java {
     toolchain {
@@ -26,6 +52,13 @@ sourceSets {
     }
 }
 
+// Generate the mixin refmap so method/field references in @Inject/@At
+// annotations get remapped from MCP names (dev) to SRG names (prod jar).
+mixin {
+    add sourceSets.main, 'betterthanwolves.refmap.json'
+    config 'betterthanwolves.mixins.json'
+}
+
 minecraft {
     mappings channel: 'official', version: '1.20.1'
 
@@ -37,12 +70,24 @@ minecraft {
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${project.projectDir}/build/createSrgToMcp/output.srg"
             arg '--mixin.config=betterthanwolves.mixins.json'
+            // Disable HotSpot's fast-throw NPE optimization. After ~15
+            // exceptions at the same bytecode location, the JIT starts
+            // throwing pre-allocated NPE instances with EMPTY stack
+            // traces, making caught exceptions unactionable. With FC
+            // bridge code triggering tight per-tick exception loops,
+            // this is essential for diagnosis.
+            jvmArg '-XX:-OmitStackTraceInFastThrow'
             mods {
                 betterthanwolves {
                     source sourceSets.main
                     source project(':Api').sourceSets.main
-                    source project(':Modern-Common').sourceSets.main
+                    // FC source set BEFORE Modern-Common: vanilla 1.5.2
+                    // Entity / AxisAlignedBB live in fc and must take
+                    // precedence over Modern-Common's stubs of the same
+                    // class names. ForgeGradle / TRANSFORMER classloader
+                    // resolves duplicates by source declaration order.
                     source sourceSets.fc
+                    source project(':Modern-Common').sourceSets.main
                 }
             }
         }
@@ -53,12 +98,20 @@ minecraft {
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapRemappingFile', "${project.projectDir}/build/createSrgToMcp/output.srg"
             arg '--mixin.config=betterthanwolves.mixins.json'
+            // See server { } block — needed so caught NPEs in tight
+            // tick loops still carry their stack trace.
+            jvmArg '-XX:-OmitStackTraceInFastThrow'
             mods {
                 betterthanwolves {
                     source sourceSets.main
                     source project(':Api').sourceSets.main
-                    source project(':Modern-Common').sourceSets.main
+                    // FC source set BEFORE Modern-Common: vanilla 1.5.2
+                    // Entity / AxisAlignedBB live in fc and must take
+                    // precedence over Modern-Common's stubs of the same
+                    // class names. ForgeGradle / TRANSFORMER classloader
+                    // resolves duplicates by source declaration order.
                     source sourceSets.fc
+                    source project(':Modern-Common').sourceSets.main
                 }
             }
         }
@@ -73,13 +126,397 @@ task remapFcCode(type: ShadowJar) {
     archiveClassifier = ''
     destinationDirectory = file("$buildDir/remapped")
 
-    // Only include FC code — NOT Api stubs (Modern-Common provides real btw.modern.* classes)
+    // FC code from the subproject modules
     from(project(':Client').sourceSets.main.output) { exclude 'btw/api/**' }
     from(project(':Common').sourceSets.main.output) { exclude 'btw/api/**' }
     from(project(':Server').sourceSets.main.output) { exclude 'btw/api/**' }
 
+    // Vanilla MC 1.5.2 AI/pathfinding classes (with FC patches) from the
+    // root project. Only include classes that Modern-Common has as dead
+    // stubs — EntityAI*, Path*, EntityLookHelper, EntitySenses, plus
+    // supporting classes they depend on (RandomPositionGenerator, etc.).
+    // Do NOT include Block, Entity, World, Minecraft, etc. — Modern-Common
+    // provides bridge implementations for those.
+    from(rootProject.file('build/classes/java/main')) {
+        include 'net/minecraft/src/EntityAI*.class'
+        exclude 'net/minecraft/src/EntityAITasks*.class'
+        include 'net/minecraft/src/PathNavigate*.class'
+        include 'net/minecraft/src/PathEntity*.class'
+        include 'net/minecraft/src/PathPoint*.class'
+        include 'net/minecraft/src/PathFinder*.class'
+        // EntitySenses excluded — Modern-Common provides a bridge stub
+        // with canSee()=true (needed so AI targeting works).
+        // EntityLookHelper is now included (stub was deleted from dev
+        // classpath; vanilla version has the (EntityLiving) constructor
+        // that EntityLiving.<init> calls).
+        include 'net/minecraft/src/EntityLookHelper*.class'
+        include 'net/minecraft/src/EntityMoveHelper*.class'
+        include 'net/minecraft/src/EntityJumpHelper*.class'
+        include 'net/minecraft/src/RandomPositionGenerator*.class'
+        include 'net/minecraft/src/MCHash*.class'
+        include 'net/minecraft/src/IntHash*.class'
+        include 'net/minecraft/src/IEntitySelector*.class'
+        // FC's vanilla 1.5.2 Entity — has the canonical moveEntity
+        // collision-clip + step-up + updateFallState that we need.
+        // Modern-Common's Entity stub is deleted post-compile by
+        // removeModernCommonShadowedClasses so the vanilla version wins.
+        //
+        // EntityLiving is ALSO swapped so that vanilla's real
+        // writeEntityToNBT / readEntityFromNBT actually persist health,
+        // motion, combat state, etc. A no-op stub would make the NBT
+        // save path "succeed" but silently lose state on load.
+        // Access-level conflicts (protected fields accessed cross-class)
+        // are fixed by openUpEntityAccess running ASM promotion.
+        //
+        // NOT swapped:
+        //   - AxisAlignedBB: vanilla has PROTECTED constructor, FC code
+        //     calls `new AxisAlignedBB(...)` directly and would fail.
+        include 'net/minecraft/src/Entity.class'
+        include 'net/minecraft/src/EntityLiving.class'
+        // EntityCreature and EntityMob carry FCMOD helper methods
+        // (EntityCreatureEntityInit, CheckForCatchFireInSun, etc.)
+        // that FC subclasses call directly to bypass virtual dispatch.
+        // Must be the vanilla versions so those helpers resolve.
+        include 'net/minecraft/src/EntityCreature.class'
+        include 'net/minecraft/src/EntityMob.class'
+        // EntityAgeable and EntityAnimal carry FCMOD helpers used by
+        // FCEntityPig/Cow/Sheep/Chicken/Wolf — GetHungerLevel(),
+        // SetHungerLevel(), IsTemptingItem(), grazing animation state,
+        // etc. — backed by DataWatcher slot 21. FC render code
+        // (FCEntityPig.getTexture) calls GetHungerLevel() to switch
+        // between fed/hungry textures.
+        include 'net/minecraft/src/EntityAgeable.class'
+        include 'net/minecraft/src/EntityAnimal.class'
+        // Concrete mob/animal classes — Modern-Common's stubs don't call
+        // setSize in their constructors, so vanilla 1.5.2 EntityAgeable's
+        // sentinel `m_fAdultWidth = -1.0F` never gets overwritten, and
+        // readEntityFromNBT → setGrowingAge → AdjustedSizeToScale eventually
+        // calls setSize(-1.0, 0.0) which corrupts the bounding box and
+        // makes the entity fall through everything.
+        include 'net/minecraft/src/EntityPig.class'
+        include 'net/minecraft/src/EntityCow.class'
+        include 'net/minecraft/src/EntitySheep.class'
+        include 'net/minecraft/src/EntityChicken.class'
+        include 'net/minecraft/src/EntityWolf.class'
+        include 'net/minecraft/src/EntityOcelot.class'
+        include 'net/minecraft/src/EntityMooshroom.class'
+        include 'net/minecraft/src/EntityVillager.class'
+        include 'net/minecraft/src/EntityZombie.class'
+        include 'net/minecraft/src/EntitySkeleton.class'
+        include 'net/minecraft/src/EntityCreeper.class'
+        include 'net/minecraft/src/EntityEnderman.class'
+        include 'net/minecraft/src/EntitySpider.class'
+        include 'net/minecraft/src/EntityCaveSpider.class'
+        include 'net/minecraft/src/EntityWitch.class'
+        include 'net/minecraft/src/EntityPigZombie.class'
+        include 'net/minecraft/src/EntityWither.class'
+        include 'net/minecraft/src/EntitySlime.class'
+        include 'net/minecraft/src/EntityMagmaCube.class'
+        include 'net/minecraft/src/EntityGhast.class'
+        include 'net/minecraft/src/EntityBlaze.class'
+        include 'net/minecraft/src/EntitySilverfish.class'
+        include 'net/minecraft/src/EntityBat.class'
+        include 'net/minecraft/src/EntitySquid.class'
+        include 'net/minecraft/src/EntitySnowman.class'
+        include 'net/minecraft/src/EntityIronGolem.class'
+        include 'net/minecraft/src/EntityAmbientCreature.class'
+        include 'net/minecraft/src/EntityWaterMob.class'
+        include 'net/minecraft/src/EntityGolem.class'
+        include 'net/minecraft/src/EntityFlying.class'
+        include 'net/minecraft/src/EntityTameable.class'
+        // Direct Entity subclasses — vanilla 1.5.2 declares writeEntityToNBT
+        // and readEntityFromNBT abstract on Entity, so the Modern-Common
+        // stubs (which inherit them as abstract) hit AbstractMethodError
+        // every time FCEntityStateCodec or ProxyEntity tries to serialize
+        // them for save/sync. Swap to vanilla so the real impls are present.
+        include 'net/minecraft/src/EntityArrow.class'
+        include 'net/minecraft/src/EntityBoat.class'
+        include 'net/minecraft/src/EntityFX.class'
+        include 'net/minecraft/src/EntityFallingSand.class'
+        include 'net/minecraft/src/EntityFireball.class'
+        include 'net/minecraft/src/EntityFishHook.class'
+        include 'net/minecraft/src/EntityItem.class'
+        include 'net/minecraft/src/EntityMinecart.class'
+        include 'net/minecraft/src/EntityPainting.class'
+        include 'net/minecraft/src/EntityTNTPrimed.class'
+        include 'net/minecraft/src/EntityThrowable.class'
+        include 'net/minecraft/src/EntityWeatherEffect.class'
+        include 'net/minecraft/src/EntityXPOrb.class'
+        include 'net/minecraft/src/FCEntityLightningBolt.class'
+        // FCEntityLightningBolt extends EntityLightningBolt, which extends
+        // EntityWeatherEffect. ModelBat uses reflection to look up methods
+        // on EntityLightningBolt, so the class must be loadable.
+        include 'net/minecraft/src/EntityLightningBolt.class'
+        // FCMOD utility classes referenced by vanilla 1.5.2 entity code:
+        //   - FCUtilsWorld: EntityLiving.getSpeedModifier (mud/path/water slowdowns)
+        //   - FCUtilsMisc: EntityAnimal/EntityAgeable behaviour helpers
+        // Modern-Common doesn't stub these, so the real vanilla versions
+        // get pulled in via remap.
+        include 'net/minecraft/src/FCUtilsWorld.class'
+        include 'net/minecraft/src/FCUtilsMisc.class'
+        // Vanilla EntityLiving references CombatTracker to record damage
+        // events used by death messages and statistics. CombatTracker
+        // depends on DamageSource — we leave DamageSource as Modern-
+        // Common's stub (compatible signature).
+        include 'net/minecraft/src/CombatTracker.class'
+        include 'net/minecraft/src/CombatEntry.class'
+        // Vanilla EntityLiving constructor creates EntityBodyHelper.
+        // Modern-Common has no stub, so include vanilla's directly.
+        include 'net/minecraft/src/EntityBodyHelper.class'
+        // Vanilla EntityLiving.CheckForHeadDrop() and .attackEntityFrom()
+        // reference FCDamageSourceCustom static fields (m_DamageSourceChoppingBlock
+        // etc.). The vanilla 1.5.2 class is a flat DamageSource subclass;
+        // it depends only on DamageSource (already stubbed in Modern-Common).
+        include 'net/minecraft/src/FCDamageSourceCustom.class'
+        // Vanilla EntityMob implements IMob. IMob has a static-final
+        // FilterIMob field. Both must be present so EntityMob loads.
+        include 'net/minecraft/src/IMob.class'
+        include 'net/minecraft/src/FilterIMob.class'
+        // Tag interfaces implemented by various vanilla 1.5.2 mob classes:
+        //   - IBossDisplayData: EntityWither, EntityDragon
+        //   - INpc, IMerchant: EntityVillager
+        // Without them the mob classes fail to link.
+        include 'net/minecraft/src/IBossDisplayData.class'
+        include 'net/minecraft/src/INpc.class'
+        include 'net/minecraft/src/IMerchant.class'
+        // Projectile subclasses referenced by vanilla mob classes:
+        //   - EntitySmallFireball: EntityBlaze.shoots, EntityGhast hit code
+        //   - EntityLargeFireball: EntityGhast.shoots
+        //   - EntityWitherSkull:   EntityWither.shoots
+        //   - FCEntityWitherSkull: vanilla EntityWither.java:479 directly
+        //     instantiates this FC subclass via `new FCEntityWitherSkull(...)`
+        include 'net/minecraft/src/EntitySmallFireball.class'
+        include 'net/minecraft/src/EntityLargeFireball.class'
+        include 'net/minecraft/src/EntityWitherSkull.class'
+        // Vanilla 1.5.2 has FCMOD-patched subclass relationships where the
+        // original vanilla class extends an FC subclass:
+        //   - EntityMooshroom extends FCEntityCow
+        //   - EntityPigZombie extends FCEntityZombie
+        //   - EntityMagmaCube extends FCEntitySlime
+        // So when we swap the vanilla parent, we MUST also bring in the
+        // FCEntity* version to satisfy the linker. Plus EntityWither has
+        // EntityWitherAttackFilter as a static-final field. The shotgun
+        // include below brings in every FCEntity*.class from Src/ — they
+        // all relocate cleanly into btw.modern.* and only depend on classes
+        // we already have.
+        include 'net/minecraft/src/FCEntity*.class'
+        include 'net/minecraft/src/EntityWitherAttackFilter.class'
+        // EntitySheep instantiates `new ContainerSheep(this)` for crafting.
+        // Container itself is a Modern-Common stub; ContainerSheep is a
+        // tiny vanilla subclass of Container.
+        include 'net/minecraft/src/ContainerSheep.class'
+        // Thrown projectile subclasses spawned by various mobs:
+        //   - EntitySnowball: EntitySnowman
+        //   - EntityEgg: EntityChicken (random egg drop)
+        //   - EntityEnderPearl: EntityEnderman
+        //   - EntityExpBottle: villager XP throw
+        include 'net/minecraft/src/EntitySnowball.class'
+        include 'net/minecraft/src/EntityEgg.class'
+        include 'net/minecraft/src/EntityEnderPearl.class'
+        include 'net/minecraft/src/EntityExpBottle.class'
+        // Tuple is a small generic pair helper used by EntityVillager's
+        // trade randomizer (and some other vanilla 1.5.2 code).
+        include 'net/minecraft/src/Tuple.class'
+        // ChunkCache is a read-only IBlockAccess used by PathFinder for
+        // A* pathfinding. Vanilla World.getEntityPathToXYZ creates one
+        // and passes it to PathFinder.createEntityPathTo.
+        // Path is the internal priority queue used by PathFinder.
+        include 'net/minecraft/src/ChunkCache.class'
+        include 'net/minecraft/src/Path.class'
+        include 'net/minecraft/src/ModelBox.class'
+        include 'net/minecraft/src/TexturedQuad.class'
+        include 'net/minecraft/src/PositionTextureVertex.class'
+    }
+    from(rootProject.file('build/classes/java/server')) {
+        include 'net/minecraft/src/EntityAI*.class'
+        exclude 'net/minecraft/src/EntityAITasks*.class'
+        include 'net/minecraft/src/PathNavigate*.class'
+        include 'net/minecraft/src/PathEntity*.class'
+        include 'net/minecraft/src/PathPoint*.class'
+        include 'net/minecraft/src/PathFinder*.class'
+        // EntitySenses excluded — Modern-Common provides a bridge stub
+        // with canSee()=true (needed so AI targeting works).
+        // EntityLookHelper is now included (stub was deleted from dev
+        // classpath; vanilla version has the (EntityLiving) constructor
+        // that EntityLiving.<init> calls).
+        include 'net/minecraft/src/EntityLookHelper*.class'
+        include 'net/minecraft/src/EntityMoveHelper*.class'
+        include 'net/minecraft/src/EntityJumpHelper*.class'
+        include 'net/minecraft/src/RandomPositionGenerator*.class'
+        include 'net/minecraft/src/MCHash*.class'
+        include 'net/minecraft/src/IntHash*.class'
+        include 'net/minecraft/src/IEntitySelector*.class'
+        // See client comment above.
+        include 'net/minecraft/src/Entity.class'
+        include 'net/minecraft/src/EntityLiving.class'
+        // EntityCreature and EntityMob carry FCMOD helper methods
+        // (EntityCreatureEntityInit, CheckForCatchFireInSun, etc.)
+        // that FC subclasses call directly to bypass virtual dispatch.
+        // Must be the vanilla versions so those helpers resolve.
+        include 'net/minecraft/src/EntityCreature.class'
+        include 'net/minecraft/src/EntityMob.class'
+        // EntityAgeable and EntityAnimal carry FCMOD helpers used by
+        // FCEntityPig/Cow/Sheep/Chicken/Wolf — GetHungerLevel(),
+        // SetHungerLevel(), IsTemptingItem(), grazing animation state,
+        // etc. — backed by DataWatcher slot 21. FC render code
+        // (FCEntityPig.getTexture) calls GetHungerLevel() to switch
+        // between fed/hungry textures.
+        include 'net/minecraft/src/EntityAgeable.class'
+        include 'net/minecraft/src/EntityAnimal.class'
+        // Concrete mob/animal classes — Modern-Common's stubs don't call
+        // setSize in their constructors, so vanilla 1.5.2 EntityAgeable's
+        // sentinel `m_fAdultWidth = -1.0F` never gets overwritten, and
+        // readEntityFromNBT → setGrowingAge → AdjustedSizeToScale eventually
+        // calls setSize(-1.0, 0.0) which corrupts the bounding box and
+        // makes the entity fall through everything.
+        include 'net/minecraft/src/EntityPig.class'
+        include 'net/minecraft/src/EntityCow.class'
+        include 'net/minecraft/src/EntitySheep.class'
+        include 'net/minecraft/src/EntityChicken.class'
+        include 'net/minecraft/src/EntityWolf.class'
+        include 'net/minecraft/src/EntityOcelot.class'
+        include 'net/minecraft/src/EntityMooshroom.class'
+        include 'net/minecraft/src/EntityVillager.class'
+        include 'net/minecraft/src/EntityZombie.class'
+        include 'net/minecraft/src/EntitySkeleton.class'
+        include 'net/minecraft/src/EntityCreeper.class'
+        include 'net/minecraft/src/EntityEnderman.class'
+        include 'net/minecraft/src/EntitySpider.class'
+        include 'net/minecraft/src/EntityCaveSpider.class'
+        include 'net/minecraft/src/EntityWitch.class'
+        include 'net/minecraft/src/EntityPigZombie.class'
+        include 'net/minecraft/src/EntityWither.class'
+        include 'net/minecraft/src/EntitySlime.class'
+        include 'net/minecraft/src/EntityMagmaCube.class'
+        include 'net/minecraft/src/EntityGhast.class'
+        include 'net/minecraft/src/EntityBlaze.class'
+        include 'net/minecraft/src/EntitySilverfish.class'
+        include 'net/minecraft/src/EntityBat.class'
+        include 'net/minecraft/src/EntitySquid.class'
+        include 'net/minecraft/src/EntitySnowman.class'
+        include 'net/minecraft/src/EntityIronGolem.class'
+        include 'net/minecraft/src/EntityAmbientCreature.class'
+        include 'net/minecraft/src/EntityWaterMob.class'
+        include 'net/minecraft/src/EntityGolem.class'
+        include 'net/minecraft/src/EntityFlying.class'
+        include 'net/minecraft/src/EntityTameable.class'
+        // Direct Entity subclasses — vanilla 1.5.2 declares writeEntityToNBT
+        // and readEntityFromNBT abstract on Entity, so the Modern-Common
+        // stubs (which inherit them as abstract) hit AbstractMethodError
+        // every time FCEntityStateCodec or ProxyEntity tries to serialize
+        // them for save/sync. Swap to vanilla so the real impls are present.
+        include 'net/minecraft/src/EntityArrow.class'
+        include 'net/minecraft/src/EntityBoat.class'
+        include 'net/minecraft/src/EntityFX.class'
+        include 'net/minecraft/src/EntityFallingSand.class'
+        include 'net/minecraft/src/EntityFireball.class'
+        include 'net/minecraft/src/EntityFishHook.class'
+        include 'net/minecraft/src/EntityItem.class'
+        include 'net/minecraft/src/EntityMinecart.class'
+        include 'net/minecraft/src/EntityPainting.class'
+        include 'net/minecraft/src/EntityTNTPrimed.class'
+        include 'net/minecraft/src/EntityThrowable.class'
+        include 'net/minecraft/src/EntityWeatherEffect.class'
+        include 'net/minecraft/src/EntityXPOrb.class'
+        include 'net/minecraft/src/FCEntityLightningBolt.class'
+        // FCEntityLightningBolt extends EntityLightningBolt, which extends
+        // EntityWeatherEffect. ModelBat uses reflection to look up methods
+        // on EntityLightningBolt, so the class must be loadable.
+        include 'net/minecraft/src/EntityLightningBolt.class'
+        // FCMOD utility classes referenced by vanilla 1.5.2 entity code:
+        //   - FCUtilsWorld: EntityLiving.getSpeedModifier (mud/path/water slowdowns)
+        //   - FCUtilsMisc: EntityAnimal/EntityAgeable behaviour helpers
+        // Modern-Common doesn't stub these, so the real vanilla versions
+        // get pulled in via remap.
+        include 'net/minecraft/src/FCUtilsWorld.class'
+        include 'net/minecraft/src/FCUtilsMisc.class'
+        // Vanilla EntityLiving references CombatTracker to record damage
+        // events used by death messages and statistics. CombatTracker
+        // depends on DamageSource — we leave DamageSource as Modern-
+        // Common's stub (compatible signature).
+        include 'net/minecraft/src/CombatTracker.class'
+        include 'net/minecraft/src/CombatEntry.class'
+        // Vanilla EntityLiving constructor creates EntityBodyHelper.
+        // Modern-Common has no stub, so include vanilla's directly.
+        include 'net/minecraft/src/EntityBodyHelper.class'
+        // Vanilla EntityLiving.CheckForHeadDrop() and .attackEntityFrom()
+        // reference FCDamageSourceCustom static fields (m_DamageSourceChoppingBlock
+        // etc.). The vanilla 1.5.2 class is a flat DamageSource subclass;
+        // it depends only on DamageSource (already stubbed in Modern-Common).
+        include 'net/minecraft/src/FCDamageSourceCustom.class'
+        // Vanilla EntityMob implements IMob. IMob has a static-final
+        // FilterIMob field. Both must be present so EntityMob loads.
+        include 'net/minecraft/src/IMob.class'
+        include 'net/minecraft/src/FilterIMob.class'
+        // Tag interfaces implemented by various vanilla 1.5.2 mob classes:
+        //   - IBossDisplayData: EntityWither, EntityDragon
+        //   - INpc, IMerchant: EntityVillager
+        // Without them the mob classes fail to link.
+        include 'net/minecraft/src/IBossDisplayData.class'
+        include 'net/minecraft/src/INpc.class'
+        include 'net/minecraft/src/IMerchant.class'
+        // Projectile subclasses referenced by vanilla mob classes:
+        //   - EntitySmallFireball: EntityBlaze.shoots, EntityGhast hit code
+        //   - EntityLargeFireball: EntityGhast.shoots
+        //   - EntityWitherSkull:   EntityWither.shoots
+        //   - FCEntityWitherSkull: vanilla EntityWither.java:479 directly
+        //     instantiates this FC subclass via `new FCEntityWitherSkull(...)`
+        include 'net/minecraft/src/EntitySmallFireball.class'
+        include 'net/minecraft/src/EntityLargeFireball.class'
+        include 'net/minecraft/src/EntityWitherSkull.class'
+        // Vanilla 1.5.2 has FCMOD-patched subclass relationships where the
+        // original vanilla class extends an FC subclass:
+        //   - EntityMooshroom extends FCEntityCow
+        //   - EntityPigZombie extends FCEntityZombie
+        //   - EntityMagmaCube extends FCEntitySlime
+        // So when we swap the vanilla parent, we MUST also bring in the
+        // FCEntity* version to satisfy the linker. Plus EntityWither has
+        // EntityWitherAttackFilter as a static-final field. The shotgun
+        // include below brings in every FCEntity*.class from Src/ — they
+        // all relocate cleanly into btw.modern.* and only depend on classes
+        // we already have.
+        include 'net/minecraft/src/FCEntity*.class'
+        include 'net/minecraft/src/EntityWitherAttackFilter.class'
+        // EntitySheep instantiates `new ContainerSheep(this)` for crafting.
+        // Container itself is a Modern-Common stub; ContainerSheep is a
+        // tiny vanilla subclass of Container.
+        include 'net/minecraft/src/ContainerSheep.class'
+        // Thrown projectile subclasses spawned by various mobs:
+        //   - EntitySnowball: EntitySnowman
+        //   - EntityEgg: EntityChicken (random egg drop)
+        //   - EntityEnderPearl: EntityEnderman
+        //   - EntityExpBottle: villager XP throw
+        include 'net/minecraft/src/EntitySnowball.class'
+        include 'net/minecraft/src/EntityEgg.class'
+        include 'net/minecraft/src/EntityEnderPearl.class'
+        include 'net/minecraft/src/EntityExpBottle.class'
+        // Tuple is a small generic pair helper used by EntityVillager's
+        // trade randomizer (and some other vanilla 1.5.2 code).
+        include 'net/minecraft/src/Tuple.class'
+        // ChunkCache is a read-only IBlockAccess used by PathFinder for
+        // A* pathfinding. Vanilla World.getEntityPathToXYZ creates one
+        // and passes it to PathFinder.createEntityPathTo.
+        // Path is the internal priority queue used by PathFinder.
+        include 'net/minecraft/src/ChunkCache.class'
+        include 'net/minecraft/src/Path.class'
+        // Model rendering: vanilla 1.5.2 ModelBox/TexturedQuad compute UV
+        // coordinates correctly for the 64x32 texture layout. The Modern-
+        // Common ModelRenderer uses these instead of hand-calculating UVs.
+        include 'net/minecraft/src/ModelBox.class'
+        include 'net/minecraft/src/TexturedQuad.class'
+        include 'net/minecraft/src/PositionTextureVertex.class'
+    }
+
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     relocate 'btw.api', 'btw.modern'
+    // Remap vanilla MC 1.5.2 classes (Entity, EntityAI*, PathNavigate, etc.)
+    // into btw.modern.* so FC code can reach the REAL vanilla AI
+    // implementations rather than dead Modern-Common stubs.
+    // Exclude net.minecraft.src.btw.** — those are FC's own packages
+    // and must stay at their original location.
+    relocate('net.minecraft.src', 'btw.modern') {
+        exclude 'net.minecraft.src.btw.**'
+    }
     // Remap GL11 calls in FC code to our no-op stub. FC CLIENT code calls
     // org.lwjgl.opengl.GL11.glTranslatef etc. for display transforms, but
     // MC 1.20.1 uses a core GL profile where these fixed-function calls
@@ -103,10 +540,322 @@ tasks.matching { it.name.startsWith('prepareRun') || it.name.startsWith('run') |
     dependsOn extractFcClasses
 }
 
+// ------------------------------------------------------------------
+// Force-delete Modern-Common's btw.modern.Entity / AxisAlignedBB stubs
+// from its build output so dev-mode classloader uses FC's vanilla
+// versions instead. The JAR-side `exclude` directives only affect the
+// built JAR; in dev (runClient/runServer), Modern-Common's classes are
+// added to the runtime classpath directly from its build output dir,
+// and ForgeGradle does NOT honor `mods { source ... }` declaration
+// order for class precedence — first-found-wins. Deleting Modern-
+// Common's .class files leaves only FC's `btw/modern/Entity.class`
+// in the classpath, so it wins by default.
+//
+// FC's vanilla 1.5.2 Entity has the full moveEntity collision-clip
+// algorithm. We deliberately use it instead of porting/stubbing.
+// ------------------------------------------------------------------
+task removeModernCommonShadowedClasses {
+    dependsOn ':Modern-Common:compileJava'
+    doLast {
+        def base = file("${project(':Modern-Common').buildDir}/classes/java/main/btw/modern")
+        ['Entity.class', 'EntityLiving.class', 'EntityCreature.class', 'EntityMob.class',
+         'EntityAgeable.class', 'EntityAnimal.class',
+         // Concrete mob/animal classes — see remapFcCode for the rationale
+         // (vanilla 1.5.2 EntityAgeable's m_fAdultWidth=-1 sentinel must be
+         // overwritten by setSize from the subclass constructor).
+         'EntityPig.class', 'EntityCow.class', 'EntitySheep.class',
+         'EntityChicken.class', 'EntityWolf.class', 'EntityOcelot.class',
+         'EntityMooshroom.class', 'EntityVillager.class',
+         'EntityZombie.class', 'EntitySkeleton.class', 'EntityCreeper.class',
+         'EntityEnderman.class', 'EntitySpider.class', 'EntityCaveSpider.class',
+         'EntityWitch.class', 'EntityPigZombie.class', 'EntityWither.class',
+         'EntitySlime.class', 'EntityMagmaCube.class', 'EntityGhast.class',
+         'EntityBlaze.class', 'EntitySilverfish.class',
+         'EntityBat.class', 'EntitySquid.class',
+         'EntitySnowman.class', 'EntityIronGolem.class',
+         'EntityAmbientCreature.class', 'EntityWaterMob.class',
+         'EntityGolem.class', 'EntityFlying.class', 'EntityTameable.class',
+         'EntityArrow.class', 'EntityBoat.class', 'EntityFX.class', 'EntityFallingSand.class',
+         'EntityFireball.class', 'EntityFishHook.class', 'EntityItem.class', 'EntityMinecart.class',
+         'EntityPainting.class', 'EntityTNTPrimed.class', 'EntityThrowable.class',
+         'EntityWeatherEffect.class', 'EntityXPOrb.class', 'FCEntityLightningBolt.class',
+         // Movement / AI / pathfinding helpers — these are in the remap
+         // include list AND excluded from the dist jar, but Modern-Common's
+         // stubs are still on the dev classpath. ForgeGradle's dev
+         // classloader doesn't honor source-set declaration order for
+         // class precedence, so we delete the stubs here too.
+         'PathNavigate.class', 'PathEntity.class', 'PathPoint.class',
+         'PathFinder.class', 'RandomPositionGenerator.class',
+         'EntityMoveHelper.class', 'EntityJumpHelper.class',
+         'EntityLookHelper.class',
+         // Projectile classes already remapped but stub still on dev classpath
+         'EntityLargeFireball.class', 'EntityWitherSkull.class',
+         'EntityEgg.class', 'EntityLightningBolt.class',
+         // ChunkCache — vanilla PathFinder uses methods on ChunkCache
+         // (doesBlockHaveSolidTopSurface, etc.) that the stub lacks.
+         'ChunkCache.class'].each { name ->
+            def f = file("$base/$name")
+            if (f.exists()) {
+                logger.lifecycle("Removing Modern-Common shadowed class: $name")
+                f.delete()
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------
+// ASM bytecode patch: open up access on FC's vanilla 1.5.2 Entity.
+//
+// FC code was compiled against Modern-Common's Entity stub, which had
+// `public` fields. Vanilla 1.5.2 Entity has many `protected` fields
+// (rand, fire, fireResistance, etc.). When FC subclasses access these
+// via bytecode `getfield btw/modern/Entity.field` where the stack type
+// is `Entity` (not the subclass), the JVM verifier rejects it as
+// "Bad access to protected data in getfield" — even when the accessor
+// IS technically a subclass, because verifier strict type tracking
+// requires the stack top to be the subclass type, not Entity itself.
+//
+// The fix is to promote all Entity fields and methods to `public` via
+// ASM, so the protected-access verifier check doesn't apply. This runs
+// AFTER extractFcClasses so it operates on the remapped btw/modern/Entity.class.
+// ------------------------------------------------------------------
+task openUpEntityAccess {
+    dependsOn extractFcClasses
+    doLast {
+        ['Entity.class', 'EntityLiving.class', 'EntityCreature.class', 'EntityMob.class',
+         'EntityAgeable.class', 'EntityAnimal.class',
+         // Concrete mob/animal classes — see remapFcCode for the rationale
+         // (vanilla 1.5.2 EntityAgeable's m_fAdultWidth=-1 sentinel must be
+         // overwritten by setSize from the subclass constructor).
+         'EntityPig.class', 'EntityCow.class', 'EntitySheep.class',
+         'EntityChicken.class', 'EntityWolf.class', 'EntityOcelot.class',
+         'EntityMooshroom.class', 'EntityVillager.class',
+         'EntityZombie.class', 'EntitySkeleton.class', 'EntityCreeper.class',
+         'EntityEnderman.class', 'EntitySpider.class', 'EntityCaveSpider.class',
+         'EntityWitch.class', 'EntityPigZombie.class', 'EntityWither.class',
+         'EntitySlime.class', 'EntityMagmaCube.class', 'EntityGhast.class',
+         'EntityBlaze.class', 'EntitySilverfish.class',
+         'EntityBat.class', 'EntitySquid.class',
+         'EntitySnowman.class', 'EntityIronGolem.class',
+         'EntityAmbientCreature.class', 'EntityWaterMob.class',
+         'EntityGolem.class', 'EntityFlying.class', 'EntityTameable.class',
+         'EntityArrow.class', 'EntityBoat.class', 'EntityFX.class', 'EntityFallingSand.class',
+         'EntityFireball.class', 'EntityFishHook.class', 'EntityItem.class', 'EntityMinecart.class',
+         'EntityPainting.class', 'EntityTNTPrimed.class', 'EntityThrowable.class',
+         'EntityWeatherEffect.class', 'EntityXPOrb.class', 'FCEntityLightningBolt.class',
+         // AI task base classes — FC subclasses (FCEntityAI*) in
+         // net.minecraft.src.btw.entity access protected fields on these
+         // parent classes (remapped to btw.modern.*). Without promotion,
+         // the module system throws IllegalAccessError every tick.
+         'EntityAIAttackOnCollide.class', 'EntityAITarget.class',
+         'EntityAINearestAttackableTarget.class', 'EntityAIHurtByTarget.class',
+         'EntityAIMoveTwardsRestriction.class', 'EntityAIMoveThroughVillage.class',
+         'EntityAIWatchClosest.class', 'EntityAILookIdle.class',
+         'EntityAISwimming.class', 'EntityAIMate.class',
+         'EntityAIFollowParent.class', 'EntityAIWander.class',
+         'EntityAIControlledByPlayer.class',
+         // Navigation / helper classes accessed cross-package by FC code
+         'PathNavigate.class', 'EntityLookHelper.class', 'EntityMoveHelper.class',
+         'EntityJumpHelper.class', 'EntityBodyHelper.class',
+         'PathFinder.class', 'ChunkCache.class',
+         'CombatTracker.class', 'CombatEntry.class'].each { fileName ->
+            def classFile = file("${buildDir}/classes/java/fc/btw/modern/${fileName}")
+            if (!classFile.exists()) {
+                logger.warn("openUpEntityAccess: ${classFile} not found — skipping")
+                return
+            }
+            byte[] input = classFile.bytes
+            ClassReader reader = new ClassReader(input)
+            ClassWriter writer = new ClassWriter(0)
+            reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
+                @Override
+                FieldVisitor visitField(int access, String name, String desc, String sig, Object value) {
+                    int newAccess = (access & ~(Opcodes.ACC_PROTECTED | Opcodes.ACC_PRIVATE)) | Opcodes.ACC_PUBLIC
+                    return super.visitField(newAccess, name, desc, sig, value)
+                }
+                @Override
+                MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] exceptions) {
+                    int newAccess = access
+                    if (!name.equals("<init>") && !name.equals("<clinit>")) {
+                        newAccess = (access & ~(Opcodes.ACC_PROTECTED | Opcodes.ACC_PRIVATE)) | Opcodes.ACC_PUBLIC
+                    }
+                    return super.visitMethod(newAccess, name, desc, sig, exceptions)
+                }
+            }, 0)
+            classFile.bytes = writer.toByteArray()
+            logger.lifecycle("Patched ${classFile.name}: all fields/methods promoted to public")
+        }
+    }
+}
+tasks.matching { it.name.startsWith('prepareRun') || it.name.startsWith('run') || it.name == 'classes' || it.name == 'jar' }.configureEach {
+    dependsOn openUpEntityAccess
+}
+tasks.matching { it.name.startsWith('prepareRun') || it.name.startsWith('run') || it.name == 'classes' || it.name == 'jar' }.configureEach {
+    dependsOn removeModernCommonShadowedClasses
+}
+
+// ------------------------------------------------------------------
+// Bundle dependent modules into the distributable jar.
+//
+// In dev (runClient/runServer) the Modern-Common, Api, and remapped FC
+// classes are injected into the mod container via the `mods { source
+// sourceSets... }` block. A standalone jar dropped into a player's
+// mods/ folder does not get that treatment, so we must copy those class
+// trees INTO the jar at build time.
+// ------------------------------------------------------------------
+jar {
+    dependsOn ':Api:jar', ':Modern-Common:jar', extractFcClasses
+
+    // Populate JAR manifest with version info. Forge's mods.toml
+    // placeholder ${file.jarVersion} reads Implementation-Version.
+    manifest {
+        attributes([
+            'Specification-Title'     : project.portArchiveName,
+            'Specification-Vendor'    : 'Better Than Wolves Port',
+            'Specification-Version'   : '1',
+            'Implementation-Title'    : project.portArchiveName,
+            'Implementation-Version'  : project.portVersion,
+            'Implementation-Vendor'   : 'Better Than Wolves Port',
+            'Implementation-Timestamp': new Date().format('yyyy-MM-dd\'T\'HH:mm:ssZ'),
+            'BTW-Upstream-Version'    : project.btwVersion,
+            'BTW-Upstream-MC-Version' : project.mcVersion,
+            'BTW-Target-MC-Version'   : project.portMcVersion,
+            'MixinConfigs'            : 'betterthanwolves.mixins.json',
+        ])
+    }
+
+    // Modern-Common FIRST: provides bridge stubs for core types (Entity,
+    // EntityLiving, World, Block, etc.) that have bridge-specific methods.
+    // DuplicatesStrategy.EXCLUDE means first-in wins, so bridge stubs
+    // take precedence over the remapped vanilla classes for types where
+    // both exist.
+    //
+    // Modern-Common bridge stubs load first. For classes where both
+    // Modern-Common and remapped vanilla exist, Modern-Common wins
+    // (DuplicatesStrategy.EXCLUDE). This is intentional for classes
+    // with bridge-specific constructors (e.g. EntityAITasks no-arg).
+    //
+    // Exclude stubs whose vanilla versions have MATCHING constructor
+    // signatures and BETTER implementations (real A* pathfinding, etc.).
+    from(project(':Modern-Common').sourceSets.main.output) {
+        exclude 'btw/api/**'
+        // Let vanilla versions win for classes with MATCHING constructors
+        // and better implementations. Keep Modern-Common's versions for
+        // classes where the bridge uses a different constructor signature
+        // (EntityLookHelper, EntitySenses use no-arg; vanilla needs entity arg).
+        exclude 'btw/modern/PathNavigate.class'
+        exclude 'btw/modern/PathEntity.class'
+        exclude 'btw/modern/PathPoint.class'
+        exclude 'btw/modern/PathFinder.class'
+        exclude 'btw/modern/EntityMoveHelper.class'
+        exclude 'btw/modern/EntityJumpHelper.class'
+        // FC's vanilla 1.5.2 Entity/EntityLiving own collision and
+        // mob state. Exclude Modern-Common's stubs so FC's versions
+        // win in the JAR. Access-level issues are resolved by ASM
+        // promotion in openUpEntityAccess. AxisAlignedBB stays
+        // Modern-Common because vanilla's constructor is protected.
+        exclude 'btw/modern/Entity.class'
+        exclude 'btw/modern/EntityLiving.class'
+        exclude 'btw/modern/EntityCreature.class'
+        exclude 'btw/modern/EntityMob.class'
+        exclude 'btw/modern/EntityAgeable.class'
+        exclude 'btw/modern/EntityAnimal.class'
+        exclude 'btw/modern/EntityPig.class'
+        exclude 'btw/modern/EntityCow.class'
+        exclude 'btw/modern/EntitySheep.class'
+        exclude 'btw/modern/EntityChicken.class'
+        exclude 'btw/modern/EntityWolf.class'
+        exclude 'btw/modern/EntityOcelot.class'
+        exclude 'btw/modern/EntityMooshroom.class'
+        exclude 'btw/modern/EntityVillager.class'
+        exclude 'btw/modern/EntityZombie.class'
+        exclude 'btw/modern/EntitySkeleton.class'
+        exclude 'btw/modern/EntityCreeper.class'
+        exclude 'btw/modern/EntityEnderman.class'
+        exclude 'btw/modern/EntitySpider.class'
+        exclude 'btw/modern/EntityCaveSpider.class'
+        exclude 'btw/modern/EntityWitch.class'
+        exclude 'btw/modern/EntityPigZombie.class'
+        exclude 'btw/modern/EntityWither.class'
+        exclude 'btw/modern/EntitySlime.class'
+        exclude 'btw/modern/EntityMagmaCube.class'
+        exclude 'btw/modern/EntityGhast.class'
+        exclude 'btw/modern/EntityBlaze.class'
+        exclude 'btw/modern/EntitySilverfish.class'
+        exclude 'btw/modern/EntityBat.class'
+        exclude 'btw/modern/EntitySquid.class'
+        exclude 'btw/modern/EntitySnowman.class'
+        exclude 'btw/modern/EntityIronGolem.class'
+        exclude 'btw/modern/EntityAmbientCreature.class'
+        exclude 'btw/modern/EntityWaterMob.class'
+        exclude 'btw/modern/EntityGolem.class'
+        exclude 'btw/modern/EntityFlying.class'
+        exclude 'btw/modern/EntityTameable.class'
+        exclude 'btw/modern/EntityArrow.class'
+        exclude 'btw/modern/EntityBoat.class'
+        exclude 'btw/modern/EntityFX.class'
+        exclude 'btw/modern/EntityFallingSand.class'
+        exclude 'btw/modern/EntityFireball.class'
+        exclude 'btw/modern/EntityFishHook.class'
+        exclude 'btw/modern/EntityItem.class'
+        exclude 'btw/modern/EntityMinecart.class'
+        exclude 'btw/modern/EntityPainting.class'
+        exclude 'btw/modern/EntityTNTPrimed.class'
+        exclude 'btw/modern/EntityThrowable.class'
+        exclude 'btw/modern/EntityWeatherEffect.class'
+        exclude 'btw/modern/EntityXPOrb.class'
+        exclude 'btw/modern/FCEntityLightningBolt.class'
+        // Model rendering: real 1.5.2 classes replace stubs for correct UVs
+        exclude 'btw/modern/ModelBox.class'
+        exclude 'btw/modern/TexturedQuad.class'
+        exclude 'btw/modern/PositionTextureVertex.class'
+    }
+
+    // FC classes SECOND: includes FC entity code (net.minecraft.src.btw.*)
+    // AND remapped vanilla classes (net.minecraft.src.* → btw.modern.*).
+    // For classes where Modern-Common already provides a bridge stub,
+    // the FC version is excluded. For vanilla AI, pathfinding, etc.
+    // where Modern-Common has no real implementation, the FC version
+    // fills the gap with the REAL vanilla 1.5.2 code.
+    from sourceSets.fc.output
+
+    // Api module — just the FC-facing btw.api.* interfaces. These are
+    // already shadow-relocated out of the FC bytecode, but some compiled
+    // Forge-side code may still reference them at class-load time.
+    from(project(':Api').sourceSets.main.output) {
+        exclude 'btw/api/**' // same reason — Modern-Common is authoritative
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+repositories {
+    // JEI
+    maven {
+        url 'https://maven.blamejared.com/'
+    }
+}
+
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
     implementation project(':Modern-Common')
     implementation project(':Api')
+
+    // Mixin annotation processor — generates the refmap at compile time so
+    // @Inject(method = "..."), @At(target = "..."), etc. get remapped from
+    // MCP (dev) names to SRG names for the distributable jar. Without this
+    // the mixin loader fails silently in production.
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
+    // JEI — optional runtime dependency. We compile against the API so
+    // btw.forge.jei.* can reference JEI types, but the JEI plugin class
+    // is only loaded by JEI itself when JEI is installed.
+    def jeiVersion = '15.3.0.8'
+    compileOnly fg.deobf("mezz.jei:jei-1.20.1-common-api:${jeiVersion}")
+    compileOnly fg.deobf("mezz.jei:jei-1.20.1-forge-api:${jeiVersion}")
+    // Needed at runtime for the dev client to actually load JEI so we can
+    // visually verify the plugin.
+    runtimeOnly fg.deobf("mezz.jei:jei-1.20.1-forge:${jeiVersion}")
 }
 
 // ============================================================
@@ -186,3 +935,22 @@ task lowercaseModelRefs {
 
 // Run before processResources so textures are in place for the build
 processResources.dependsOn lowercaseModelRefs
+
+// Template placeholders in META-INF/mods.toml so users can see which
+// upstream BTW build is embedded. We use a targeted string-replace
+// rather than Groovy's expand() because ${file.jarVersion} is handled
+// by Forge's mod-loading runtime — expand() would try to resolve it
+// at build time and fail.
+processResources {
+    def replacements = [
+        '${btw_version}'     : project.btwVersion,
+        '${port_version}'    : project.portVersion,
+        '${port_mc_version}' : project.portMcVersion,
+    ]
+    inputs.properties(replacements.collectEntries { k, v -> [(k): v] })
+    filesMatching('META-INF/mods.toml') {
+        filter { String line ->
+            replacements.inject(line) { acc, k, v -> acc.replace(k, v) }
+        }
+    }
+}

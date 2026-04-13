@@ -164,11 +164,40 @@ public class ForgeNBTCompound extends btw.modern.NBTTagCompound {
         if (fromMap != null && fromMap.tagCount() > 0) return fromMap;
         // Fall back to MC CompoundTag (for data loaded from disk)
         if (!tag.contains(key, 9)) return new btw.modern.NBTTagList(); // 9 = list type
-        net.minecraft.nbt.ListTag mcList = tag.getList(key, 10); // 10 = compound elements
+        // Auto-detect element type. Vanilla 1.5.2 stores Pos/Motion as
+        // double-element lists (type 6) and Rotation as float-element
+        // lists (type 5). Compound-element lists (type 10) are used for
+        // Equipment, ActiveEffects, etc. Without this dispatch, non-
+        // compound lists come back empty and vanilla Entity.readFromNBT
+        // throws IndexOutOfBoundsException dereferencing posList.tagAt(0).
+        net.minecraft.nbt.Tag rawList = tag.get(key);
+        if (!(rawList instanceof net.minecraft.nbt.ListTag mcList)) {
+            return new btw.modern.NBTTagList();
+        }
+        byte elementType = mcList.getElementType();
         btw.modern.NBTTagList result = new btw.modern.NBTTagList();
         for (int i = 0; i < mcList.size(); i++) {
-            CompoundTag mcSub = mcList.getCompound(i);
-            result.appendTag(new ForgeNBTCompound(mcSub));
+            switch (elementType) {
+                case 6 -> { // double
+                    double v = mcList.getDouble(i);
+                    result.appendTag(new btw.modern.NBTTagDouble("", v));
+                }
+                case 5 -> { // float
+                    float v = mcList.getFloat(i);
+                    result.appendTag(new btw.modern.NBTTagFloat("", v));
+                }
+                case 8 -> { // string
+                    String v = mcList.getString(i);
+                    result.appendTag(new btw.modern.NBTTagString("", v));
+                }
+                case 10 -> { // compound
+                    CompoundTag mcSub = mcList.getCompound(i);
+                    result.appendTag(new ForgeNBTCompound(mcSub));
+                }
+                default -> {
+                    // unsupported element type — skip
+                }
+            }
         }
         return result;
     }

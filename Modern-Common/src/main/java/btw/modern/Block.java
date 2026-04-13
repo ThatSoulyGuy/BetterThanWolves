@@ -192,7 +192,7 @@ public abstract class Block {
     public StepSound stepSound;
     public float blockParticleGravity;
     public Material blockMaterial;
-    public float slipperiness;
+    public float slipperiness = 0.6F;
     protected CreativeTabs displayOnCreativeTab;
 
     // --- BTW backing fields for builder-pattern Set*() methods ---
@@ -343,7 +343,17 @@ public abstract class Block {
     // --- Instance query methods ---
 
     public boolean renderAsNormalBlock() { return true; }
-    public boolean getBlocksMovement(IBlockAccess blockAccess, int x, int y, int z) { return true; }
+    /**
+     * Vanilla 1.5.2: "does this block allow movement through it?"
+     * Returns true for passable blocks (air, plants, etc.) and false for
+     * solid blocks (stone, dirt, etc.). The stub previously hardcoded
+     * true, which made PathFinder think all blocks were passable — A*
+     * saw no walls or ground, couldn't build valid walking paths, and
+     * returned null for every pathfinding request.
+     */
+    public boolean getBlocksMovement(IBlockAccess blockAccess, int x, int y, int z) {
+        return this.blockMaterial == null || !this.blockMaterial.blocksMovement();
+    }
     public int getRenderType() { return 0; }
     public int getRenderBlockPass() { return 0; }
     public boolean getTickRandomly() { return this.needsRandomTick; }
@@ -1259,8 +1269,14 @@ public abstract class Block {
 
     // --- BTW-added: Pathing ---
 
-    public boolean CanPathThroughBlock(IBlockAccess blockAccess, int i, int j, int k, Entity entity, PathFinder pathFinder) { return true; }
-    public boolean ShouldOffsetPositionIfPathingOutOf(IBlockAccess blockAccess, int i, int j, int k, Entity entity, PathFinder pathFinder) { return false; }
+    public boolean CanPathThroughBlock(IBlockAccess blockAccess, int i, int j, int k, Entity entity, PathFinder pathFinder) {
+        // FC's real default: delegates to getBlocksMovement which returns
+        // true if the block's material does NOT block movement (air, plants, etc.)
+        return getBlocksMovement(blockAccess, i, j, k);
+    }
+    public boolean ShouldOffsetPositionIfPathingOutOf(IBlockAccess blockAccess, int i, int j, int k, Entity entity, PathFinder pathFinder) {
+        return !CanPathThroughBlock(blockAccess, i, j, k, entity, pathFinder);
+    }
     public int GetWeightOnPathBlocked(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
     public int AdjustPathWeightOnNotBlocked(int iPreviousWeight) { return iPreviousWeight; }
 

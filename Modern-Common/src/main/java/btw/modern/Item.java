@@ -144,6 +144,10 @@ public class Item {
     public static Item bakedPotato;
     public static Item carrot;
     public static ItemEnchantedBook enchantedBook;
+    /** Vanilla 1.5.2 Item.expBottle — referenced by EntityVillager static init. */
+    public static Item expBottle;
+    /** Vanilla 1.5.2 Item.monsterPlacer — spawn egg, referenced by EntityAgeable.interact. */
+    public static Item monsterPlacer;
     public static Item redstoneRepeater;
     public static Item flowerPot;
     public static ItemArmor helmetLeather;
@@ -804,6 +808,8 @@ public class Item {
         netherStar = new Item(143);        // 399
         pumpkinPie = new Item(144);        // 400
         enchantedBook = new ItemEnchantedBook(147); // 403
+        expBottle = new Item(128);                  // 384 (vanilla XP bottle id)
+        monsterPlacer = new Item(161);              // 383 (vanilla spawn egg id)
         comparator = new Item(148);        // 404
         netherQuartz = new Item(150);      // 406
         minecartTnt = new Item(151);       // 407

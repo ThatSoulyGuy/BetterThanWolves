@@ -90,6 +90,14 @@ public abstract class Entity {
         this.rand = new Random();
         this.dataWatcher = new DataWatcher();
         this.boundingBox = AxisAlignedBB.getBoundingBox(0, 0, 0, 0, 0, 0);
+        // Vanilla 1.5.2 Entity constructor defaults — many mob subclasses
+        // (Zombie, Skeleton, Creeper) never call setSize() and rely on
+        // these defaults. Without them, every FC entity ends up with a
+        // zero-sized bounding box which clips ALL movement to zero.
+        this.width = 0.6F;
+        this.height = 1.8F;
+        this.fireResistance = 1;
+        this.nextStepDistance = 1;
     }
 
     // --- Abstract methods ---
@@ -102,9 +110,29 @@ public abstract class Entity {
         this.isDead = true;
     }
 
+    /**
+     * Vanilla 1.5.2 Entity.setSize: sets the width/height fields AND
+     * resizes the bounding box around its current minX/Y/Z corner.
+     * Without this resize, FC subclass constructors call setSize(w, h)
+     * after super(world) creates a zero-sized boundingBox, and the box
+     * stays zero forever — making the entity a single-point collider
+     * that gets clipped to no movement on every axis.
+     */
     public void setSize(float width, float height) {
-        this.width = width;
-        this.height = height;
+        if (width != this.width || height != this.height) {
+            this.width = width;
+            this.height = height;
+            if (this.boundingBox != null) {
+                this.boundingBox.setBounds(
+                    this.boundingBox.minX,
+                    this.boundingBox.minY,
+                    this.boundingBox.minZ,
+                    this.boundingBox.minX + (double) this.width,
+                    this.boundingBox.minY + (double) this.height,
+                    this.boundingBox.minZ + (double) this.width
+                );
+            }
+        }
     }
 
     public void setRotation(float yaw, float pitch) {
@@ -146,11 +174,182 @@ public abstract class Entity {
 
     // --- Movement and collision ---
 
+    public int nextStepDistance;
+
+    /**
+     * Vanilla 1.5.2 / FC port of Entity.moveEntity. Performs the standard
+     * three-axis collision-clip algorithm against the world's colliding
+     * bounding boxes, including step-up support.
+     *
+     * Stripped from the vanilla version (intentionally, for the bridge):
+     *  - Player sneaking edge-detect (only matters for the player entity,
+     *    which is not a proxy entity).
+     *  - Step sound playback (vanilla MC entities still play their own
+     *    step sounds via the proxy).
+     *  - Fire damage / lava handling (handled by MC's tick on the proxy).
+     *  - doBlockCollisions block-collision callbacks (cobweb,
+     *    pressure plates, tripwires) — TODO if needed.
+     *  - Profiler push/pop calls (no profiler available in bridge).
+     *
+     * What it DOES handle and is required for FC AI movement:
+     *  - X/Y/Z collision against world block bounding boxes
+     *  - Step-up onto blocks within stepHeight
+     *  - Setting onGround / isCollidedHorizontally / isCollidedVertically
+     *  - Zeroing motion components on impact
+     *  - updateFallState to accumulate fallDistance and trigger fall()
+     */
+    private static boolean loggedMoveEntity = false;
     public void moveEntity(double dMoveX, double dMoveY, double dMoveZ) {
-        this.posX += dMoveX;
-        this.posY += dMoveY;
-        this.posZ += dMoveZ;
-        this.setPosition(this.posX, this.posY, this.posZ);
+        if (!loggedMoveEntity) {
+            loggedMoveEntity = true;
+            org.apache.logging.log4j.LogManager.getLogger("BTW-Entity").warn(
+                "[WHICH-MOVEENTITY] Modern-Common stub moveEntity is running! entity={}", this.getClass().getSimpleName());
+        }
+        if (this.noClip) {
+            this.boundingBox.offset(dMoveX, dMoveY, dMoveZ);
+            this.posX = (this.boundingBox.minX + this.boundingBox.maxX) / 2.0D;
+            this.posY = this.boundingBox.minY + (double) this.yOffset - (double) this.ySize;
+            this.posZ = (this.boundingBox.minZ + this.boundingBox.maxZ) / 2.0D;
+            return;
+        }
+
+        this.ySize *= 0.4F;
+        double dOldPosX = this.posX;
+        double dOldPosY = this.posY;
+        double dOldPosZ = this.posZ;
+
+        AxisAlignedBB oldBoundingBox = this.boundingBox.copy();
+
+        if (this.isInWeb) {
+            this.isInWeb = false;
+            dMoveX *= 0.25D;
+            dMoveY *= 0.05D;
+            dMoveZ *= 0.25D;
+            this.motionX = 0.0D;
+            this.motionY = 0.0D;
+            this.motionZ = 0.0D;
+        }
+
+        double dUnboundedMoveX = dMoveX;
+        double dUnboundedMoveY = dMoveY;
+        double dUnboundedMoveZ = dMoveZ;
+
+        // FC's optimization: precompute collision list expanded vertically
+        // by stepHeight so the step-up retry doesn't need a second query.
+        AxisAlignedBB moveRangeBoundingBox = this.boundingBox.addCoord(dMoveX, dMoveY, dMoveZ);
+        if ((double) this.stepHeight > dMoveY) {
+            moveRangeBoundingBox.maxY = this.boundingBox.maxY + (double) this.stepHeight;
+        }
+        java.util.List<AxisAlignedBB> moveRangeCollisionList =
+                this.worldObj.getCollidingBoundingBoxes(this, moveRangeBoundingBox);
+
+        for (int i = 0; i < moveRangeCollisionList.size(); i++) {
+            dMoveY = moveRangeCollisionList.get(i).calculateYOffset(this.boundingBox, dMoveY);
+        }
+        this.boundingBox.offset(0.0D, dMoveY, 0.0D);
+
+        boolean bVerticallySupported = this.onGround || (dUnboundedMoveY != dMoveY && dUnboundedMoveY < 0.0D);
+
+        for (int i = 0; i < moveRangeCollisionList.size(); i++) {
+            dMoveX = moveRangeCollisionList.get(i).calculateXOffset(this.boundingBox, dMoveX);
+        }
+        this.boundingBox.offset(dMoveX, 0.0D, 0.0D);
+
+        for (int i = 0; i < moveRangeCollisionList.size(); i++) {
+            dMoveZ = moveRangeCollisionList.get(i).calculateZOffset(this.boundingBox, dMoveZ);
+        }
+        this.boundingBox.offset(0.0D, 0.0D, dMoveZ);
+
+        // Step-up retry: if horizontal movement got blocked AND we're on
+        // ground, try the same horizontal motion at +stepHeight to step over
+        // the obstacle, then drop back down to the highest blocked surface.
+        if (this.stepHeight > 0.0F && bVerticallySupported && this.ySize < 0.05F
+                && (dUnboundedMoveX != dMoveX || dUnboundedMoveZ != dMoveZ)) {
+            double dBoundedMoveX = dMoveX;
+            double dBoundedMoveY = dMoveY;
+            double dBoundedMoveZ = dMoveZ;
+
+            dMoveX = dUnboundedMoveX;
+            dMoveY = (double) this.stepHeight;
+            dMoveZ = dUnboundedMoveZ;
+
+            AxisAlignedBB dBoundedMoveBox = this.boundingBox.copy();
+            this.boundingBox.setBounds(oldBoundingBox.minX, oldBoundingBox.minY, oldBoundingBox.minZ,
+                    oldBoundingBox.maxX, oldBoundingBox.maxY, oldBoundingBox.maxZ);
+
+            for (int i = 0; i < moveRangeCollisionList.size(); i++) {
+                dMoveY = moveRangeCollisionList.get(i).calculateYOffset(this.boundingBox, dMoveY);
+            }
+            this.boundingBox.offset(0.0D, dMoveY, 0.0D);
+
+            for (int i = 0; i < moveRangeCollisionList.size(); i++) {
+                dMoveX = moveRangeCollisionList.get(i).calculateXOffset(this.boundingBox, dMoveX);
+            }
+            this.boundingBox.offset(dMoveX, 0.0D, 0.0D);
+
+            for (int i = 0; i < moveRangeCollisionList.size(); i++) {
+                dMoveZ = moveRangeCollisionList.get(i).calculateZOffset(this.boundingBox, dMoveZ);
+            }
+            this.boundingBox.offset(0.0D, 0.0D, dMoveZ);
+
+            // Drop back down onto the surface, capped at the rise.
+            if (dMoveY > 0.0D) {
+                dMoveY = -dMoveY;
+                for (int i = 0; i < moveRangeCollisionList.size(); i++) {
+                    dMoveY = moveRangeCollisionList.get(i).calculateYOffset(this.boundingBox, dMoveY);
+                }
+                this.boundingBox.offset(0.0D, dMoveY, 0.0D);
+            }
+
+            // If the original horizontal move covered more ground, prefer it
+            // (don't take the step-up). Otherwise keep the step-up result.
+            if (dBoundedMoveX * dBoundedMoveX + dBoundedMoveZ * dBoundedMoveZ
+                    >= dMoveX * dMoveX + dMoveZ * dMoveZ) {
+                dMoveX = dBoundedMoveX;
+                dMoveY = dBoundedMoveY;
+                dMoveZ = dBoundedMoveZ;
+                this.boundingBox.setBounds(dBoundedMoveBox.minX, dBoundedMoveBox.minY, dBoundedMoveBox.minZ,
+                        dBoundedMoveBox.maxX, dBoundedMoveBox.maxY, dBoundedMoveBox.maxZ);
+            }
+        }
+
+        this.posX = (this.boundingBox.minX + this.boundingBox.maxX) / 2.0D;
+        this.posY = this.boundingBox.minY + (double) this.yOffset - (double) this.ySize;
+        this.posZ = (this.boundingBox.minZ + this.boundingBox.maxZ) / 2.0D;
+
+        this.isCollidedHorizontally = dUnboundedMoveX != dMoveX || dUnboundedMoveZ != dMoveZ;
+        this.isCollidedVertically = dUnboundedMoveY != dMoveY;
+        this.onGround = dUnboundedMoveY != dMoveY && dUnboundedMoveY < 0.0D;
+        this.isCollided = this.isCollidedHorizontally || this.isCollidedVertically;
+
+        this.updateFallState(dMoveY, this.onGround);
+
+        if (dUnboundedMoveX != dMoveX) this.motionX = 0.0D;
+        if (dUnboundedMoveY != dMoveY) this.motionY = 0.0D;
+        if (dUnboundedMoveZ != dMoveZ) this.motionZ = 0.0D;
+
+        double dDeltaX = this.posX - dOldPosX;
+        double dDeltaZ = this.posZ - dOldPosZ;
+        this.distanceWalkedModified = (float) ((double) this.distanceWalkedModified
+                + (double) MathHelper.sqrt_double(dDeltaX * dDeltaX + dDeltaZ * dDeltaZ) * 0.6D);
+    }
+
+    /**
+     * Tracks fall distance for fall-damage purposes. Vanilla 1.5.2:
+     * if the entity is on the ground, calls fall(fallDistance) and
+     * resets the counter; otherwise, accumulates negative dy as
+     * fallDistance. Subclasses (EntityLiving) override fall() to
+     * apply damage.
+     */
+    protected void updateFallState(double dy, boolean isOnGround) {
+        if (isOnGround) {
+            if (this.fallDistance > 0.0F) {
+                this.fall(this.fallDistance);
+                this.fallDistance = 0.0F;
+            }
+        } else if (dy < 0.0D) {
+            this.fallDistance = (float) ((double) this.fallDistance - dy);
+        }
     }
 
     public boolean isOffsetPositionInLiquid(double x, double y, double z) {

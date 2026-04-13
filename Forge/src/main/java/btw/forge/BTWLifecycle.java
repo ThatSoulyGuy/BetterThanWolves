@@ -104,8 +104,23 @@ public class BTWLifecycle {
             Method initMods = handlerClass.getMethod("InitializeMods");
             initMods.invoke(null);
             LOGGER.info("FCAddOnHandler.InitializeMods() completed successfully.");
-        } catch (Exception e) {
+        } catch (java.lang.reflect.InvocationTargetException ite) {
+            LOGGER.error("FCAddOnHandler.InitializeMods() threw inside FC code:", ite.getCause());
+        } catch (Throwable e) {
             LOGGER.error("Failed to call FCAddOnHandler.InitializeMods()", e);
+        }
+
+        // Sanity check — if InitializeMods succeeded, fcItemWitchWart must
+        // be non-null (it's assigned in FCBetterThanWolves.InstantiateModItems
+        // which is called by Initialize() which is called by InitializeMods).
+        // If it's still null, Initialize() silently failed partway through.
+        try {
+            Class<?> btwClass = Class.forName("net.minecraft.src.btw.core.FCBetterThanWolves");
+            java.lang.reflect.Field f = btwClass.getField("fcItemWitchWart");
+            Object v = f.get(null);
+            LOGGER.info("[POST-INIT] FCBetterThanWolves.fcItemWitchWart = {}", v);
+        } catch (Throwable t) {
+            LOGGER.error("[POST-INIT] Could not read fcItemWitchWart", t);
         }
 
         LOGGER.info("Step 5b: Loading FC language files...");

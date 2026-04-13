@@ -89,6 +89,7 @@ public abstract class EntityPlayer extends EntityLiving {
     public void displayGUIBrewingStand(TileEntity tileEntity) {}
     public void displayGUIBeacon(TileEntity tileEntity) {}
     public void displayGUIAnvil(int x, int y, int z) {}
+    public void displayGUIMerchant(IMerchant merchant, String title) {}
     public void displayGUIEnchantment(int x, int y, int z, String name) {}
 
     /** Set to true when exhaustion is added; read by HUD rendering to trigger food pip shake. */

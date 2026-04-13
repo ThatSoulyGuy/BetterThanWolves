@@ -27,4 +27,7 @@ public abstract class EntityFireball extends Entity {
     }
 
     protected abstract void onImpact(MovingObjectPosition result);
+
+    @Override
+    public void entityInit() {}
 }

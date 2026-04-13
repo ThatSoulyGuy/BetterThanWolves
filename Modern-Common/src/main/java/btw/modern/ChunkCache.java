@@ -14,7 +14,12 @@ public class ChunkCache implements IBlockAccess {
     private final Chunk[][] chunks;
     private final World worldObj;
 
-    public ChunkCache(World world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+    /**
+     * Must match vanilla 1.5.2's 8-arg constructor so the bytecode from
+     * WorldBridge.getEntityPathToXYZ resolves at runtime when the stub
+     * is deleted and vanilla's ChunkCache wins.
+     */
+    public ChunkCache(World world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ, int padding) {
         this.worldObj = world;
         this.chunkX = minX >> 4;
         this.chunkZ = minZ >> 4;

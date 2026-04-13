@@ -4,10 +4,14 @@ license="All Rights Reserved"
 
 [[mods]]
 modId="betterthanwolves"
-version="4.B0000003"
+# ${file.jarVersion} is replaced at runtime with the Implementation-Version
+# attribute from the JAR manifest — which ForgeGradle sets from the Forge
+# subproject's `version` (see gradle.properties: portVersion).
+version="${file.jarVersion}"
 displayName="Better Than Wolves"
 description='''
-Better Than Wolves total conversion mod, ported to Forge 1.20.1.
+Better Than Wolves total conversion mod, ported from Minecraft 1.5.2 to Forge 1.20.1.
+Runs the original BTW ${btw_version} code verbatim through a compatibility bridge.
 Originally by FlowerChild for Minecraft 1.5.2.
 '''
 
@@ -23,6 +27,15 @@ modId="minecraft"
 mandatory=true
 versionRange="[1.20.1,1.21)"
 ordering="NONE"
+side="BOTH"
+
+# JEI is optional — if present we register recipe categories for
+# cauldron/crucible/mill stone. Load after JEI so the plugin sees its API.
+[[dependencies.betterthanwolves]]
+modId="jei"
+mandatory=false
+versionRange="[15.0.0,)"
+ordering="AFTER"
 side="BOTH"
 
 [[mixins]]

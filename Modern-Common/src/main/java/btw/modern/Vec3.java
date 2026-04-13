@@ -20,6 +20,10 @@ public class Vec3 {
         return new Vec3(copyVector.xCoord, copyVector.yCoord, copyVector.zCoord);
     }
 
+    public Vec3 subtract(Vec3 other) {
+        return new Vec3(this.xCoord - other.xCoord, this.yCoord - other.yCoord, this.zCoord - other.zCoord);
+    }
+
     public Vec3 normalize() {
         double len = Math.sqrt(xCoord * xCoord + yCoord * yCoord + zCoord * zCoord);
         if (len < 1.0E-4D) {
@@ -59,6 +63,18 @@ public class Vec3 {
         double dx = other.xCoord - this.xCoord;
         double dy = other.yCoord - this.yCoord;
         double dz = other.zCoord - this.zCoord;
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    /**
+     * Vanilla 1.5.2 overload — used by EntityCreature.updateEntityActionState
+     * to compute squared distance to a target's (x,y,z) without allocating a
+     * temporary Vec3.
+     */
+    public double squareDistanceTo(double x, double y, double z) {
+        double dx = x - this.xCoord;
+        double dy = y - this.yCoord;
+        double dz = z - this.zCoord;
         return dx * dx + dy * dy + dz * dz;
     }
 

@@ -1053,6 +1053,13 @@ public class WorldBridge extends btw.modern.World {
         if (forgeEntity instanceof ProxyAnimal pa) return pa.getFcEntity();
         if (forgeEntity instanceof ProxyPathfinderMob pp) return pp.getFcEntity();
         if (forgeEntity instanceof ProxyEntity pe) return pe.getFcEntity();
+        // Players are not proxies — they have a PlayerBridge that wraps the
+        // MC Player as an FC EntityPlayerMP. Without this, FC AI tasks that
+        // query getEntitiesWithinAABB(EntityPlayer.class, ...) cannot see
+        // any players, and mobs never acquire attack targets.
+        if (forgeEntity instanceof net.minecraft.world.entity.player.Player p) {
+            return PlayerBridge.getOrCreate(p);
+        }
         return null;
     }
 
@@ -1717,9 +1724,24 @@ public class WorldBridge extends btw.modern.World {
     // Collision detection
     // ================================================================
 
+    private static final java.util.Set<String> LOGGED_COLLISION = new java.util.HashSet<>();
+    private static int collisionCallCount = 0;
+
     @Override
     @SuppressWarnings("unchecked")
     public java.util.List getCollidingBoundingBoxes(btw.modern.Entity entity, btw.modern.AxisAlignedBB aabb) {
+        // Detailed trace: log first 20 collision calls to see entity state at each
+        if (entity != null && collisionCallCount < 20) {
+            collisionCallCount++;
+            LOGGER.info("[COL-DETAIL] #{} {} entityPosX={} motX={} motZ={} entityBBminX={} queryBBminX={} queryBBminY={}",
+                collisionCallCount, entity.getClass().getSimpleName(),
+                Double.isFinite(entity.posX) ? String.format("%.4f", entity.posX) : "NaN",
+                Double.isFinite(entity.motionX) ? String.format("%.4f", entity.motionX) : "NaN",
+                Double.isFinite(entity.motionZ) ? String.format("%.4f", entity.motionZ) : "NaN",
+                entity.boundingBox != null && Double.isFinite(entity.boundingBox.minX) ? String.format("%.4f", entity.boundingBox.minX) : "NaN",
+                Double.isFinite(aabb.minX) ? String.format("%.4f", aabb.minX) : "NaN",
+                Double.isFinite(aabb.minY) ? String.format("%.4f", aabb.minY) : "NaN");
+        }
         java.util.List list = new java.util.ArrayList();
         int minX = btw.modern.MathHelper.floor_double(aabb.minX);
         int maxX = btw.modern.MathHelper.floor_double(aabb.maxX + 1.0D);
@@ -1740,8 +1762,23 @@ public class WorldBridge extends btw.modern.World {
                 }
             }
         }
+        // Diagnostic: log collision results periodically
+        if (entity != null) {
+            String key = entity.getClass().getSimpleName();
+            if (LOGGED_COLLISION.add(key)) {
+                LOGGER.info("[COLLISION] {} aabb=({},{},{} -> {},{},{}) boxes={} yRange={}-{}",
+                    key,
+                    String.format("%.2f", aabb.minX), String.format("%.2f", aabb.minY), String.format("%.2f", aabb.minZ),
+                    String.format("%.2f", aabb.maxX), String.format("%.2f", aabb.maxY), String.format("%.2f", aabb.maxZ),
+                    list.size(), minY, maxY);
+            }
+        }
         return list;
     }
+
+    // ================================================================
+    // Liquid / material checks
+    // ================================================================
 
     // ================================================================
     // Liquid / material checks

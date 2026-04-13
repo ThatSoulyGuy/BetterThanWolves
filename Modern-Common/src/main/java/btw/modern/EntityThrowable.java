@@ -22,4 +22,7 @@ public abstract class EntityThrowable extends Entity implements IProjectile {
 
     public void SetThrower(EntityLiving thrower) {}
     public void setThrowableHeading(double x, double y, double z, float velocity, float inaccuracy) {}
+
+    @Override
+    public void entityInit() {}
 }

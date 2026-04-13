@@ -73,6 +73,10 @@ public class BTWNetwork {
         CHANNEL.registerMessage(nextMessageId++, PenaltySync.class,
                 PenaltySync::encode, PenaltySync::decode, PenaltySync::handle);
 
+        // FC entity state sync: server -> client (NBT + DataWatcher snapshot)
+        CHANNEL.registerMessage(nextMessageId++, FCEntityStateSync.class,
+                FCEntityStateSync::encode, FCEntityStateSync::decode, FCEntityStateSync::handle);
+
         // StartBlockHarvest packet (FC's Packet166):
         // In legacy FC, the client sends FCPacket166StartBlockHarvest to the server
         // when beginning to mine a block. It carries the block position, hit face,
@@ -164,5 +168,72 @@ public class BTWNetwork {
             });
             ctx.setPacketHandled(true);
         }
+    }
+
+    // =================================================================
+    // Packet: FCEntityStateSync (server -> client)
+    // =================================================================
+
+    /**
+     * Carries an FC entity's live state (NBT fields + DataWatcher snapshot)
+     * to the client so proxy-wrapped FC entities render with the correct
+     * dynamic state (windmill rotation speed, blade colors, etc.).
+     */
+    public static class FCEntityStateSync {
+        final int entityId;
+        final byte[] payload;
+
+        public FCEntityStateSync(int entityId, byte[] payload) {
+            this.entityId = entityId;
+            this.payload = payload;
+        }
+
+        public static void encode(FCEntityStateSync msg, FriendlyByteBuf buf) {
+            buf.writeVarInt(msg.entityId);
+            buf.writeByteArray(msg.payload);
+        }
+
+        public static FCEntityStateSync decode(FriendlyByteBuf buf) {
+            int id = buf.readVarInt();
+            byte[] payload = buf.readByteArray();
+            return new FCEntityStateSync(id, payload);
+        }
+
+        public static void handle(FCEntityStateSync msg,
+                Supplier<net.minecraftforge.network.NetworkEvent.Context> ctxSupplier) {
+            net.minecraftforge.network.NetworkEvent.Context ctx = ctxSupplier.get();
+            ctx.enqueueWork(() -> applyOnClient(msg));
+            ctx.setPacketHandled(true);
+        }
+
+        private static void applyOnClient(FCEntityStateSync msg) {
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc.level == null) return;
+            net.minecraft.world.entity.Entity e = mc.level.getEntity(msg.entityId);
+            btw.modern.Entity fc = null;
+            if (e instanceof ProxyEntity pe) fc = pe.getFcEntity();
+            else if (e instanceof ProxyMob pm) fc = pm.getFcEntity();
+            else if (e instanceof ProxyAnimal pa) fc = pa.getFcEntity();
+            else if (e instanceof ProxyPathfinderMob pp) fc = pp.getFcEntity();
+            else return;
+            if (fc == null) return;
+            FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(msg.payload));
+            FCEntityStateCodec.applyState(buf, fc);
+        }
+    }
+
+    /**
+     * Encodes the current FC entity state and broadcasts to all players
+     * tracking the entity. No-op if the entity has no FC entity attached.
+     */
+    public static void broadcastFCEntityState(net.minecraft.world.entity.Entity mcEntity,
+                                              btw.modern.Entity fcEntity) {
+        if (fcEntity == null || !(mcEntity.level() instanceof net.minecraft.server.level.ServerLevel)) return;
+        FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        FCEntityStateCodec.writeState(buf, fcEntity);
+        byte[] payload = new byte[buf.readableBytes()];
+        buf.readBytes(payload);
+        CHANNEL.send(PacketDistributor.TRACKING_ENTITY.with(() -> mcEntity),
+                new FCEntityStateSync(mcEntity.getId(), payload));
     }
 }

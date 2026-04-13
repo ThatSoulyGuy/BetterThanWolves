@@ -1,25 +1,10 @@
 package btw.modern;
 
-/**
- * AI task for sitting behavior (tamed animals).
- * Mirrors net.minecraft.src.EntityAISit.
- */
+// Compile-time stub — real implementation provided by vanilla remap at runtime
 public class EntityAISit extends EntityAIBase {
-
-    private boolean isSitting;
-
-    public EntityAISit(EntityLiving entity) {
-    }
-
-    public boolean shouldExecute() {
-        return false;
-    }
-
-    public void setSitting(boolean sitting) {
-        this.isSitting = sitting;
-    }
-
-    public boolean isSitting() {
-        return this.isSitting;
-    }
+    private boolean sitting;
+    public EntityAISit(EntityLiving entity) { setMutexBits(5); }
+    public boolean shouldExecute() { return this.sitting; }
+    public void setSitting(boolean sitting) { this.sitting = sitting; }
+    public boolean isSitting() { return this.sitting; }
 }

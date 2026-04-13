@@ -42,7 +42,20 @@ public class EnchantmentHelper {
 
     public static void setEnchantments(Map enchMap, ItemStack stack) {}
 
-    public static int getMaxEnchantmentLevel(int enchId, ItemStack[] stacks) { return 0; }
+    /**
+     * Walks every stack in {@code stacks} and returns the highest level of
+     * enchantment {@code enchId} found across all of them. Mirrors vanilla
+     * 1.5.2 EnchantmentHelper.getMaxEnchantmentLevel.
+     */
+    public static int getMaxEnchantmentLevel(int enchId, ItemStack[] stacks) {
+        if (stacks == null) return 0;
+        int max = 0;
+        for (ItemStack stack : stacks) {
+            int lvl = getEnchantmentLevel(enchId, stack);
+            if (lvl > max) max = lvl;
+        }
+        return max;
+    }
 
     /**
      * Returns the modifier of protection enchantments on armors.
@@ -136,36 +149,45 @@ public class EnchantmentHelper {
         return 0;
     }
 
+    // The methods below mirror vanilla 1.5.2 EnchantmentHelper.
+    // Earlier versions delegated to per-entity helper methods like
+    // entity.getKnockbackEnchantLevel(), but those only existed on
+    // Modern-Common's stub EntityLiving — at runtime the real vanilla
+    // 1.5.2 EntityLiving is loaded, and it doesn't expose them, so the
+    // delegating versions threw NoSuchMethodError every tick.
+    // Instead we walk the entity's items directly via getHeldItem() /
+    // getLastActiveItems(), which DO exist on real EntityLiving.
+
     public static int getKnockbackModifier(EntityLiving attacker, EntityLiving target) {
-        return attacker.getKnockbackEnchantLevel();
+        return getEnchantmentLevel(Enchantment.knockback.effectId, attacker.getHeldItem());
     }
 
     public static int getFireAspectModifier(EntityLiving entity) {
-        return entity.getFireAspectEnchantLevel();
+        return getEnchantmentLevel(Enchantment.fireAspect.effectId, entity.getHeldItem());
     }
 
     public static int getRespiration(EntityLiving entity) {
-        return entity.getRespirationEnchantLevel();
+        return getMaxEnchantmentLevel(Enchantment.respiration.effectId, entity.getLastActiveItems());
     }
 
     public static int getEfficiencyModifier(EntityLiving entity) {
-        return entity.getEfficiencyEnchantLevel();
+        return getEnchantmentLevel(Enchantment.efficiency.effectId, entity.getHeldItem());
     }
 
     public static int getUnbreakingModifier(EntityLiving entity) {
-        return entity.getUnbreakingEnchantLevel();
+        return getEnchantmentLevel(Enchantment.unbreaking.effectId, entity.getHeldItem());
     }
 
     public static int getFortuneModifier(EntityLiving entity) {
-        return entity.getFortuneEnchantLevel();
+        return getEnchantmentLevel(Enchantment.fortune.effectId, entity.getHeldItem());
     }
 
     public static int getLootingModifier(EntityLiving entity) {
-        return entity.getLootingEnchantLevel();
+        return getEnchantmentLevel(Enchantment.looting.effectId, entity.getHeldItem());
     }
 
     public static boolean getAquaAffinityModifier(EntityLiving entity) {
-        return entity.getAquaAffinityEnchant();
+        return getMaxEnchantmentLevel(Enchantment.aquaAffinity.effectId, entity.getLastActiveItems()) > 0;
     }
 
     public static boolean getSilkTouchModifier(EntityLiving entity) {

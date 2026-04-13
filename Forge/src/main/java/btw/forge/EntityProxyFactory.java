@@ -104,8 +104,8 @@ public class EntityProxyFactory {
         EntityType<ProxyAnimal> type = (EntityType<ProxyAnimal>)
                 (registeredType != null ? registeredType : EntityType.PIG);
         ProxyAnimal proxy = new ProxyAnimal(type, level);
-        proxy.setFcEntity(fcEntity);
         applyPositionFromFc(proxy, fcEntity);
+        proxy.setFcEntity(fcEntity);
         LOGGER.debug("Created ProxyAnimal for {}", fcEntity.getClass().getSimpleName());
         return proxy;
     }
@@ -119,8 +119,8 @@ public class EntityProxyFactory {
         EntityType<ProxyMob> type = (EntityType<ProxyMob>)
                 (registeredType != null ? registeredType : EntityType.ZOMBIE);
         ProxyMob proxy = new ProxyMob(type, level);
-        proxy.setFcEntity(fcEntity);
         applyPositionFromFc(proxy, fcEntity);
+        proxy.setFcEntity(fcEntity);
         LOGGER.debug("Created ProxyMob for {}", fcEntity.getClass().getSimpleName());
         return proxy;
     }
@@ -134,8 +134,8 @@ public class EntityProxyFactory {
         EntityType<ProxyPathfinderMob> type = (EntityType<ProxyPathfinderMob>)
                 (registeredType != null ? registeredType : EntityType.VILLAGER);
         ProxyPathfinderMob proxy = new ProxyPathfinderMob(type, level);
-        proxy.setFcEntity(fcEntity);
         applyPositionFromFc(proxy, fcEntity);
+        proxy.setFcEntity(fcEntity);
         LOGGER.debug("Created ProxyPathfinderMob for {}",
                 fcEntity.getClass().getSimpleName());
         return proxy;
@@ -150,8 +150,8 @@ public class EntityProxyFactory {
         EntityType<ProxyEntity> type = (EntityType<ProxyEntity>)
                 (registeredType != null ? registeredType : EntityType.MARKER);
         ProxyEntity proxy = new ProxyEntity(type, level);
+        applyPositionFromFc(proxy, fcEntity);  // set position BEFORE setFcEntity to prevent syncToFc from zeroing it
         proxy.setFcEntity(fcEntity);
-        applyPositionFromFc(proxy, fcEntity);
         LOGGER.debug("Created ProxyEntity for {}", fcEntity.getClass().getSimpleName());
         return proxy;
     }

@@ -25,8 +25,42 @@ public class ProxyMob extends Mob
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-ProxyMob");
 
+    private static final java.util.Set<String> LOGGED_REMOVALS =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
+     * Catches every removal path so we can diagnose disappearing entities.
+     */
+    @Override
+    public void remove(net.minecraft.world.entity.Entity.RemovalReason reason) {
+        String key = (fcEntity != null ? fcEntity.getClass().getSimpleName() : "null") + "|" + reason;
+        if (LOGGED_REMOVALS.add(key)) {
+            LOGGER.warn("ProxyMob.remove({}) — fc={}, id={}, pos={},{},{}",
+                    reason,
+                    fcEntity != null ? fcEntity.getClass().getSimpleName() : "null",
+                    getId(), getX(), getY(), getZ());
+            StackTraceElement[] st = new Throwable().getStackTrace();
+            for (int i = 1; i < Math.min(12, st.length); i++) {
+                LOGGER.warn("    at {}", st[i]);
+            }
+        }
+        super.remove(reason);
+    }
+
+    private static boolean isFiniteState(btw.modern.EntityLiving fc) {
+        return Double.isFinite(fc.posX) && Double.isFinite(fc.posY) && Double.isFinite(fc.posZ)
+            && Double.isFinite(fc.motionX) && Double.isFinite(fc.motionY) && Double.isFinite(fc.motionZ)
+            && Float.isFinite(fc.rotationYaw) && Float.isFinite(fc.rotationPitch);
+    }
+
     private btw.modern.EntityLiving fcEntity;
     private String fcClassName = "";
+    private boolean pendingKnockback = false;
+    // Last known finite position — used for NaN recovery. Updated every tick
+    // that posX/Y/Z are finite. If posX becomes NaN (moveEntity corruption
+    // from NaN motionX/Z), the NaN guard restores from here instead of
+    // the per-tick snapshot (which would also be NaN).
+    private double lastGoodPosX, lastGoodPosY, lastGoodPosZ;
 
     public ProxyMob(EntityType<? extends Mob> type, Level level) {
         super(type, level);
@@ -46,8 +80,8 @@ public class ProxyMob extends Mob
     }
 
     public btw.modern.EntityLiving getFcEntity() {
-        if (fcEntity == null && level().isClientSide && !fcClassName.isEmpty()) {
-            createClientFcEntity();
+        if (fcEntity == null) {
+            ensureFcEntity();
         }
         if (fcEntity != null) syncToFc();
         return fcEntity;
@@ -60,35 +94,68 @@ public class ProxyMob extends Mob
         return fcClassName;
     }
 
-    private void createClientFcEntity() {
-        if (fcClassName == null || fcClassName.isEmpty()) return;
-        btw.modern.World dummyWorld = ProxyEntity.createDummyClientWorld();
+    private void ensureFcEntity() {
+        String className = getFcClassName();
+        if (className == null || className.isEmpty()) return;
+        btw.modern.World world;
+        if (level().isClientSide) {
+            world = ProxyEntity.createDummyClientWorld(level());
+        } else if (level() instanceof net.minecraft.server.level.ServerLevel sl) {
+            world = WorldBridge.getOrCreate(sl);
+        } else {
+            return;
+        }
         try {
-            Class<?> fcClass = Class.forName(fcClassName);
+            Class<?> fcClass = Class.forName(className);
             try {
                 var ctor = fcClass.getConstructor(btw.modern.World.class);
-                fcEntity = (btw.modern.EntityLiving) ctor.newInstance(dummyWorld);
+                fcEntity = (btw.modern.EntityLiving) ctor.newInstance(world);
             } catch (NoSuchMethodException e) {
                 var ctor = fcClass.getDeclaredConstructor();
                 ctor.setAccessible(true);
                 fcEntity = (btw.modern.EntityLiving) ctor.newInstance();
             }
-            if (fcEntity != null) fcEntity.worldObj = dummyWorld;
-            syncToFc();
+            if (fcEntity != null) {
+                fcEntity.worldObj = world;
+                // CRITICAL: seed the FC entity's position from MC's spawn
+                // position. In puppet mode, FC owns position from this point
+                // forward — but the very first tick must start at the MC
+                // entity's spawn coords (where VanillaMobReplacer placed us
+                // or where /summon put us). Without this, the FC entity
+                // spawns at (0,0,0), syncFromFc teleports the MC entity to
+                // the void on the first tick, and it gets discarded.
+                fcEntity.setLocationAndAngles(getX(), getY(), getZ(), getYRot(), getXRot());
+                lastGoodPosX = getX();
+                lastGoodPosY = getY();
+                lastGoodPosZ = getZ();
+                fcEntity.entityId = getId();
+                // Mirror FC's max health onto MC's MAX_HEALTH attribute so
+                // MC's hurt() pipeline kills the entity at the right time.
+                int fcMaxHp = fcEntity.getMaxHealth();
+                if (fcMaxHp > 0) {
+                    var attr = getAttribute(Attributes.MAX_HEALTH);
+                    if (attr != null) attr.setBaseValue(fcMaxHp);
+                    setHealth(fcMaxHp);
+                    fcEntity.health = fcMaxHp;
+                }
+                ProxyMobTaskDumper.dumpFcTasks(fcEntity);
+            }
         } catch (Throwable e) {
-            LOGGER.info("Could not create client FC entity {}: {}", fcClassName, e.getMessage(), e);
+            LOGGER.info("Could not create FC entity {}: {}", className, e.getMessage(), e);
         }
     }
 
     @Override
     public void writeSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
         buf.writeUtf(fcClassName);
+        FCEntityStateCodec.writeState(buf, fcEntity);
     }
 
     @Override
     public void readSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
         fcClassName = buf.readUtf();
-        if (!fcClassName.isEmpty()) createClientFcEntity();
+        if (!fcClassName.isEmpty()) ensureFcEntity();
+        FCEntityStateCodec.applyState(buf, fcEntity);
     }
 
     // ------------------------------------------------------------------
@@ -96,56 +163,53 @@ public class ProxyMob extends Mob
     // ------------------------------------------------------------------
 
     /**
-     * Pushes Forge entity state into the FC entity fields so that FC code
-     * sees the current position, rotation, and flags.
+     * Puppet-mode architecture (see git history): FC entity owns the FULL
+     * simulation — AI, intent, motion, collision, gravity, position. The
+     * MC proxy is a "puppet": every tick we copy FC's authoritative
+     * position/rotation onto the MC entity for rendering and network
+     * sync, but MC's travel() and aiStep() are no-oped so MC physics
+     * cannot touch position.
+     *
+     * syncToFc copies only NON-position state INTO the FC entity (things
+     * MC owns: damage state, fire timer, world reference). Position is
+     * NEVER pushed from MC into FC — that would erase the position FC
+     * computed last tick.
      */
     private void syncToFc() {
         if (fcEntity == null) return;
-        fcEntity.posX = getX();
-        fcEntity.posY = getY();
-        fcEntity.posZ = getZ();
-        fcEntity.prevPosX = xOld;
-        fcEntity.prevPosY = yOld;
-        fcEntity.prevPosZ = zOld;
-        fcEntity.rotationYaw = getYRot();
-        fcEntity.rotationPitch = getXRot();
-        fcEntity.prevRotationYaw = yRotO;
-        fcEntity.prevRotationPitch = xRotO;
-        fcEntity.onGround = onGround();
         fcEntity.entityId = getId();
-        fcEntity.motionX = getDeltaMovement().x;
-        fcEntity.motionY = getDeltaMovement().y;
-        fcEntity.motionZ = getDeltaMovement().z;
         fcEntity.ticksExisted = tickCount;
-        fcEntity.fallDistance = fallDistance;
-
-        // Animation fields — derived from MC entity's walk/body state
-        fcEntity.renderYawOffset = yBodyRot;
-        fcEntity.prevRenderYawOffset = yBodyRotO;
-        fcEntity.rotationYawHead = yHeadRot;
-        fcEntity.prevRotationYawHead = yHeadRotO;
-
-        // Limb swing: compute from walk distance
-        float dist = walkDist - walkDistO;
-        fcEntity.limbYaw = Math.min(dist * 4.0F, 1.0F);
-        fcEntity.prevLimbYaw = fcEntity.limbYaw;
-        fcEntity.limbSwing = walkDist * 0.6662F;
-
         fcEntity.inWater = isInWater();
         fcEntity.fire = getRemainingFireTicks();
+        // Knockback transfer is handled exclusively in tick() via the
+        // pendingKnockback flag. Do NOT touch deltaMovement here —
+        // syncToFc() is called from getFcEntity() which external code
+        // (hurt pipeline, etc.) can invoke at any time, and blindly
+        // adding deltaMovement would accumulate spurious velocity.
     }
 
     /**
-     * Pulls FC entity state back into the Forge entity so that movement
-     * changes made by FC code are reflected in the modern engine.
+     * Copies FC's authoritative position, rotation, and animation state
+     * onto the MC entity so the renderer and network tracker see what FC
+     * computed. This is the ONLY direction position flows.
      */
     private void syncFromFc() {
         if (fcEntity == null) return;
+        // Position — single source of truth.
         setPos(fcEntity.posX, fcEntity.posY, fcEntity.posZ);
+        // Rotation — also single source of truth (FC AI's lookHelper sets these).
         setYRot(fcEntity.rotationYaw);
         setXRot(fcEntity.rotationPitch);
-        setDeltaMovement(fcEntity.motionX, fcEntity.motionY, fcEntity.motionZ);
-        fallDistance = fcEntity.fallDistance;
+        this.yBodyRot = fcEntity.renderYawOffset;
+        this.yHeadRot = fcEntity.rotationYawHead;
+        this.yBodyRotO = fcEntity.prevRenderYawOffset;
+        this.yHeadRotO = fcEntity.prevRotationYawHead;
+        // Fall distance for vanilla MC's fall-damage hooks (FC.moveEntity
+        // already applied damage via fall(), this just keeps MC in sync).
+        this.fallDistance = fcEntity.fallDistance;
+        this.setOnGround(fcEntity.onGround);
+        // Zero MC delta so MC's friction loop is inert.
+        setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
         if (fcEntity.isDead) {
             discard();
         }
@@ -155,30 +219,323 @@ public class ProxyMob extends Mob
     // Lifecycle overrides
     // ------------------------------------------------------------------
 
+    /** No-op: FC AI runs in fcEntity.onUpdate(). MC AI is bypassed. */
     @Override
-    public void tick() {
-        syncToFc();
-        if (fcEntity != null) {
-            try {
-                fcEntity.onUpdate();
-            } catch (Exception e) {
-                LOGGER.debug("FC entity onUpdate() threw: {}", e.getMessage());
-            }
-        }
-        syncFromFc();
-        // Let the Forge engine do its own processing (physics, etc.)
-        super.tick();
-    }
+    protected void customServerAiStep() {}
+
+    /** No-op: FC physics owns motion. MC physics is bypassed. */
+    @Override
+    public void travel(net.minecraft.world.phys.Vec3 travelVector) {}
+
+    /** No-op: FC owns body/head rotation. Prevents MC's LivingEntity.aiStep
+     *  from overwriting yBodyRot/yHeadRot that we set from FC's values. */
+    @Override
+    protected float tickHeadTurn(float yRot, float animStep) { return animStep; }
 
     @Override
-    public boolean hurt(DamageSource source, float amount) {
-        if (fcEntity != null) {
-            btw.modern.DamageSource fcSource = translateDamageSource(source);
-            boolean result = fcEntity.attackEntityFrom(fcSource, (int) amount);
-            syncFromFc();
-            return result;
+    public void tick() {
+        if (fcEntity == null) ensureFcEntity();
+
+        // CLIENT SIDE: FC physics only run on the server. The client
+        // receives position updates via network packets. If we ran
+        // fcEntity.onUpdate() on the client with the dummy world, the
+        // client FC entity would stay at its spawn position (no real
+        // WorldBridge) and overwrite the server-synced position every tick.
+        if (level().isClientSide) {
+            // Animation/rotation data arrives via FCEntityStateSync packet
+            // (bridged from server FC entity's actual computed values).
+            // Keep FC entity position in sync for renderer origin.
+            if (fcEntity != null) {
+                fcEntity.prevPosX = fcEntity.posX;
+                fcEntity.prevPosY = fcEntity.posY;
+                fcEntity.prevPosZ = fcEntity.posZ;
+                fcEntity.posX = getX();
+                fcEntity.posY = getY();
+                fcEntity.posZ = getZ();
+            }
+            super.tick();
+            return;
         }
-        return super.hurt(source, amount);
+
+        // Puppet mode: FC entity is the source of truth for position,
+        // motion, AI, and physics. MC proxy entity is a "puppet" that
+        // mirrors FC's state every tick for rendering and network sync.
+        // Knockback (set on MC.deltaMovement by hurt() pipeline) flows
+        // INTO FC; everything else flows FROM FC.
+        if (fcEntity != null) {
+            // 1. One-way state IN: knockback velocity from MC -> FC,
+            //    plus a few non-position fields MC owns (fire, water).
+            // Transfer knockback only — see ProxyAnimal for rationale.
+            if (pendingKnockback) {
+                pendingKnockback = false;
+                net.minecraft.world.phys.Vec3 d = getDeltaMovement();
+                if (d.lengthSqr() > 1.0E-6) {
+                    fcEntity.motionX += d.x;
+                    fcEntity.motionY += d.y;
+                    fcEntity.motionZ += d.z;
+                }
+            }
+            setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            fcEntity.entityId = getId();
+            fcEntity.ticksExisted = tickCount;
+            fcEntity.inWater = isInWater();
+            fcEntity.fire = getRemainingFireTicks();
+
+            // 2. FC simulation: AI -> moveEntityWithHeading -> vanilla
+            //    1.5.2 moveEntity (collision, gravity, friction, fall
+            //    damage). At runtime, moveEntity is FC's actual code
+            //    (we exclude Modern-Common's stub from the classpath).
+            //
+            // Unconditionally sanitize ALL entity state at tick start.
+            // Something inside FC's onUpdate produces NaN posX/posZ every
+            // tick via an unknown code path. Instead of tracing the exact
+            // source, ensure the entity ALWAYS starts with valid state.
+            if (Double.isFinite(fcEntity.posX) && Double.isFinite(fcEntity.posY) && Double.isFinite(fcEntity.posZ)) {
+                lastGoodPosX = fcEntity.posX;
+                lastGoodPosY = fcEntity.posY;
+                lastGoodPosZ = fcEntity.posZ;
+            } else {
+                fcEntity.posX = lastGoodPosX;
+                fcEntity.posY = lastGoodPosY;
+                fcEntity.posZ = lastGoodPosZ;
+            }
+            if (!Double.isFinite(fcEntity.motionX)) fcEntity.motionX = 0;
+            if (!Double.isFinite(fcEntity.motionY)) fcEntity.motionY = 0;
+            if (!Double.isFinite(fcEntity.motionZ)) fcEntity.motionZ = 0;
+            if (!Float.isFinite(fcEntity.rotationYaw)) fcEntity.rotationYaw = 0;
+            if (!Float.isFinite(fcEntity.rotationPitch)) fcEntity.rotationPitch = 0;
+            // ALWAYS rebuild BB and prevPos from the (now-sanitized) position.
+            // This is the nuclear option: whatever corrupted BB/prevPos last
+            // tick gets wiped before FC code can read it.
+            fcEntity.setPosition(fcEntity.posX, fcEntity.posY, fcEntity.posZ);
+            fcEntity.prevPosX = fcEntity.posX;
+            fcEntity.prevPosY = fcEntity.posY;
+            fcEntity.prevPosZ = fcEntity.posZ;
+            fcEntity.lastTickPosX = fcEntity.posX;
+            fcEntity.lastTickPosY = fcEntity.posY;
+            fcEntity.lastTickPosZ = fcEntity.posZ;
+
+            // Snapshot pos/rotation/motion BEFORE the FC tick so the NaN
+            // guard below can revert if FC produces non-finite output.
+            double snapPosX = fcEntity.posX, snapPosY = fcEntity.posY, snapPosZ = fcEntity.posZ;
+            float snapYaw = fcEntity.rotationYaw, snapPitch = fcEntity.rotationPitch;
+            double snapMotX = fcEntity.motionX, snapMotY = fcEntity.motionY, snapMotZ = fcEntity.motionZ;
+
+            double preMotY = fcEntity.motionY;
+            double preMotX = fcEntity.motionX;
+            double prePosY = fcEntity.posY;
+            // One-time: verify worldObj class
+            if (tickCount == 1 && !level().isClientSide) {
+                LOGGER.warn("[WORLD-CHECK] {} worldObj={} noClip={} yOffset={} ySize={} stepHeight={}",
+                    fcEntity.getClass().getSimpleName(),
+                    fcEntity.worldObj != null ? fcEntity.worldObj.getClass().getName() : "NULL",
+                    fcEntity.noClip, fcEntity.yOffset, fcEntity.ySize, fcEntity.stepHeight);
+            }
+            try {
+                fcEntity.onUpdate();
+            } catch (Throwable e) {
+                if (tickCount % 100 == 0) {
+                    LOGGER.warn("FC entity {} onUpdate() threw {}: {}",
+                        fcEntity.getClass().getSimpleName(),
+                        e.getClass().getName(), e.getMessage());
+                    StackTraceElement[] st = e.getStackTrace();
+                    for (int i = 0; i < Math.min(8, st.length); i++) {
+                        LOGGER.warn("    at {}", st[i]);
+                    }
+                }
+            }
+            // Check if NaN guard reverts and why
+            // Diagnostic: check raw motionX/Z BEFORE NaN guard
+            if (!level().isClientSide && fcEntity.moveForward > 0.01F && (tickCount % 20) == 0) {
+                LOGGER.warn("[MOVE-CHK] {} mF={} motX={} motZ={} yaw={} bbMinX={} posX={} posZ={} onGround={}",
+                        fcEntity.getClass().getSimpleName(),
+                        String.format("%.3f", fcEntity.moveForward),
+                        Double.isFinite(fcEntity.motionX) ? String.format("%.6f", fcEntity.motionX) : "NaN!",
+                        Double.isFinite(fcEntity.motionZ) ? String.format("%.6f", fcEntity.motionZ) : "NaN!",
+                        Float.isFinite(fcEntity.rotationYaw) ? String.format("%.2f", fcEntity.rotationYaw) : "NaN!",
+                        Double.isFinite(fcEntity.boundingBox.minX) ? String.format("%.2f", fcEntity.boundingBox.minX) : "NaN!",
+                        String.format("%.2f", fcEntity.posX), String.format("%.2f", fcEntity.posZ),
+                        fcEntity.onGround);
+            }
+
+            // Compute onGround directly: check if the block below the entity's
+            // feet is solid. FC's moveEntity misses ground detection when
+            // entity-collision pushes produce large horizontal motion, and
+            // MC's onGround is also false because travel() is a no-op.
+            {
+                int bx = net.minecraft.util.Mth.floor(fcEntity.posX);
+                int by = net.minecraft.util.Mth.floor(fcEntity.boundingBox.minY - 0.01);
+                int bz = net.minecraft.util.Mth.floor(fcEntity.posZ);
+                net.minecraft.core.BlockPos belowPos = new net.minecraft.core.BlockPos(bx, by, bz);
+                boolean solidBelow = !level().getBlockState(belowPos).isAir();
+                if (solidBelow) {
+                    fcEntity.onGround = true;
+                }
+            }
+
+            // --- Debug: periodic AI/movement diagnostics (every 60 ticks / 3s) ---
+            if (!level().isClientSide && (tickCount % 60) == 0) {
+                btw.modern.PathNavigate nav = fcEntity.getNavigator();
+                boolean navNoPath = nav.noPath();
+                btw.modern.PathEntity navPath = nav.getPath();
+                int pathLen = (navPath != null) ? navPath.getCurrentPathLength() : 0;
+                int pathIdx = (navPath != null) ? navPath.getCurrentPathIndex() : -1;
+
+                btw.modern.EntityLiving atkTarget = fcEntity.getAttackTarget();
+                btw.modern.EntityLiving aiTarget = fcEntity.getAITarget();
+
+                LOGGER.info("[AI-DBG] {} | onGround={} mF={} aiSpd={} mot=({},{},{}) | nav: noPath={} pathLen={} pathIdx={} | atkTarget={} aiTarget={} | pathfindCalls={}",
+                    fcEntity.getClass().getSimpleName(),
+                    fcEntity.onGround,
+                    String.format("%.3f", fcEntity.moveForward),
+                    String.format("%.3f", fcEntity.getAIMoveSpeed()),
+                    String.format("%.4f", fcEntity.motionX),
+                    String.format("%.4f", fcEntity.motionY),
+                    String.format("%.4f", fcEntity.motionZ),
+                    navNoPath, pathLen, pathIdx,
+                    atkTarget != null ? atkTarget.getClass().getSimpleName() : "none",
+                    aiTarget != null ? aiTarget.getClass().getSimpleName() : "none",
+                    btw.modern.World.pathfindCallCount.get());
+            }
+
+            // --- Debug: flame particle at next path waypoint (every 20 ticks) ---
+            if (!level().isClientSide && (tickCount % 20) == 0
+                    && level() instanceof ServerLevel sl) {
+                btw.modern.PathNavigate nav2 = fcEntity.getNavigator();
+                if (!nav2.noPath()) {
+                    btw.modern.PathEntity path = nav2.getPath();
+                    if (path != null && path.getCurrentPathIndex() < path.getCurrentPathLength()) {
+                        btw.modern.PathPoint wp = path.getPathPointFromIndex(path.getCurrentPathIndex());
+                        sl.sendParticles(
+                            net.minecraft.core.particles.ParticleTypes.FLAME,
+                            wp.xCoord + 0.5, wp.yCoord + 0.5, wp.zCoord + 0.5,
+                            1, 0.0, 0.0, 0.0, 0.0);
+                    }
+                }
+            }
+
+            // Defensive NaN/Infinity guard — fix ONLY the fields that are
+            // actually non-finite. The old approach reverted ALL state when
+            // ANY field was NaN, which destroyed gravity accumulation when
+            // only rotationYaw was NaN (common: atan2 in FC's lookHelper).
+            if (!Double.isFinite(fcEntity.posX)) fcEntity.posX = snapPosX;
+            if (!Double.isFinite(fcEntity.posY)) fcEntity.posY = snapPosY;
+            if (!Double.isFinite(fcEntity.posZ)) fcEntity.posZ = snapPosZ;
+            if (!Double.isFinite(fcEntity.motionX)) fcEntity.motionX = 0.0;
+            if (!Double.isFinite(fcEntity.motionY)) fcEntity.motionY = 0.0;
+            if (!Double.isFinite(fcEntity.motionZ)) fcEntity.motionZ = 0.0;
+            if (!Float.isFinite(fcEntity.rotationYaw)) fcEntity.rotationYaw = snapYaw;
+            if (!Float.isFinite(fcEntity.rotationPitch)) fcEntity.rotationPitch = snapPitch;
+
+            // Recalculate the bounding box from sanitized position. During
+            // onUpdate, NaN rotationYaw → NaN motionX/Z → moveEntity offsets
+            // the bounding box by NaN, corrupting it permanently. The field
+            // fixes above restore position/motion but NOT the bounding box.
+            // setPosition rebuilds the BB from posX/posY/posZ.
+            if (fcEntity.boundingBox != null
+                    && (!Double.isFinite(fcEntity.boundingBox.minX)
+                        || !Double.isFinite(fcEntity.boundingBox.minZ))) {
+                fcEntity.setPosition(fcEntity.posX, fcEntity.posY, fcEntity.posZ);
+            }
+
+            // 3. Copy FC's new state OUT to the MC proxy for rendering
+            //    and network broadcast. Save old position for interpolation
+            //    BEFORE updating, so the renderer can smoothly animate.
+            this.xo = this.getX();
+            this.yo = this.getY();
+            this.zo = this.getZ();
+            this.yRotO = this.getYRot();
+            this.xRotO = this.getXRot();
+            setPos(fcEntity.posX, fcEntity.posY, fcEntity.posZ);
+            setYRot(fcEntity.rotationYaw);
+            setXRot(fcEntity.rotationPitch);
+            this.yBodyRot = fcEntity.renderYawOffset;
+            this.yHeadRot = fcEntity.rotationYawHead;
+            this.yBodyRotO = fcEntity.prevRenderYawOffset;
+            this.yHeadRotO = fcEntity.prevRotationYawHead;
+            this.fallDistance = fcEntity.fallDistance;
+            setOnGround(fcEntity.onGround);
+            setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+
+            if (fcEntity.isDead) {
+                discard();
+            }
+        }
+
+        // 4. Run MC's tick (chunk tracking, despawn, network sync).
+        //    travel() and customServerAiStep are no-ops so MC physics
+        //    cannot move us. The chunk tracker compares MC.position vs
+        //    its internal xp/yp/zp and broadcasts on change.
+        // Save xo/yo/zo BEFORE super.tick() overwrites them, then restore.
+        double savedXo = this.xo, savedYo = this.yo, savedZo = this.zo;
+        super.tick();
+
+        // 5. Re-pin position and restore interpolation origin.
+        if (fcEntity != null) {
+            setPos(fcEntity.posX, fcEntity.posY, fcEntity.posZ);
+            setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            this.xo = savedXo;
+            this.yo = savedYo;
+            this.zo = savedZo;
+        }
+
+        if (!level().isClientSide && fcEntity != null && (tickCount % 2) == 0) {
+            BTWNetwork.broadcastFCEntityState(this, fcEntity);
+        }
+    }
+
+    /** Delegate to FC's interact() for villager trading, etc. */
+    @Override
+    protected net.minecraft.world.InteractionResult mobInteract(
+            net.minecraft.world.entity.player.Player player,
+            net.minecraft.world.InteractionHand hand) {
+        if (fcEntity != null && hand == net.minecraft.world.InteractionHand.MAIN_HAND
+                && player instanceof net.minecraft.server.level.ServerPlayer sp) {
+            btw.forge.PlayerBridge pb = btw.forge.PlayerBridge.getOrCreate(sp);
+            if (fcEntity.interact(pb)) {
+                return net.minecraft.world.InteractionResult.SUCCESS;
+            }
+        }
+        return super.mobInteract(player, hand);
+    }
+
+    /** FC handles its own entity collision; MC's push/cramming must be ignored. */
+    @Override
+    public void push(double x, double y, double z) {}
+
+    @Override
+    public boolean isPushable() { return false; }
+
+    @Override
+    protected void pushEntities() {} // FC handles via Entity.applyEntityCollision
+
+    /** Real knockback from hurt() — flag it so tick() transfers the delta. */
+    @Override
+    public void knockback(double strength, double x, double z) {
+        super.knockback(strength, x, z);
+        pendingKnockback = true;
+    }
+
+    public boolean hurt(DamageSource source, float amount) {
+        // Let MC's full hurt() pipeline run: hurt sound, red flash,
+        // knockback, hit particles, hurt animation, AI revenge target,
+        // damage application, death/loot. We do not short-circuit any
+        // of MC's "million little subroutines" — they all fire normally
+        // on the MC proxy entity.
+        boolean result = super.hurt(source, amount);
+
+        // Mirror the result to FC so FC game logic stays in sync:
+        // health value, AI revenge target, attacker tracking. FC's
+        // custom death drops (CheckForScrollDrop, etc.) are triggered
+        // separately via die() — see ProxyMob.die() override.
+        if (result && fcEntity != null) {
+            fcEntity.health = (int) Math.max(0, getHealth());
+            if (source.getEntity() instanceof ProxyMob pm && pm.fcEntity != null) {
+                fcEntity.entityLivingToAttack = pm.fcEntity;
+                fcEntity.lastAttackingEntity = pm.fcEntity;
+            }
+        }
+        return result;
     }
 
     @Override
@@ -187,8 +544,21 @@ public class ProxyMob extends Mob
             btw.modern.DamageSource fcSource = translateDamageSource(source);
             fcEntity.onDeath(fcSource);
             syncFromFc();
+            // FC's onDeath already ran dropFewItems + CheckForScrollDrop +
+            // dropEquipment. Suppress vanilla's loot table so drops don't
+            // double-fire, then let MC handle death animation / XP / removal.
+            suppressVanillaLoot = true;
         }
         super.die(source);
+        suppressVanillaLoot = false;
+    }
+
+    private boolean suppressVanillaLoot = false;
+
+    @Override
+    protected void dropAllDeathLoot(DamageSource source) {
+        if (suppressVanillaLoot) return;
+        super.dropAllDeathLoot(source);
     }
 
     // ------------------------------------------------------------------
@@ -208,7 +578,7 @@ public class ProxyMob extends Mob
         if (tag.contains("FCClassName")) {
             fcClassName = tag.getString("FCClassName");
             if (fcEntity == null && !fcClassName.isEmpty()) {
-                createClientFcEntity(); // recreate on server side too
+                ensureFcEntity(); // recreate on server side too
             }
         }
         if (fcEntity != null && tag.contains("FCData")) {
@@ -217,8 +587,16 @@ public class ProxyMob extends Mob
             try {
                 fcEntity.readFromNBT(wrapper);
                 fcEntity.readEntityFromNBT(wrapper);
-            } catch (Exception e) {
-                LOGGER.warn("Failed to read FC entity NBT data: {}", e.getMessage());
+            } catch (Throwable e) {
+                // Vanilla 1.5.2 Entity.readFromNBT wraps everything in a
+                // ReportedException("Loading entity NBT"); the actual error
+                // lives in the cause chain. Walk it so the log is useful.
+                Throwable root = e;
+                while (root.getCause() != null && root.getCause() != root) {
+                    root = root.getCause();
+                }
+                LOGGER.warn("Failed to read FC entity NBT data for {}: {}: {}",
+                        fcClassName, root.getClass().getSimpleName(), root.getMessage());
             }
         }
     }

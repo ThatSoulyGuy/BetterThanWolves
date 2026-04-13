@@ -21,11 +21,10 @@ public class ModelRenderer {
     public List cubeList;
     public List childModels;
     public final String boxName;
+    public float field_82906_o;
     public float field_82908_p;
     public float field_82907_q;
-
-    /** Stored box definitions for rendering. */
-    private final List<float[]> boxes = new ArrayList<>();
+    private ModelBase baseModel;
 
     public ModelRenderer(ModelBase model, String name) {
         this.textureWidth = 64.0F;
@@ -34,8 +33,10 @@ public class ModelRenderer {
         this.showModel = true;
         this.cubeList = new ArrayList();
         this.boxName = name;
+        this.baseModel = model;
         if (model != null) {
             this.setTextureSize((int) model.textureWidth, (int) model.textureHeight);
+            model.boxList.add(this);
         }
     }
 
@@ -61,18 +62,25 @@ public class ModelRenderer {
         return this;
     }
 
+    /**
+     * Creates a real ModelBox with correct UV mapping from vanilla 1.5.2's
+     * ModelBox/TexturedQuad/PositionTextureVertex pipeline.
+     */
     public ModelRenderer addBox(String name, float x, float y, float z, int width, int height, int depth) {
-        boxes.add(new float[]{x, y, z, width, height, depth, 0});
+        this.cubeList.add(new ModelBox(this, this.textureOffsetX, this.textureOffsetY,
+                x, y, z, width, height, depth, 0.0F));
         return this;
     }
 
     public ModelRenderer addBox(float x, float y, float z, int width, int height, int depth) {
-        boxes.add(new float[]{x, y, z, width, height, depth, 0});
+        this.cubeList.add(new ModelBox(this, this.textureOffsetX, this.textureOffsetY,
+                x, y, z, width, height, depth, 0.0F));
         return this;
     }
 
     public void addBox(float x, float y, float z, int width, int height, int depth, float scaleFactor) {
-        boxes.add(new float[]{x, y, z, width, height, depth, scaleFactor});
+        this.cubeList.add(new ModelBox(this, this.textureOffsetX, this.textureOffsetY,
+                x, y, z, width, height, depth, scaleFactor));
     }
 
     public void setRotationPoint(float x, float y, float z) {
@@ -82,125 +90,73 @@ public class ModelRenderer {
     }
 
     /**
-     * Renders all boxes through GL11 transforms and Tessellator quads,
-     * so the FCEntityRenderer capture pipeline can intercept the geometry.
+     * Renders all ModelBoxes through GL11 transforms and Tessellator quads.
+     * Uses the real vanilla 1.5.2 ModelBox → TexturedQuad rendering pipeline
+     * for correct UV mapping. Skips GL display lists (our GL11 stub doesn't
+     * support them) and renders directly each frame instead.
      */
     public void render(float scale) {
         if (isHidden || !showModel) return;
 
         GL11.glPushMatrix();
+        GL11.glTranslatef(field_82906_o, field_82908_p, field_82907_q);
 
-        // Apply rotation point translation
-        GL11.glTranslatef(rotationPointX * scale, rotationPointY * scale, rotationPointZ * scale);
-
-        // Apply rotations (ZYX order, matching MC 1.5.2)
-        if (rotateAngleZ != 0) GL11.glRotatef(rotateAngleZ * (180F / (float) Math.PI), 0, 0, 1);
-        if (rotateAngleY != 0) GL11.glRotatef(rotateAngleY * (180F / (float) Math.PI), 0, 1, 0);
-        if (rotateAngleX != 0) GL11.glRotatef(rotateAngleX * (180F / (float) Math.PI), 1, 0, 0);
-
-        // Render each box
-        for (float[] box : boxes) {
-            renderBox(box[0], box[1], box[2], (int) box[3], (int) box[4], (int) box[5], box[6], scale);
-        }
-
-        // Render children
-        if (childModels != null) {
-            for (Object child : childModels) {
-                ((ModelRenderer) child).render(scale);
+        if (rotateAngleX == 0.0F && rotateAngleY == 0.0F && rotateAngleZ == 0.0F) {
+            if (rotationPointX != 0.0F || rotationPointY != 0.0F || rotationPointZ != 0.0F) {
+                GL11.glTranslatef(rotationPointX * scale, rotationPointY * scale, rotationPointZ * scale);
             }
+            renderBoxes(scale);
+            if (childModels != null) {
+                for (int i = 0; i < childModels.size(); i++) {
+                    ((ModelRenderer) childModels.get(i)).render(scale);
+                }
+            }
+        } else {
+            GL11.glPushMatrix();
+            GL11.glTranslatef(rotationPointX * scale, rotationPointY * scale, rotationPointZ * scale);
+            if (rotateAngleZ != 0.0F) GL11.glRotatef(rotateAngleZ * (180F / (float) Math.PI), 0, 0, 1);
+            if (rotateAngleY != 0.0F) GL11.glRotatef(rotateAngleY * (180F / (float) Math.PI), 0, 1, 0);
+            if (rotateAngleX != 0.0F) GL11.glRotatef(rotateAngleX * (180F / (float) Math.PI), 1, 0, 0);
+            renderBoxes(scale);
+            if (childModels != null) {
+                for (int i = 0; i < childModels.size(); i++) {
+                    ((ModelRenderer) childModels.get(i)).render(scale);
+                }
+            }
+            GL11.glPopMatrix();
         }
 
         GL11.glPopMatrix();
     }
 
+    private void renderBoxes(float scale) {
+        for (int i = 0; i < cubeList.size(); i++) {
+            ((ModelBox) cubeList.get(i)).render(Tessellator.instance, scale);
+        }
+    }
+
     public void renderWithRotation(float scale) {
-        render(scale);
+        if (isHidden || !showModel) return;
+        GL11.glPushMatrix();
+        GL11.glTranslatef(rotationPointX * scale, rotationPointY * scale, rotationPointZ * scale);
+        if (rotateAngleY != 0.0F) GL11.glRotatef(rotateAngleY * (180F / (float) Math.PI), 0, 1, 0);
+        if (rotateAngleX != 0.0F) GL11.glRotatef(rotateAngleX * (180F / (float) Math.PI), 1, 0, 0);
+        if (rotateAngleZ != 0.0F) GL11.glRotatef(rotateAngleZ * (180F / (float) Math.PI), 0, 0, 1);
+        renderBoxes(scale);
+        GL11.glPopMatrix();
     }
 
     public void postRender(float scale) {
-        // Apply transforms without rendering — used for attachment points
-        GL11.glTranslatef(rotationPointX * scale, rotationPointY * scale, rotationPointZ * scale);
-        if (rotateAngleZ != 0) GL11.glRotatef(rotateAngleZ * (180F / (float) Math.PI), 0, 0, 1);
-        if (rotateAngleY != 0) GL11.glRotatef(rotateAngleY * (180F / (float) Math.PI), 0, 1, 0);
-        if (rotateAngleX != 0) GL11.glRotatef(rotateAngleX * (180F / (float) Math.PI), 1, 0, 0);
-    }
-
-    /**
-     * Emits a box as 6 quads through the Tessellator.
-     * UV mapping exactly matches MC 1.5.2's ModelBox quad layout.
-     */
-    private void renderBox(float x, float y, float z, int w, int h, int d, float expand, float scale) {
-        float x1 = (x - expand) * scale;
-        float y1 = (y - expand) * scale;
-        float z1 = (z - expand) * scale;
-        float x2 = (x + w + expand) * scale;
-        float y2 = (y + h + expand) * scale;
-        float z2 = (z + d + expand) * scale;
-
-        if (mirror) {
-            float temp = x1; x1 = x2; x2 = temp;
+        if (rotateAngleX == 0.0F && rotateAngleY == 0.0F && rotateAngleZ == 0.0F) {
+            if (rotationPointX != 0.0F || rotationPointY != 0.0F || rotationPointZ != 0.0F) {
+                GL11.glTranslatef(rotationPointX * scale, rotationPointY * scale, rotationPointZ * scale);
+            }
+        } else {
+            GL11.glTranslatef(rotationPointX * scale, rotationPointY * scale, rotationPointZ * scale);
+            if (rotateAngleZ != 0.0F) GL11.glRotatef(rotateAngleZ * (180F / (float) Math.PI), 0, 0, 1);
+            if (rotateAngleY != 0.0F) GL11.glRotatef(rotateAngleY * (180F / (float) Math.PI), 0, 1, 0);
+            if (rotateAngleX != 0.0F) GL11.glRotatef(rotateAngleX * (180F / (float) Math.PI), 1, 0, 0);
         }
-
-        // UV regions matching MC 1.5.2 ModelBox exactly:
-        // u/v = texture offset, d=depth, w=width, h=height, tw/th = texture dimensions
-        float u = textureOffsetX, v = textureOffsetY;
-        float tw = textureWidth, th = textureHeight;
-
-        Tessellator tess = Tessellator.instance;
-
-        // East face (x2 side) — quadList[0]
-        tess.startDrawingQuads();
-        tess.setNormal(1, 0, 0);
-        tess.addVertexWithUV(x2, y1, z2, (u+d+w)/tw,     (v+d)/th);
-        tess.addVertexWithUV(x2, y1, z1, (u+d+w+d)/tw,   (v+d)/th);
-        tess.addVertexWithUV(x2, y2, z1, (u+d+w+d)/tw,   (v+d+h)/th);
-        tess.addVertexWithUV(x2, y2, z2, (u+d+w)/tw,     (v+d+h)/th);
-        tess.draw();
-
-        // West face (x1 side) — quadList[1]
-        tess.startDrawingQuads();
-        tess.setNormal(-1, 0, 0);
-        tess.addVertexWithUV(x1, y1, z1, u/tw,       (v+d)/th);
-        tess.addVertexWithUV(x1, y1, z2, (u+d)/tw,   (v+d)/th);
-        tess.addVertexWithUV(x1, y2, z2, (u+d)/tw,   (v+d+h)/th);
-        tess.addVertexWithUV(x1, y2, z1, u/tw,       (v+d+h)/th);
-        tess.draw();
-
-        // Top face (y1 side — model top) — quadList[2]
-        tess.startDrawingQuads();
-        tess.setNormal(0, -1, 0);
-        tess.addVertexWithUV(x2, y1, z2, (u+d+w)/tw,   v/th);
-        tess.addVertexWithUV(x1, y1, z2, (u+d)/tw,     v/th);
-        tess.addVertexWithUV(x1, y1, z1, (u+d)/tw,     (v+d)/th);
-        tess.addVertexWithUV(x2, y1, z1, (u+d+w)/tw,   (v+d)/th);
-        tess.draw();
-
-        // Bottom face (y2 side — model bottom) — quadList[3]
-        tess.startDrawingQuads();
-        tess.setNormal(0, 1, 0);
-        tess.addVertexWithUV(x2, y2, z1, (u+d+w+w)/tw,   (v+d)/th);
-        tess.addVertexWithUV(x1, y2, z1, (u+d+w)/tw,     (v+d)/th);
-        tess.addVertexWithUV(x1, y2, z2, (u+d+w)/tw,     v/th);
-        tess.addVertexWithUV(x2, y2, z2, (u+d+w+w)/tw,   v/th);
-        tess.draw();
-
-        // Front face (z1 side — north) — quadList[4]
-        tess.startDrawingQuads();
-        tess.setNormal(0, 0, -1);
-        tess.addVertexWithUV(x2, y1, z1, (u+d)/tw,     (v+d)/th);
-        tess.addVertexWithUV(x1, y1, z1, (u+d+w)/tw,   (v+d)/th);
-        tess.addVertexWithUV(x1, y2, z1, (u+d+w)/tw,   (v+d+h)/th);
-        tess.addVertexWithUV(x2, y2, z1, (u+d)/tw,     (v+d+h)/th);
-        tess.draw();
-
-        // Back face (z2 side — south) — quadList[5]
-        tess.startDrawingQuads();
-        tess.setNormal(0, 0, 1);
-        tess.addVertexWithUV(x1, y1, z2, (u+d+w+d)/tw,     (v+d)/th);
-        tess.addVertexWithUV(x2, y1, z2, (u+d+w+d+w)/tw,   (v+d)/th);
-        tess.addVertexWithUV(x2, y2, z2, (u+d+w+d+w)/tw,   (v+d+h)/th);
-        tess.addVertexWithUV(x1, y2, z2, (u+d+w+d)/tw,     (v+d+h)/th);
-        tess.draw();
     }
 
     public ModelRenderer setTextureSize(int width, int height) {
@@ -213,13 +169,11 @@ public class ModelRenderer {
         if (isHidden || !showModel) return;
         GL11.glPushMatrix();
         GL11.glTranslatef(rotationPointX * scale, rotationPointY * scale, rotationPointZ * scale);
-        if (rotateAngleZ != 0) GL11.glRotatef(rotateAngleZ * (180F / (float) Math.PI), 0, 0, 1);
-        if (rotateAngleY != 0) GL11.glRotatef(rotateAngleY * (180F / (float) Math.PI), 0, 1, 0);
-        if (rotateAngleX != 0) GL11.glRotatef(rotateAngleX * (180F / (float) Math.PI), 1, 0, 0);
+        if (rotateAngleZ != 0.0F) GL11.glRotatef(rotateAngleZ * (180F / (float) Math.PI), 0, 0, 1);
+        if (rotateAngleY != 0.0F) GL11.glRotatef(rotateAngleY * (180F / (float) Math.PI), 0, 1, 0);
+        if (rotateAngleX != 0.0F) GL11.glRotatef(rotateAngleX * (180F / (float) Math.PI), 1, 0, 0);
         GL11.glScalef(scaleX, scaleY, scaleZ);
-        for (float[] box : boxes) {
-            renderBox(box[0], box[1], box[2], (int) box[3], (int) box[4], (int) box[5], box[6], scale);
-        }
+        renderBoxes(scale);
         if (childModels != null) {
             for (Object child : childModels) {
                 ((ModelRenderer) child).render(scale);

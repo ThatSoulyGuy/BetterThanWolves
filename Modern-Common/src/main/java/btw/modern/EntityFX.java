@@ -88,4 +88,6 @@ public class EntityFX extends Entity {
         ++this.particleTextureIndexX;
     }
 
+    @Override
+    public void entityInit() {}
 }
