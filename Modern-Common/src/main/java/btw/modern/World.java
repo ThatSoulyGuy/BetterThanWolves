@@ -425,8 +425,6 @@ public abstract class World implements IBlockAccess {
      * the entity and delegates to PathFinder for real A* pathfinding.
      * Copied verbatim from vanilla so FC's PathNavigate calls this directly.
      */
-    private static final java.util.Set<String> LOGGED_PATHFIND = new java.util.HashSet<>();
-
     public PathEntity getEntityPathToXYZ(Entity entity, int x, int y, int z, float range,
                                          boolean canBreakDoors, boolean canEnterDoors,
                                          boolean avoidsWater, boolean canSwim) {
@@ -441,25 +439,6 @@ public abstract class World implements IBlockAccess {
         PathEntity result = (new PathFinder(cache, canBreakDoors, canEnterDoors,
                 avoidsWater, canSwim)).createEntityPathTo(entity, x, y, z, range);
         this.theProfiler.endSection();
-
-        // Diagnostic: log pathfinding results (once per entity class)
-        String key = entity.getClass().getSimpleName() + "|" + (result != null);
-        if (LOGGED_PATHFIND.add(key) || pathfindCallCount.get() % 20 == 0) {
-            int blockAtFeet = getBlockId(ex, ey, ez);
-            int blockBelow = getBlockId(ex, ey - 1, ez);
-            Block bFeet = (blockAtFeet >= 0 && blockAtFeet < Block.blocksList.length) ? Block.blocksList[blockAtFeet] : null;
-            Block bBelow = (blockBelow >= 0 && blockBelow < Block.blocksList.length) ? Block.blocksList[blockBelow] : null;
-            org.apache.logging.log4j.LogManager.getLogger("BTW-Pathfind").info(
-                "[PATH] {} from ({},{},{}) to ({},{},{}) range={} result={} pathLen={} | blockAtFeet={}({}) blockBelow={}({}) bb.minY={} width={} height={}",
-                entity.getClass().getSimpleName(),
-                ex, ey, ez, x, y, z, range,
-                result != null ? "OK" : "NULL",
-                result != null ? result.getCurrentPathLength() : 0,
-                blockAtFeet, bFeet != null ? bFeet.getClass().getSimpleName() : "null",
-                blockBelow, bBelow != null ? bBelow.getClass().getSimpleName() : "null",
-                String.format("%.2f", entity.boundingBox != null ? entity.boundingBox.minY : -999),
-                String.format("%.2f", entity.width), String.format("%.2f", entity.height));
-        }
         return result;
     }
 
@@ -500,19 +479,7 @@ public abstract class World implements IBlockAccess {
         return nearest;
     }
 
-    private static boolean loggedBaseCollision = false;
     public List getCollidingBoundingBoxes(Entity entity, AxisAlignedBB aabb) {
-        if (!loggedBaseCollision && entity != null) {
-            loggedBaseCollision = true;
-            org.apache.logging.log4j.LogManager.getLogger("BTW-World").error(
-                "[BASE-COLLISION] Base World.getCollidingBoundingBoxes called! entity={} worldClass={} aabb=({},{},{})",
-                entity.getClass().getSimpleName(), this.getClass().getName(),
-                aabb != null ? aabb.minX : "null", aabb != null ? aabb.minY : "null", aabb != null ? aabb.minZ : "null");
-            StackTraceElement[] st = new Throwable().getStackTrace();
-            for (int i = 0; i < Math.min(15, st.length); i++) {
-                org.apache.logging.log4j.LogManager.getLogger("BTW-World").error("    at {}", st[i]);
-            }
-        }
         return new ArrayList();
     }
 

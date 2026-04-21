@@ -312,16 +312,19 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
             // Strip leading slash
             String clean = path.startsWith("/") ? path.substring(1) : path;
 
+            // MC 1.20.1 requires all-lowercase ResourceLocation paths
+            String lower = clean.toLowerCase(java.util.Locale.ROOT);
+
             // FC BTW textures: btwmodtex/foo.png → betterthanwolves:textures/entity/foo.png
-            if (clean.startsWith("btwmodtex/")) {
-                String name = clean.substring("btwmodtex/".length());
+            if (lower.startsWith("btwmodtex/")) {
+                String name = lower.substring("btwmodtex/".length());
                 return new ResourceLocation(BTWForgeMod.MOD_ID, "textures/entity/" + name);
             }
 
             // All FC texture paths (mob/, armor/, item/, etc.) use bundled
             // 1.5.2 originals. MC 1.20.1 textures have different dimensions
             // (64x64 vs 64x32) and reorganized paths that break FC's UV maps.
-            return new ResourceLocation(BTWForgeMod.MOD_ID, "textures/" + clean);
+            return new ResourceLocation(BTWForgeMod.MOD_ID, "textures/" + lower);
         });
     }
 }

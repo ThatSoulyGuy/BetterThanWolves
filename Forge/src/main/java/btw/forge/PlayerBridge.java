@@ -57,6 +57,7 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
         this.invBridge = new InventoryBridge(player.getInventory());
         this.capabilities = this.capBridge;
         this.inventory = this.invBridge;
+        this.inventory.player = this; // InventoryBridge passes null to super(); fix the backref
         this.foodStats = new btw.modern.FoodStats();
         // NetServerHandler bridge — translates FC packets to MC 1.20.1 packets
         this.playerNetServerHandler = new ForgeNetServerHandler(player);
@@ -626,6 +627,90 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
         }
         this.openContainer = fcContainer;
         ContainerBridge.openFCContainer(this, fcContainer, "Crafting");
+    }
+
+    @Override
+    public void displayGUIMerchant(btw.modern.IMerchant merchant, String title) {
+        if (merchant == null) return;
+        btw.modern.Container fcContainer = new btw.modern.ContainerMerchant(
+                this.inventory, merchant, this.worldObj);
+        this.openContainer = fcContainer;
+        ContainerBridge.openFCContainer(this, fcContainer, title != null ? title : "Merchant");
+        // Send recipe list to client so the trade buttons render
+        if (realPlayer instanceof net.minecraft.server.level.ServerPlayer sp) {
+            btw.modern.MerchantRecipeList recipes = merchant.getRecipes(this);
+            if (recipes != null) {
+                // Get the MC container ID from the opened menu
+                int containerId = sp.containerMenu.containerId;
+                BTWNetwork.sendMerchantRecipes(sp, containerId, recipes);
+            }
+        }
+    }
+
+    @Override
+    public void displayGUIFurnace(btw.modern.TileEntity tileEntity) {
+        openTileEntityContainer("btw.modern.ContainerFurnace", tileEntity, "Furnace");
+    }
+
+    @Override
+    public void displayGUIDispenser(btw.modern.TileEntity tileEntity) {
+        openTileEntityContainer("btw.modern.ContainerDispenser", tileEntity, "Dispenser");
+    }
+
+    @Override
+    public void displayGUIHopper(btw.modern.TileEntity tileEntity) {
+        openTileEntityContainer("btw.modern.ContainerHopper", tileEntity, "Hopper");
+    }
+
+    @Override
+    public void displayGUIBrewingStand(btw.modern.TileEntity tileEntity) {
+        openTileEntityContainer("btw.modern.ContainerBrewingStand", tileEntity, "Brewing Stand");
+    }
+
+    @Override
+    public void displayGUIBeacon(btw.modern.TileEntity tileEntity) {
+        openTileEntityContainer("btw.modern.ContainerBeacon", tileEntity, "Beacon");
+    }
+
+    /**
+     * Creates an FC container via reflection to handle constructor signature
+     * mismatches (stubs use IInventory, real classes use specific TileEntity types).
+     */
+    private void openTileEntityContainer(String containerClassName, btw.modern.TileEntity te, String title) {
+        if (te == null) return;
+        try {
+            Class<?> containerClass = Class.forName(containerClassName);
+            // Try (InventoryPlayer, <tileEntityType>) — most real constructors use specific TE types
+            for (var ctor : containerClass.getConstructors()) {
+                Class<?>[] params = ctor.getParameterTypes();
+                if (params.length == 2 && params[0].isAssignableFrom(this.inventory.getClass())
+                        && params[1].isInstance(te)) {
+                    btw.modern.Container fc = (btw.modern.Container) ctor.newInstance(this.inventory, te);
+                    this.openContainer = fc;
+                    ContainerBridge.openFCContainer(this, fc, title);
+                    return;
+                }
+            }
+            LOGGER.warn("No matching constructor for {} with {}", containerClassName, te.getClass().getName());
+        } catch (Exception e) {
+            LOGGER.warn("Failed to open container {}: {}", containerClassName, e.getMessage());
+        }
+    }
+
+    @Override
+    public void displayGUIAnvil(int x, int y, int z) {
+        btw.modern.Container fcContainer = new btw.modern.ContainerRepair(
+                this.inventory, this.worldObj, x, y, z, this);
+        this.openContainer = fcContainer;
+        ContainerBridge.openFCContainer(this, fcContainer, "Repairing");
+    }
+
+    @Override
+    public void displayGUIEnchantment(int x, int y, int z, String name) {
+        btw.modern.Container fcContainer = new btw.modern.ContainerEnchantment(
+                this.inventory, this.worldObj, x, y, z);
+        this.openContainer = fcContainer;
+        ContainerBridge.openFCContainer(this, fcContainer, name != null ? name : "Enchant");
     }
 
     private static final org.apache.logging.log4j.Logger LOGGER =

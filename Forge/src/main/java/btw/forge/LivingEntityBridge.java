@@ -27,12 +27,27 @@ public class LivingEntityBridge extends btw.modern.EntityLiving {
     private static final WeakHashMap<LivingEntity, LivingEntityBridge> cache = new WeakHashMap<>();
 
     /**
+     * Holds the entity being wrapped while super(null) runs, so virtual calls
+     * dispatched from EntityLiving's field initializers (notably
+     * `health = this.getMaxHealth()`) can reach the real entity before our
+     * subclass body has a chance to assign {@link #realEntity}.
+     */
+    private static final ThreadLocal<LivingEntity> CONSTRUCTING = new ThreadLocal<>();
+
+    /**
      * Returns (or creates) the LivingEntityBridge for the given LivingEntity.
      * For Player entities, prefer {@link #wrapLiving(LivingEntity)} which
      * returns the correct PlayerBridge subtype.
      */
     public static LivingEntityBridge getOrCreate(LivingEntity entity) {
-        return cache.computeIfAbsent(entity, LivingEntityBridge::new);
+        return cache.computeIfAbsent(entity, e -> {
+            CONSTRUCTING.set(e);
+            try {
+                return new LivingEntityBridge(e);
+            } finally {
+                CONSTRUCTING.remove();
+            }
+        });
     }
 
     /**
@@ -128,7 +143,8 @@ public class LivingEntityBridge extends btw.modern.EntityLiving {
 
     @Override
     public int getMaxHealth() {
-        return (int) realEntity.getMaxHealth();
+        LivingEntity target = realEntity != null ? realEntity : CONSTRUCTING.get();
+        return (int) target.getMaxHealth();
     }
 
     @Override

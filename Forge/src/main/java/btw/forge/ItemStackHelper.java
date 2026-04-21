@@ -23,6 +23,15 @@ public class ItemStackHelper {
      * @return the equivalent MC item stack, or {@link net.minecraft.world.item.ItemStack#EMPTY}
      *         if the input is null or the legacy ID cannot be resolved
      */
+    /**
+     * Converts an FC legacy item ID + damage + count to an MC ItemStack.
+     * Used for rendering FC items in GUIs (merchant trades, etc.).
+     */
+    public static net.minecraft.world.item.ItemStack fcIdToMcStack(int fcItemId, int count, int damage) {
+        if (fcItemId <= 0) return net.minecraft.world.item.ItemStack.EMPTY;
+        return toMcStack(new btw.modern.ItemStack(fcItemId, count, damage));
+    }
+
     public static net.minecraft.world.item.ItemStack toMcStack(btw.modern.ItemStack fcStack) {
         if (fcStack == null) return net.minecraft.world.item.ItemStack.EMPTY;
 

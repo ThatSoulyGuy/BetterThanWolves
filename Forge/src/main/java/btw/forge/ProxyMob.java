@@ -322,15 +322,6 @@ public class ProxyMob extends Mob
             double snapMotX = fcEntity.motionX, snapMotY = fcEntity.motionY, snapMotZ = fcEntity.motionZ;
 
             double preMotY = fcEntity.motionY;
-            double preMotX = fcEntity.motionX;
-            double prePosY = fcEntity.posY;
-            // One-time: verify worldObj class
-            if (tickCount == 1 && !level().isClientSide) {
-                LOGGER.warn("[WORLD-CHECK] {} worldObj={} noClip={} yOffset={} ySize={} stepHeight={}",
-                    fcEntity.getClass().getSimpleName(),
-                    fcEntity.worldObj != null ? fcEntity.worldObj.getClass().getName() : "NULL",
-                    fcEntity.noClip, fcEntity.yOffset, fcEntity.ySize, fcEntity.stepHeight);
-            }
             try {
                 fcEntity.onUpdate();
             } catch (Throwable e) {
@@ -338,24 +329,7 @@ public class ProxyMob extends Mob
                     LOGGER.warn("FC entity {} onUpdate() threw {}: {}",
                         fcEntity.getClass().getSimpleName(),
                         e.getClass().getName(), e.getMessage());
-                    StackTraceElement[] st = e.getStackTrace();
-                    for (int i = 0; i < Math.min(8, st.length); i++) {
-                        LOGGER.warn("    at {}", st[i]);
-                    }
                 }
-            }
-            // Check if NaN guard reverts and why
-            // Diagnostic: check raw motionX/Z BEFORE NaN guard
-            if (!level().isClientSide && fcEntity.moveForward > 0.01F && (tickCount % 20) == 0) {
-                LOGGER.warn("[MOVE-CHK] {} mF={} motX={} motZ={} yaw={} bbMinX={} posX={} posZ={} onGround={}",
-                        fcEntity.getClass().getSimpleName(),
-                        String.format("%.3f", fcEntity.moveForward),
-                        Double.isFinite(fcEntity.motionX) ? String.format("%.6f", fcEntity.motionX) : "NaN!",
-                        Double.isFinite(fcEntity.motionZ) ? String.format("%.6f", fcEntity.motionZ) : "NaN!",
-                        Float.isFinite(fcEntity.rotationYaw) ? String.format("%.2f", fcEntity.rotationYaw) : "NaN!",
-                        Double.isFinite(fcEntity.boundingBox.minX) ? String.format("%.2f", fcEntity.boundingBox.minX) : "NaN!",
-                        String.format("%.2f", fcEntity.posX), String.format("%.2f", fcEntity.posZ),
-                        fcEntity.onGround);
             }
 
             // Compute onGround directly: check if the block below the entity's
@@ -530,9 +504,10 @@ public class ProxyMob extends Mob
         // separately via die() — see ProxyMob.die() override.
         if (result && fcEntity != null) {
             fcEntity.health = (int) Math.max(0, getHealth());
-            if (source.getEntity() instanceof ProxyMob pm && pm.fcEntity != null) {
-                fcEntity.entityLivingToAttack = pm.fcEntity;
-                fcEntity.lastAttackingEntity = pm.fcEntity;
+            btw.modern.EntityLiving fcAttacker = wrapAttacker(source);
+            if (fcAttacker != null) {
+                fcEntity.lastAttackingEntity = fcAttacker;
+                fcEntity.setRevengeTarget(fcAttacker);
             }
         }
         return result;
@@ -621,6 +596,26 @@ public class ProxyMob extends Mob
     // ------------------------------------------------------------------
     // DamageSource translation
     // ------------------------------------------------------------------
+
+    /**
+     * Translates the MC attacker behind a DamageSource into an FC
+     * EntityLiving so {@link btw.modern.EntityLiving#setRevengeTarget} can
+     * record it. Without this, FC's panic / hurt-by-target AI never fires
+     * because {@code entityLivingToAttack} stays null.
+     *
+     * Returns null if the source has no entity attacker (env damage, etc.).
+     */
+    static btw.modern.EntityLiving wrapAttacker(DamageSource source) {
+        net.minecraft.world.entity.Entity attacker = source.getEntity();
+        if (attacker == null) return null;
+        if (attacker instanceof ProxyMob pm && pm.fcEntity != null) return pm.fcEntity;
+        if (attacker instanceof ProxyAnimal pa && pa.getFcEntity() != null) return pa.getFcEntity();
+        if (attacker instanceof ProxyPathfinderMob pp && pp.getFcEntity() != null) return pp.getFcEntity();
+        if (attacker instanceof net.minecraft.world.entity.LivingEntity le) {
+            return LivingEntityBridge.wrapLiving(le);
+        }
+        return null;
+    }
 
     static btw.modern.DamageSource translateDamageSource(DamageSource source) {
         String msgId = source.getMsgId();

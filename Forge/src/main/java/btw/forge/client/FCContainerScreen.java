@@ -27,7 +27,7 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
     private static final Map<String, GuiInfo> GUI_MAP = new HashMap<>();
     static {
         GUI_MAP.put("FCContainerSoulforge", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguianvil.png"), 176, 184));
-        GUI_MAP.put("FCContainerWorkbench", new GuiInfo(new ResourceLocation("textures/gui/container/crafting_table.png"), 176, 166));
+        GUI_MAP.put("FCContainerWorkbench", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/crafting.png"), 176, 166));
         GUI_MAP.put("FCContainerInfernalEnchanter", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguiinfernal.png"), 176, 210));
         GUI_MAP.put("FCContainerHopper", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fchopper.png"), 176, 166));
         GUI_MAP.put("FCContainerBlockDispenser", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguiblockdisp.png"), 176, 166));
@@ -36,9 +36,20 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
         GUI_MAP.put("FCContainerCrucible", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fccauldron.png"), 176, 193));
         GUI_MAP.put("FCContainerMillStone", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fccauldron.png"), 176, 193));
         GUI_MAP.put("FCContainerHamper", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguiinv4.png"), 176, 166));
-        GUI_MAP.put("FCContainerFurnaceBrick", new GuiInfo(new ResourceLocation("textures/gui/container/furnace.png"), 176, 166));
+        GUI_MAP.put("FCContainerFurnaceBrick", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/furnace.png"), 176, 166));
         GUI_MAP.put("FCContainerVanillaAnvil", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguianvilvanilla.png"), 176, 166));
         GUI_MAP.put("SimpleChestContainer", new GuiInfo(new ResourceLocation("textures/gui/container/generic_54.png"), 176, 222));
+        // Vanilla containers opened via displayGUI* — use bundled 1.5.2 textures
+        GUI_MAP.put("ContainerFurnace", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/furnace.png"), 176, 166));
+        GUI_MAP.put("ContainerMerchant", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/entity/fcguitrading.png"), 176, 239));
+        GUI_MAP.put("ContainerBeacon", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/beacon.png"), 230, 219));
+        GUI_MAP.put("ContainerRepair", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/repair.png"), 176, 166));
+        GUI_MAP.put("ContainerEnchantment", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/enchant.png"), 176, 166));
+        GUI_MAP.put("ContainerBrewingStand", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/alchemy.png"), 176, 166));
+        GUI_MAP.put("ContainerDispenser", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/trap.png"), 176, 166));
+        GUI_MAP.put("ContainerHopper", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/hopper.png"), 176, 133));
+        GUI_MAP.put("ContainerChest", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/container.png"), 176, 222));
+        GUI_MAP.put("ContainerWorkbench", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/crafting.png"), 176, 166));
     }
 
     private static final GuiInfo FALLBACK = new GuiInfo(
@@ -75,7 +86,10 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
         this.imageHeight = info.height;
         this.inventoryLabelY = this.imageHeight - 94;
         this.isEnchanter = "FCContainerInfernalEnchanter".equals(type);
+        this.isMerchant = "ContainerMerchant".equals(type);
     }
+
+    private final boolean isMerchant;
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -104,6 +118,72 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
 
         if (isEnchanter) {
             renderEnchanterButtons(graphics, x, y, mouseX, mouseY);
+        }
+        if (isMerchant) {
+            renderMerchantTrades(graphics, x, y, mouseX, mouseY);
+        }
+    }
+
+    /**
+     * Renders trade display for the merchant GUI. Up to 8 trades shown in
+     * 2 columns, each with input item(s) + arrow + output item, matching
+     * FC's GuiMerchant layout exactly.
+     */
+    private void renderMerchantTrades(GuiGraphics graphics, int guiX, int guiY,
+                                       int mouseX, int mouseY) {
+        var recipes = this.menu.getMerchantRecipes();
+        if (recipes.isEmpty()) return;
+
+        int numRecipes = Math.min(recipes.size(), 8);
+        int offsetY = 18;
+
+        for (int i = 0; i < numRecipes; i++) {
+            var r = recipes.get(i);
+            int offsetX = (i % 2 == 0) ? 8 : 8 + (18 * 5);
+
+            // Render input item 1
+            renderFcItem(graphics, r.buy1Id(), r.buy1Damage(), r.buy1Count(),
+                    guiX + offsetX, guiY + offsetY);
+
+            // Render input item 2 (if present)
+            if (r.buy2Id() > 0) {
+                renderFcItem(graphics, r.buy2Id(), r.buy2Damage(), r.buy2Count(),
+                        guiX + offsetX + 18, guiY + offsetY);
+            }
+
+            // Render arrow (active or expired) from the GUI texture
+            if (!r.expired()) {
+                graphics.blit(this.guiTexture, guiX + offsetX + 36, guiY + offsetY,
+                        176, 38, 16, 16);
+            } else {
+                graphics.blit(this.guiTexture, guiX + offsetX + 36, guiY + offsetY,
+                        191, 38, 16, 16);
+            }
+
+            // Render output item
+            renderFcItem(graphics, r.sellId(), r.sellDamage(), r.sellCount(),
+                    guiX + offsetX + 54, guiY + offsetY);
+
+            if (i % 2 == 1) {
+                offsetY += 18;
+            }
+        }
+    }
+
+    /**
+     * Renders an FC item by its legacy ID at the given screen position.
+     */
+    private void renderFcItem(GuiGraphics graphics, int fcItemId, int damage, int count,
+                               int screenX, int screenY) {
+        if (fcItemId <= 0) return;
+        // Look up the MC ItemStack via ProxyRegistry
+        net.minecraft.world.item.ItemStack mcStack =
+                btw.forge.ItemStackHelper.fcIdToMcStack(fcItemId, count, damage);
+        if (mcStack != null && !mcStack.isEmpty()) {
+            graphics.renderItem(mcStack, screenX, screenY);
+            if (count > 1) {
+                graphics.renderItemDecorations(this.font, mcStack, screenX, screenY);
+            }
         }
     }
 
@@ -229,6 +309,28 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
                         return true;
                     }
                 }
+            }
+        }
+        if (isMerchant && button == 0) {
+            int guiX = (this.width - this.imageWidth) / 2;
+            int guiY = (this.height - this.imageHeight) / 2;
+            var recipes = this.menu.getMerchantRecipes();
+            int numRecipes = Math.min(recipes.size(), 8);
+            int offsetY = 18;
+
+            for (int i = 0; i < numRecipes; i++) {
+                int offsetX = (i % 2 == 0) ? 8 : 8 + (18 * 5);
+                // Click area covers the full trade row (input1 + input2 + arrow + output)
+                if (mouseX >= guiX + offsetX && mouseX < guiX + offsetX + 72
+                        && mouseY >= guiY + offsetY && mouseY < guiY + offsetY + 18) {
+                    this.menu.setSelectedRecipeIndex(i);
+                    if (this.minecraft != null && this.minecraft.gameMode != null) {
+                        this.minecraft.gameMode.handleInventoryButtonClick(
+                                this.menu.containerId, i);
+                    }
+                    return true;
+                }
+                if (i % 2 == 1) offsetY += 18;
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);

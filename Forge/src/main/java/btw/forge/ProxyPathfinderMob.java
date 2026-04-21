@@ -276,6 +276,11 @@ public class ProxyPathfinderMob extends PathfinderMob
         boolean result = super.hurt(source, amount);
         if (result && fcEntity != null) {
             fcEntity.health = (int) Math.max(0, getHealth());
+            btw.modern.EntityLiving fcAttacker = ProxyMob.wrapAttacker(source);
+            if (fcAttacker != null) {
+                fcEntity.lastAttackingEntity = fcAttacker;
+                fcEntity.setRevengeTarget(fcAttacker);
+            }
         }
         return result;
     }

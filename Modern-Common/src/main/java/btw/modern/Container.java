@@ -264,6 +264,9 @@ public abstract class Container {
                                 if (slotStack.stackSize == 0) {
                                     slot.putStack(null);
                                 }
+                                // Must call onPickupFromSlot so merchant/crafting
+                                // slots can consume inputs on trade/craft completion.
+                                slot.onPickupFromSlot(player, slotStack);
                             }
                         }
                     }

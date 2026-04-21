@@ -54,6 +54,59 @@ public class FCContainerMenu extends AbstractContainerMenu {
 
     public String getContainerType() { return containerType; }
 
+    /** Client-side merchant recipe data, received via MerchantRecipesSync packet. */
+    private java.util.List<MerchantRecipeInfo> merchantRecipes = new java.util.ArrayList<>();
+    private int selectedRecipeIndex = 0;
+
+    public record MerchantRecipeInfo(int buy1Id, int buy1Damage, int buy1Count,
+                                      int buy2Id, int buy2Damage, int buy2Count,
+                                      int sellId, int sellDamage, int sellCount,
+                                      boolean expired) {}
+
+    public java.util.List<MerchantRecipeInfo> getMerchantRecipes() { return merchantRecipes; }
+    public int getSelectedRecipeIndex() { return selectedRecipeIndex; }
+    public void setSelectedRecipeIndex(int idx) { selectedRecipeIndex = idx; }
+
+    public void setMerchantRecipes(net.minecraft.nbt.CompoundTag tag) {
+        merchantRecipes.clear();
+        if (tag == null) return;
+        int count = tag.getInt("count");
+        for (int i = 0; i < count; i++) {
+            if (!tag.contains("recipe" + i)) continue;
+            net.minecraft.nbt.CompoundTag r = tag.getCompound("recipe" + i);
+            int buy1Id = getItemId(r, "buy");
+            int buy1Dmg = getItemDamage(r, "buy");
+            int buy1Count = getItemCount(r, "buy");
+            int buy2Id = getItemId(r, "buyB");
+            int buy2Dmg = getItemDamage(r, "buyB");
+            int buy2Count = getItemCount(r, "buyB");
+            int sellId = getItemId(r, "sell");
+            int sellDmg = getItemDamage(r, "sell");
+            int sellCount = getItemCount(r, "sell");
+            boolean expired = r.contains("uses") && r.contains("maxUses")
+                    && r.getInt("uses") >= r.getInt("maxUses");
+            merchantRecipes.add(new MerchantRecipeInfo(
+                    buy1Id, buy1Dmg, buy1Count,
+                    buy2Id, buy2Dmg, buy2Count,
+                    sellId, sellDmg, sellCount, expired));
+        }
+    }
+
+    private static int getItemId(net.minecraft.nbt.CompoundTag recipe, String key) {
+        if (!recipe.contains(key)) return 0;
+        return recipe.getCompound(key).getShort("id");
+    }
+
+    private static int getItemCount(net.minecraft.nbt.CompoundTag recipe, String key) {
+        if (!recipe.contains(key)) return 0;
+        return recipe.getCompound(key).getByte("Count");
+    }
+
+    private static int getItemDamage(net.minecraft.nbt.CompoundTag recipe, String key) {
+        if (!recipe.contains(key)) return 0;
+        return recipe.getCompound(key).getShort("Damage");
+    }
+
     /** Returns the number of container rows for chest-like GUIs. */
     public int getFcNumRows() {
         // Server side: use FC container's slot list
@@ -245,8 +298,31 @@ public class FCContainerMenu extends AbstractContainerMenu {
      */
     @Override
     public void clicked(int slotId, int button, net.minecraft.world.inventory.ClickType type, Player player) {
-        // Let MC 1.20.1's native AbstractContainerMenu handle ALL slot interactions.
-        // The InventoryAdapter proxy ensures MC reads/writes directly to FC's inventories.
+        if (fcContainer != null && fcPlayer != null) {
+            try {
+                fcPlayer.syncFromReal();
+                int fcMode = switch (type) {
+                    case PICKUP -> 0;
+                    case QUICK_MOVE -> 1;
+                    case SWAP -> 2;
+                    case CLONE -> 3;
+                    case THROW -> 4;
+                    case QUICK_CRAFT -> 5;
+                    case PICKUP_ALL -> 6;
+                };
+                fcContainer.slotClick(slotId, button, fcMode, fcPlayer);
+                // Sync FC inventory back to MC
+                if (fcPlayer.inventory instanceof InventoryBridge ib) {
+                    ib.writeBackAll();
+                }
+                // Sync cursor
+                btw.modern.ItemStack fcCursor = fcPlayer.inventory.getItemStack();
+                setCarried(fcCursor != null ? ItemStackHelper.toMcStack(fcCursor) : net.minecraft.world.item.ItemStack.EMPTY);
+                return;
+            } catch (Throwable e) {
+                LOGGER.debug("FC slotClick failed, falling back to MC: {}", e.getMessage());
+            }
+        }
         super.clicked(slotId, button, type, player);
     }
 
@@ -260,12 +336,17 @@ public class FCContainerMenu extends AbstractContainerMenu {
         if (fcContainer != null && fcPlayer != null) {
             try {
                 fcPlayer.syncFromReal();
+                // Merchant containers use setCurrentRecipeIndex instead of enchantItem
+                if (fcContainer instanceof btw.modern.ContainerMerchant cm) {
+                    cm.setCurrentRecipeIndex(buttonId);
+                    return true;
+                }
                 boolean result = fcContainer.enchantItem(fcPlayer, buttonId);
                 // Flush inventory changes (XP cost, scroll consumed, etc.)
                 ((InventoryBridge) fcPlayer.inventory).writeBackAll();
                 return result;
             } catch (Exception e) {
-                LOGGER.debug("FC enchantItem failed for button {}: {}", buttonId, e.getMessage());
+                LOGGER.debug("FC clickMenuButton failed for button {}: {}", buttonId, e.getMessage());
             }
         }
         return false;
@@ -279,23 +360,51 @@ public class FCContainerMenu extends AbstractContainerMenu {
      * calls {@code sendProgressBarUpdate()} which writes into {@link #fcData}.
      * MC then detects the DataSlot changes and sends them to the client.</p>
      */
+    private int lastMerchantRecipeHash = 0;
+    private btw.modern.IMerchant cachedMerchant = null;
+    private boolean merchantResolved = false;
+
     @Override
     public void broadcastChanges() {
         if (fcContainer != null && fcPlayer != null) {
             try {
-                // Run FC's sync loop — triggers sendProgressBarUpdate on crafters
                 fcContainer.detectAndSendChanges();
-
-                // Push FC-computed data that FC normally computes client-side
-                // (e.g., enchantment levels). We send these explicitly because
-                // the client doesn't have the FC container.
                 pushFcComputedData();
+                syncMerchantRecipes();
             } catch (Exception e) {
                 LOGGER.debug("FC detectAndSendChanges failed: {}", e.getMessage());
             }
         }
-        // MC's broadcastChanges syncs slots + DataSlots to client
         super.broadcastChanges();
+    }
+
+    private void syncMerchantRecipes() {
+        if (!(fcContainer instanceof btw.modern.ContainerMerchant cm)) return;
+        if (!merchantResolved) {
+            merchantResolved = true;
+            try {
+                var f = btw.modern.ContainerMerchant.class.getDeclaredField("theMerchant");
+                f.setAccessible(true);
+                cachedMerchant = (btw.modern.IMerchant) f.get(cm);
+            } catch (Exception ignored) {}
+        }
+        if (cachedMerchant == null) return;
+        btw.modern.MerchantRecipeList recipes = cachedMerchant.getRecipes(fcPlayer);
+        if (recipes == null) return;
+        int hash = recipes.size();
+        for (int i = 0; i < recipes.size(); i++) {
+            btw.modern.MerchantRecipe r = (btw.modern.MerchantRecipe) recipes.get(i);
+            hash = hash * 31 + r.getItemToBuy().itemID;
+            hash = hash * 31 + r.getItemToSell().itemID;
+            hash = hash * 31 + r.getToolUses();
+        }
+        if (hash != lastMerchantRecipeHash) {
+            lastMerchantRecipeHash = hash;
+            var sp = fcPlayer.getServerPlayer();
+            if (sp != null) {
+                BTWNetwork.sendMerchantRecipes(sp, this.containerId, recipes);
+            }
+        }
     }
 
     /**

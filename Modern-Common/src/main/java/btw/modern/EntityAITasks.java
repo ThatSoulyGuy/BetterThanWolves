@@ -117,25 +117,15 @@ public class EntityAITasks {
 
         if (tickCount % TICK_RATE != 0) return;
 
-        // Diagnostic: log task evaluation every ~3 seconds (60 ticks / TICK_RATE)
-        boolean doLog = (tickCount % 60) == 0;
-
         for (EntityAITaskEntry entry : taskEntries) {
             if (executingTasks.contains(entry)) continue;
             try {
-                boolean should = entry.action.shouldExecute();
-                if (doLog) {
-                    AI_LOGGER.info("[AI-EVAL] p{} {} shouldExecute={}",
-                        entry.priority, entry.action.getClass().getSimpleName(), should);
-                }
-                if (should) {
+                if (entry.action.shouldExecute()) {
                     if (canUse(entry)) {
                         interruptConflicts(entry);
                         try {
                             entry.action.startExecuting();
                             executingTasks.add(entry);
-                            AI_LOGGER.info("[AI-START] p{} {} started",
-                                entry.priority, entry.action.getClass().getSimpleName());
                         } catch (Throwable e) {
                             logTaskFailureOnce("startExecuting", entry.action, e);
                         }

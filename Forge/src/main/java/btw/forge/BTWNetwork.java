@@ -89,7 +89,35 @@ public class BTWNetwork {
         //         StartBlockHarvestPacket::encode, StartBlockHarvestPacket::decode,
         //         StartBlockHarvestPacket::handle);
 
+        // Merchant recipe list sync: server -> client
+        CHANNEL.registerMessage(nextMessageId++, MerchantRecipesSync.class,
+                MerchantRecipesSync::encode, MerchantRecipesSync::decode, MerchantRecipesSync::handle);
+
         LOGGER.info("BTW network channel registered.");
+    }
+
+    /**
+     * Sends the merchant recipe list to the player after opening a merchant GUI.
+     */
+    public static void sendMerchantRecipes(ServerPlayer player, int containerId,
+                                            btw.modern.MerchantRecipeList recipes) {
+        if (recipes == null || recipes.isEmpty()) return;
+        try {
+            // Serialize each recipe via FC's writeToTags, then convert to MC NBT
+            net.minecraft.nbt.CompoundTag mcTag = new net.minecraft.nbt.CompoundTag();
+            mcTag.putInt("count", recipes.size());
+            for (int i = 0; i < recipes.size(); i++) {
+                btw.modern.MerchantRecipe r = (btw.modern.MerchantRecipe) recipes.get(i);
+                // Write FC recipe to a ForgeNBTCompound wrapper
+                ForgeNBTCompound wrapper = new ForgeNBTCompound(new net.minecraft.nbt.CompoundTag());
+                r.writeToTags(wrapper);
+                mcTag.put("recipe" + i, wrapper.getTag());
+            }
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new MerchantRecipesSync(containerId, mcTag));
+        } catch (Exception e) {
+            LOGGER.warn("Failed to send merchant recipes: {}", e.getMessage(), e);
+        }
     }
 
     /**
@@ -235,5 +263,41 @@ public class BTWNetwork {
         buf.readBytes(payload);
         CHANNEL.send(PacketDistributor.TRACKING_ENTITY.with(() -> mcEntity),
                 new FCEntityStateSync(mcEntity.getId(), payload));
+    }
+
+    // -----------------------------------------------------------------
+    // Merchant recipe list sync
+    // -----------------------------------------------------------------
+
+    public static class MerchantRecipesSync {
+        int containerId;
+        net.minecraft.nbt.CompoundTag recipesTag;
+
+        public MerchantRecipesSync(int containerId, net.minecraft.nbt.CompoundTag tag) {
+            this.containerId = containerId;
+            this.recipesTag = tag;
+        }
+
+        public static void encode(MerchantRecipesSync msg, FriendlyByteBuf buf) {
+            buf.writeVarInt(msg.containerId);
+            buf.writeNbt(msg.recipesTag);
+        }
+
+        public static MerchantRecipesSync decode(FriendlyByteBuf buf) {
+            return new MerchantRecipesSync(buf.readVarInt(), buf.readNbt());
+        }
+
+        public static void handle(MerchantRecipesSync msg,
+                Supplier<net.minecraftforge.network.NetworkEvent.Context> ctxSupplier) {
+            var ctx = ctxSupplier.get();
+            ctx.enqueueWork(() -> {
+                var mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc.player != null && mc.player.containerMenu instanceof FCContainerMenu fcm
+                        && fcm.containerId == msg.containerId) {
+                    fcm.setMerchantRecipes(msg.recipesTag);
+                }
+            });
+            ctx.setPacketHandled(true);
+        }
     }
 }

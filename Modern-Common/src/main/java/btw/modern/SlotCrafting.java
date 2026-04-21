@@ -14,7 +14,11 @@ public class SlotCrafting extends Slot {
     private EntityPlayer thePlayer;
     private int amountCrafted;
 
-    public SlotCrafting(EntityPlayer player, InventoryCrafting craftMatrix, IInventory craftResult, int index, int x, int y) {
+    // Second parameter MUST be IInventory (not InventoryCrafting) to match FC's
+    // shadow-remapped constructor descriptor — otherwise Modern-Common callers
+    // emit a `(EntityPlayer, InventoryCrafting, IInventory, ...)` invokespecial
+    // that doesn't exist on the FC class that wins the shadow-merge at runtime.
+    public SlotCrafting(EntityPlayer player, IInventory craftMatrix, IInventory craftResult, int index, int x, int y) {
         super(craftResult, index, x, y);
         this.thePlayer = player;
         this.craftMatrix = craftMatrix;

@@ -326,6 +326,22 @@ task remapFcCode(type: ShadowJar) {
         include 'net/minecraft/src/ModelBox.class'
         include 'net/minecraft/src/TexturedQuad.class'
         include 'net/minecraft/src/PositionTextureVertex.class'
+        include 'net/minecraft/src/ContainerMerchant.class'
+        include 'net/minecraft/src/ContainerFurnace.class'
+        include 'net/minecraft/src/ContainerDispenser.class'
+        include 'net/minecraft/src/ContainerHopper.class'
+        include 'net/minecraft/src/ContainerBrewingStand.class'
+        include 'net/minecraft/src/ContainerBeacon.class'
+        include 'net/minecraft/src/ContainerRepair.class'
+        include 'net/minecraft/src/ContainerEnchantment.class'
+        include 'net/minecraft/src/ContainerChest.class'
+        include 'net/minecraft/src/InventoryMerchant.class'
+        include 'net/minecraft/src/SlotMerchantResult.class'
+        include 'net/minecraft/src/SlotFurnace.class'
+        include 'net/minecraft/src/SlotBrewingStandPotion.class'
+        include 'net/minecraft/src/SlotBrewingStandIngredient.class'
+        include 'net/minecraft/src/SlotArmor.class'
+        include 'net/minecraft/src/SlotCrafting.class'
     }
     from(rootProject.file('build/classes/java/server')) {
         include 'net/minecraft/src/EntityAI*.class'
@@ -505,6 +521,25 @@ task remapFcCode(type: ShadowJar) {
         include 'net/minecraft/src/ModelBox.class'
         include 'net/minecraft/src/TexturedQuad.class'
         include 'net/minecraft/src/PositionTextureVertex.class'
+        // Container classes for GUI system — FC's displayGUI* methods
+        // create these containers which get wrapped by FCContainerMenu.
+        include 'net/minecraft/src/ContainerMerchant.class'
+        include 'net/minecraft/src/ContainerFurnace.class'
+        include 'net/minecraft/src/ContainerDispenser.class'
+        include 'net/minecraft/src/ContainerHopper.class'
+        include 'net/minecraft/src/ContainerBrewingStand.class'
+        include 'net/minecraft/src/ContainerBeacon.class'
+        include 'net/minecraft/src/ContainerRepair.class'
+        include 'net/minecraft/src/ContainerEnchantment.class'
+        include 'net/minecraft/src/ContainerChest.class'
+        // Supporting classes for containers
+        include 'net/minecraft/src/InventoryMerchant.class'
+        include 'net/minecraft/src/SlotMerchantResult.class'
+        include 'net/minecraft/src/SlotFurnace.class'
+        include 'net/minecraft/src/SlotBrewingStandPotion.class'
+        include 'net/minecraft/src/SlotBrewingStandIngredient.class'
+        include 'net/minecraft/src/SlotArmor.class'
+        include 'net/minecraft/src/SlotCrafting.class'
     }
 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE

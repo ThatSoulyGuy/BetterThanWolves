@@ -396,9 +396,15 @@ public class ProxyAnimal extends Animal
     public boolean hurt(DamageSource source, float amount) {
         // Run MC's full hurt pipeline (sound, knockback, animation, etc.).
         boolean result = super.hurt(source, amount);
-        // Mirror to FC so FC game state stays in sync.
+        // Mirror to FC so FC game state stays in sync, and record the
+        // attacker so EntityAIPanic / EntityAIHurtByTarget actually fires.
         if (result && fcEntity != null) {
             fcEntity.health = (int) Math.max(0, getHealth());
+            btw.modern.EntityLiving fcAttacker = ProxyMob.wrapAttacker(source);
+            if (fcAttacker != null) {
+                fcEntity.lastAttackingEntity = fcAttacker;
+                fcEntity.setRevengeTarget(fcAttacker);
+            }
         }
         return result;
     }
