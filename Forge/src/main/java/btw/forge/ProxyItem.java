@@ -27,7 +27,7 @@ import net.minecraft.world.InteractionResult;
  * (FCItemAxe, FCItemFood, FCItemBow, etc.) have their full behavior expressed
  * through Forge's item system.
  */
-public class ProxyItem extends Item {
+public class ProxyItem extends Item implements LegacyProxyItem {
     private static final org.apache.logging.log4j.Logger LOGGER = org.apache.logging.log4j.LogManager.getLogger("BTW-ProxyItem");
     private final int legacyId;
     private final String displayName;
@@ -36,6 +36,11 @@ public class ProxyItem extends Item {
         super(props);
         this.legacyId = legacyId;
         this.displayName = displayName;
+    }
+
+    @Override
+    public int getLegacyId() {
+        return legacyId;
     }
 
     private btw.modern.Item fc() {
@@ -140,22 +145,10 @@ public class ProxyItem extends Item {
             pb.syncFromReal();
             btw.modern.ItemStack fcStack = pb.getCurrentEquippedItem();
             if (fcStack != null) {
+                // FC's onEaten applies hunger/saturation for ItemFood (and any
+                // FC subclass override of onEaten). Nutrition lives in the FC
+                // layer now — no bridge-side fixup required.
                 btw.modern.ItemStack result = fc().onEaten(fcStack, WorldBridge.getOrCreate(sl), pb);
-
-                // Bridge gap: btw.modern.ItemFood.onEaten() is a stub that doesn't
-                // call foodStats.addStats(). The original MC 1.5.2 ItemFood.onEaten()
-                // did this automatically. Apply nutrition here for any ItemFood.
-                btw.modern.Item fcItem = fc();
-                if (fcItem instanceof btw.modern.ItemFood food) {
-                    int hungerRestored = fcItem.GetHungerRestored();
-                    if (hungerRestored > 0) {
-                        // FC subclass (FCItemFoodHighRes etc.) provides its own value
-                        pb.foodStats.addStats(hungerRestored, food.getSaturationModifier());
-                    } else {
-                        // Base ItemFood: original MC 1.5.2 returned getHealAmount() * 3
-                        pb.foodStats.addStats(food.getHealAmount() * 3, food.getSaturationModifier());
-                    }
-                }
 
                 pb.syncToReal();
 

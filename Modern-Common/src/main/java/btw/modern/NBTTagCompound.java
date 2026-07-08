@@ -8,6 +8,11 @@ public class NBTTagCompound extends NBTBase {
     private Map tagMap = new HashMap();
     public NBTTagCompound() {}
 
+    // 1.5.2 ctor — frozen Entity.writeToNBT news NBTTagCompound("Riding") when
+    // an entity is mounted (FC squid head-crab). The name is redundant with the
+    // setCompoundTag key, so this shim discards it like the no-arg ctor does.
+    public NBTTagCompound(String name) {}
+
     public void setInteger(String key, int value) {
         tagMap.put(key, value);
     }

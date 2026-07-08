@@ -366,8 +366,9 @@ public abstract class EntityLiving extends Entity {
     /** Returns true if the player has aqua affinity on worn armor. */
     public boolean getAquaAffinityEnchant() { return false; }
 
-    /** Returns true if the player has silk touch on the held item. */
-    public boolean getSilkTouchEnchant() { return false; }
+    // getSilkTouchEnchant intentionally NOT declared here: this class is
+    // shadowed at runtime by FC's real 1.5.2 EntityLiving, so any method
+    // invented on it throws NoSuchMethodError. It lives on EntityPlayer.
 
     // --- BTW-added methods ---
 
@@ -990,7 +991,10 @@ public abstract class EntityLiving extends Entity {
     public int GetHungerLevel() { return 0; }
     public int GetGrazeHungerGain() { return 0; }
     public void AttemptToPossessNearbyCreatureOnDeath() {}
-    public void AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) {}
+    // boolean, not void: real 1.5.2 declares boolean AttemptToPossessNearbyCreature
+    // on EntityCreature — a void stub here makes FCEntityWolf emit a (DZ)V
+    // descriptor that never resolves against the frozen runtime hierarchy.
+    public boolean AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) { return false; }
     public boolean CanEntityCenterOfMassBeSeen(Entity entity) { return false; }
 
     // --- Client-side methods ---

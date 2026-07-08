@@ -2,6 +2,11 @@ package btw.modern;
 
 public class MathHelper {
 
+    // 1.5.2 signature — EntityWither's head idle-barrage calls this 3x per shot
+    public static double getRandomDoubleInRange(java.util.Random rand, double min, double max) {
+        return min >= max ? min : rand.nextDouble() * (max - min) + min;
+    }
+
     public static final float sin(float value) {
         return (float) Math.sin(value);
     }

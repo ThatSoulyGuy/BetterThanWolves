@@ -466,8 +466,15 @@ public class ProxyMob extends Mob
         if (fcEntity != null && hand == net.minecraft.world.InteractionHand.MAIN_HAND
                 && player instanceof net.minecraft.server.level.ServerPlayer sp) {
             btw.forge.PlayerBridge pb = btw.forge.PlayerBridge.getOrCreate(sp);
-            if (fcEntity.interact(pb)) {
-                return net.minecraft.world.InteractionResult.SUCCESS;
+            try {
+                if (fcEntity.interact(pb)) {
+                    return net.minecraft.world.InteractionResult.SUCCESS;
+                }
+            } catch (Throwable t) {
+                // Errors from FC interact (e.g. villager trade generation hitting
+                // a bridge gap) must not crash the interaction packet handler.
+                LOGGER.warn("FC entity interact() threw: {}: {}",
+                        t.getClass().getSimpleName(), t.getMessage());
             }
         }
         return super.mobInteract(player, hand);
@@ -516,13 +523,20 @@ public class ProxyMob extends Mob
     @Override
     public void die(DamageSource source) {
         if (fcEntity != null) {
-            btw.modern.DamageSource fcSource = translateDamageSource(source);
-            fcEntity.onDeath(fcSource);
-            syncFromFc();
-            // FC's onDeath already ran dropFewItems + CheckForScrollDrop +
-            // dropEquipment. Suppress vanilla's loot table so drops don't
-            // double-fire, then let MC handle death animation / XP / removal.
-            suppressVanillaLoot = true;
+            try {
+                btw.modern.DamageSource fcSource = translateDamageSource(source);
+                fcEntity.onDeath(fcSource);
+                syncFromFc();
+                // FC's onDeath already ran dropFewItems + CheckForScrollDrop +
+                // dropEquipment. Suppress vanilla's loot table so drops don't
+                // double-fire, then let MC handle death animation / XP / removal.
+                suppressVanillaLoot = true;
+            } catch (Throwable t) {
+                // If FC's death path hit a bridge gap, fall back to vanilla loot
+                // (suppressVanillaLoot stays false) instead of crashing the server.
+                LOGGER.warn("FC entity onDeath() threw: {}: {}",
+                        t.getClass().getSimpleName(), t.getMessage());
+            }
         }
         super.die(source);
         suppressVanillaLoot = false;
@@ -586,7 +600,7 @@ public class ProxyMob extends Mob
             try {
                 fcEntity.writeToNBT(wrapper);
                 fcEntity.writeEntityToNBT(wrapper);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 LOGGER.warn("Failed to write FC entity NBT data: {}", e.getMessage());
             }
             tag.put("FCData", fcCompound);

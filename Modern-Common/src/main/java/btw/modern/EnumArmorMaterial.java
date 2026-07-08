@@ -17,7 +17,12 @@ public enum EnumArmorMaterial {
         this.enchantability = enchant;
     }
 
-    public int getDurability(int slot) { return 0; }
+    // Vanilla 1.5.2 ItemArmor base durability per slot (helmet, chest, legs, boots),
+    // multiplied by the material's maxDamageFactor. Mirrors vanilla ItemArmor.
+    private static final int[] BASE_DURABILITY = {11, 16, 15, 13};
+
+    public int getMaxDamageFactor() { return maxDamageFactor; }
+    public int getDurability(int slot) { return BASE_DURABILITY[slot] * maxDamageFactor; }
     public int getDamageReductionAmount(int slot) { return damageReductionAmountArray[slot]; }
     public int getEnchantability() { return enchantability; }
     public int getArmorCraftingMaterial() { return 0; }

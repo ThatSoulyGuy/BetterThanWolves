@@ -34,6 +34,12 @@ public class BTWForgeMod {
         // Register menu types for FC container GUIs (hopper, soulforge, etc.)
         BTWMenuTypes.MENU_TYPES.register(modEventBus);
 
+        // Register Global Loot Modifier codecs (used by #004 loot overrides
+        // and any future loot-rebalance integrations). Must bind during
+        // mod construction so Forge's loot-modifier loader sees the codec
+        // before datapack scan runs.
+        btw.forge.data.BTWLootModifiers.LOOT_MODIFIERS.register(modEventBus);
+
         // Register network channel early so both sides agree on the protocol
         // before any packets are sent. Must happen during mod construction
         // (before FMLCommonSetupEvent) so the channel exists when the server

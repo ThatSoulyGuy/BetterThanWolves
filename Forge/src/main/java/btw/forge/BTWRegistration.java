@@ -132,23 +132,34 @@ public class BTWRegistration {
             if (existingModern != null) continue;
 
             try {
-                Item.Properties props = new Item.Properties();
-                props.stacksTo(fcItem.maxStackSize);
-                if (fcItem.getMaxDamage() > 0) {
-                    props.durability(fcItem.getMaxDamage());
-                }
-
                 String fcName = fcItem.getUnlocalizedName();
                 String displayName = formatFcName(fcName, "Item " + id);
 
-                // ProxyItem delegates ALL item interactions to the FC item class
-                Item proxyItem = new ProxyItem(props, id, displayName);
+                Item proxyItem;
+                if (fcItem instanceof btw.modern.ItemArmor armor) {
+                    // FC armor → a real ArmorItem so 1.20.1 handles equipping,
+                    // the protection attribute, and worn-on-body rendering (BTW
+                    // uses the vanilla armor formula). Durability comes from the
+                    // FCArmorMaterial, so do NOT set props.durability() here too.
+                    Item.Properties props = new Item.Properties().stacksTo(1);
+                    net.minecraft.world.item.ArmorItem.Type type = armorTypeFor(armor.armorType);
+                    proxyItem = new ProxyArmorItem(new FCArmorMaterial(armor), type, props, id, displayName);
+                } else {
+                    Item.Properties props = new Item.Properties();
+                    props.stacksTo(fcItem.maxStackSize);
+                    if (fcItem.getMaxDamage() > 0) {
+                        props.durability(fcItem.getMaxDamage());
+                    }
+                    // ProxyItem delegates ALL item interactions to the FC item class
+                    proxyItem = new ProxyItem(props, id, displayName);
+                }
 
                 ResourceLocation key = new ResourceLocation(
                         BTWForgeMod.MOD_ID, "item_" + id);
 
+                final Item toRegister = proxyItem;
                 event.register(net.minecraftforge.registries.ForgeRegistries.Keys.ITEMS,
-                        helper -> helper.register(key, proxyItem));
+                        helper -> helper.register(key, toRegister));
 
                 ProxyRegistry.registerItem(id, proxyItem);
                 registered++;
@@ -158,6 +169,17 @@ public class BTWRegistration {
             }
         }
         LOGGER.info("Registered {} BTW proxy items with Forge registries.", registered);
+    }
+
+    /** Maps FC/1.5.2 ItemArmor armorType (0=helmet,1=chest,2=legs,3=boots) to 1.20.1. */
+    private static net.minecraft.world.item.ArmorItem.Type armorTypeFor(int fcArmorType) {
+        switch (fcArmorType) {
+            case 0:  return net.minecraft.world.item.ArmorItem.Type.HELMET;
+            case 1:  return net.minecraft.world.item.ArmorItem.Type.CHESTPLATE;
+            case 2:  return net.minecraft.world.item.ArmorItem.Type.LEGGINGS;
+            case 3:
+            default: return net.minecraft.world.item.ArmorItem.Type.BOOTS;
+        }
     }
 
     /**

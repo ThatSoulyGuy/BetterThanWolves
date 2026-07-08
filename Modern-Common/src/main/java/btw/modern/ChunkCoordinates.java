@@ -19,6 +19,13 @@ public class ChunkCoordinates implements Comparable {
         this.posZ = other.posZ;
     }
 
+    // 1.5.2 ChunkCoordinates.set — frozen EntityLiving.setHomeArea calls it
+    public void set(int x, int y, int z) {
+        this.posX = x;
+        this.posY = y;
+        this.posZ = z;
+    }
+
     public boolean equals(Object obj) {
         if (!(obj instanceof ChunkCoordinates)) return false;
         ChunkCoordinates other = (ChunkCoordinates) obj;

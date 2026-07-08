@@ -86,6 +86,18 @@ public abstract class EntityPlayer extends EntityLiving {
     public void displayGUIFurnace(TileEntity tileEntity) {}
     public void displayGUIDispenser(TileEntity tileEntity) {}
     public void displayGUIHopper(TileEntity tileEntity) {}
+    public void displayGUIHopperMinecart(EntityMinecartHopper minecart) {}
+
+    // 1.5.2 EntityPlayer.func_71066_bF — server impl returns false (client-side
+    // it reports sleeping-in-bed); frozen Entity.updateRiderPosition calls it
+    // whenever a player rides an FC entity. Beds are disabled in BTW anyway.
+    public boolean func_71066_bF() { return false; }
+
+    // 1.5.2 EntityPlayer.func_96122_a — PvP friendly-fire check via scoreboard
+    // teams; frozen EntityArrow calls it when a player-shot FC arrow hits a
+    // player. The shim has no scoreboard teams, and 1.5.2's no-team semantics
+    // are "attack allowed", so true is the faithful default.
+    public boolean func_96122_a(EntityPlayer other) { return true; }
     public void displayGUIBrewingStand(TileEntity tileEntity) {}
     public void displayGUIBeacon(TileEntity tileEntity) {}
     public void displayGUIAnvil(int x, int y, int z) {}
@@ -336,8 +348,20 @@ public abstract class EntityPlayer extends EntityLiving {
     public void OnNearbyFireStartAttempt(EntityPlayer player) {}
     public int GetHungerLevel() { return 0; }
     public void AttemptToPossessNearbyCreatureOnDeath() {}
-    public void AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) {}
+    // boolean to match real 1.5.2 EntityCreature and the EntityLiving shim decl
+    public boolean AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) { return false; }
     public void AttemptToPossessCreaturesAroundBlock(World world, int x, int y, int z, int range, int dim) {}
+
+    /**
+     * Returns true if the player has silk touch on the held item.
+     * Declared HERE (not on EntityLiving) because the runtime EntityLiving is
+     * FC's real 1.5.2 class — methods invented on shadowed classes throw
+     * NoSuchMethodError. PlayerBridge overrides this with the modern player's
+     * live held item; this default is the real 1.5.2 logic over FC state.
+     */
+    public boolean getSilkTouchEnchant() {
+        return EnchantmentHelper.getEnchantmentLevel(Enchantment.silkTouch.effectId, getHeldItem()) > 0;
+    }
     public void AddRawChatMessage(String message) {}
     public boolean AddStackToCurrentHeldStackIfEmpty(ItemStack stack) {
         if (getCurrentEquippedItem() == null && this.inventory != null) {
@@ -574,6 +598,45 @@ public abstract class EntityPlayer extends EntityLiving {
         if (boots == null || boots.getItem() == null) return false;
         String className = boots.getItem().getClass().getSimpleName();
         return className.contains("ArmorRefined") || className.contains("ArmorSoulforged");
+    }
+
+    /**
+     * Respiration enchant level. Declared here (not only on EntityLiving) because
+     * the runtime {@code btw.modern.EntityLiving} is FC's vanilla 1.5.2 class — it
+     * is shadowed out of Modern-Common and lacks this bridge method, so calling it
+     * via the inherited reference NoSuchMethodErrors at runtime. EntityPlayer is NOT
+     * shadowed, so declaring it here makes the call in {@link #decreaseAirSupply(int)}
+     * resolve. PlayerBridge overrides this with the real value from the live player.
+     */
+    public int getRespirationEnchantLevel() { return 0; }
+
+    /**
+     * FC's air-supply decrease (replaces vanilla). A soulforged helm makes the
+     * Respiration enchantment quadratically effective — the per-tick chance to
+     * keep air is {@code 1 - 1/(level^2 + 1)} vs vanilla's linear
+     * {@code 1 - 1/(level + 1)}. Mirrors FC EntityPlayer.decreaseAirSupply.
+     * Real enchant/armor data arrives through the bridge-overridden
+     * {@link #getRespirationEnchantLevel()} and {@link #IsWearingSoulforgedHelm()}.
+     */
+    public int decreaseAirSupply(int iAirSupply) {
+        m_iAirRecoveryCountdown = 20;
+
+        int iEnchantmentLevel = getRespirationEnchantLevel();
+
+        if (iEnchantmentLevel > 0 && IsWearingSoulforgedHelm()) {
+            if (worldObj != null && worldObj.getWorldTime() % 100 == 0) {
+                worldObj.playSoundAtEntity(this, "random.breath",
+                        0.75F + rand.nextFloat() * 0.5F,
+                        0.5F + rand.nextFloat() * 0.025F);
+            }
+
+            return rand.nextInt(iEnchantmentLevel * iEnchantmentLevel + 1) > 0
+                    ? iAirSupply : iAirSupply - 1;
+        }
+
+        // No soulforged helm: vanilla linear Respiration roll (1.5.2 base).
+        return iEnchantmentLevel > 0 && rand.nextInt(iEnchantmentLevel + 1) > 0
+                ? iAirSupply : iAirSupply - 1;
     }
 
     // =========================================================================

@@ -1,11 +1,15 @@
 package btw.forge.mixin;
 
+import btw.forge.EntityBridge;
+import btw.forge.LivingEntityBridge;
+import btw.forge.PlayerBridge;
 import btw.forge.ProxyBlock;
 import btw.forge.ProxyRegistry;
 import btw.forge.WorldBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -42,6 +46,30 @@ public abstract class BlockMixin {
         return ProxyRegistry.getFcBlock((Block) (Object) this);
     }
 
+    /**
+     * Wraps a vanilla MC entity as a btw.modern.Entity for FC block callbacks:
+     * a {@link PlayerBridge} for players, a {@link LivingEntityBridge} for other
+     * living entities, or an {@link EntityBridge} otherwise. Mirrors
+     * {@code ProxyBlock.wrapEntity} so vanilla blocks with FC behavior pass real
+     * entities to callbacks like onEntityWalking / onFallenUpon.
+     */
+    private btw.modern.Entity btw$wrapEntity(Entity entity) {
+        if (entity == null) return null;
+        if (entity instanceof Player player) {
+            PlayerBridge pb = PlayerBridge.getOrCreate(player);
+            pb.syncFromReal();
+            return pb;
+        }
+        if (entity instanceof LivingEntity living) {
+            LivingEntityBridge lb = LivingEntityBridge.getOrCreate(living);
+            lb.syncFromReal();
+            return lb;
+        }
+        EntityBridge eb = EntityBridge.getOrCreate(entity);
+        eb.syncFromReal();
+        return eb;
+    }
+
     // NOTE: playerDestroy is NOT intercepted here. FC's harvest pipeline runs
     // from ServerPlayerGameModeMixin.destroyBlock() at HEAD — BEFORE vanilla
     // removes the block. This is critical because FC's tryHarvestBlock queries
@@ -59,8 +87,7 @@ public abstract class BlockMixin {
 
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
-            // Entity wrapping not yet implemented — pass null
-            fcBlock.onEntityWalking(world, pos.getX(), pos.getY(), pos.getZ(), null);
+            fcBlock.onEntityWalking(world, pos.getX(), pos.getY(), pos.getZ(), btw$wrapEntity(entity));
             ci.cancel();
         }
     }
@@ -77,7 +104,7 @@ public abstract class BlockMixin {
 
         if (level instanceof ServerLevel sl) {
             btw.modern.World world = WorldBridge.getOrCreate(sl);
-            fcBlock.onFallenUpon(world, pos.getX(), pos.getY(), pos.getZ(), null, fallDistance);
+            fcBlock.onFallenUpon(world, pos.getX(), pos.getY(), pos.getZ(), btw$wrapEntity(entity), fallDistance);
             // Do NOT cancel — vanilla fallOn must still call entity.causeFallDamage().
             // FC's onFallenUpon is a notification hook, not a damage replacement.
         }

@@ -5,7 +5,11 @@ public class SlotCrafting extends Slot {
     private EntityPlayer thePlayer;
     private int amountCrafted;
 
-    public SlotCrafting(EntityPlayer player, InventoryCrafting craftMatrix, IInventory craftResult, int index, int x, int y) {
+    // Second parameter MUST be IInventory to match the real 1.5.2 vanilla
+    // signature — FC bytecode compiled against this stub emits an invokespecial
+    // with exactly this descriptor, and the btw.modern class that wins the
+    // shadow-merge at runtime only declares (EntityPlayer, IInventory, ...).
+    public SlotCrafting(EntityPlayer player, IInventory craftMatrix, IInventory craftResult, int index, int x, int y) {
         super(craftResult, index, x, y);
         this.thePlayer = player;
         this.craftMatrix = craftMatrix;

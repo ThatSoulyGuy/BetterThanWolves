@@ -1336,6 +1336,19 @@ public class WorldBridge extends btw.modern.World {
     }
 
     @Override
+    public EntityPlayer getPlayerEntityByName(String name) {
+        // Called every AI tick by tamed-animal owner lookups (empty name for
+        // untamed) — keep the miss path cheap and allocation-free.
+        if (name == null || name.isEmpty()) return null;
+        for (ServerPlayer player : level.players()) {
+            if (name.equals(player.getGameProfile().getName())) {
+                return PlayerBridge.getOrCreate(player);
+            }
+        }
+        return null;
+    }
+
+    @Override
     public EntityPlayer getClosestVulnerablePlayerToEntity(btw.modern.Entity entity, double range) {
         if (entity == null) return null;
         return getClosestVulnerablePlayer(entity.posX, entity.posY, entity.posZ, range);

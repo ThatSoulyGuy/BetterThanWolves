@@ -1,20 +1,26 @@
 {
   "required": true,
   "package": "btw.forge.mixin",
-  "compatibilityLevel": "JAVA_16",
+  "compatibilityLevel": "JAVA_17",
   "minVersion": "0.8",
   "refmap": "betterthanwolves.refmap.json",
   "mixins": [
     "BlockBehaviorMixin",
     "BlockMixin",
+    "CrossbowPiercingMixin",
     "FoodDataMixin",
+    "FrostWalkerRadiusMixin",
     "ItemStackMixin",
     "LivingEntityMixin",
     "MendingCapMixin",
     "PlayerMixin",
+    "RespawnAnchorChargeMixin",
     "ServerLevelMixin",
     "ServerPlayerGameModeMixin",
-    "ServerPlayerMixin"
+    "ServerPlayerMixin",
+    "SweepingEdgeMixin",
+    "SwiftSneakLevelMixin",
+    "TotemOfUndyingMixin"
   ],
   "injectors": {
     "defaultRequire": 1

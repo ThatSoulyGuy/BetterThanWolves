@@ -55,6 +55,32 @@ public abstract class FoodDataMixin {
     }
 
     /**
+     * Vanilla items with FC counterparts already get their nutrition from FC's
+     * ItemFood.onEaten (ItemStackMixin.finishUsingItem → FoodStats.addStats with
+     * FC's tuned heal values). Vanilla's FoodProperties path then calls
+     * eat(Item, ItemStack) → eat(int, float), which applied the nutrition a
+     * SECOND time (6x instead of 3x). Cancel this overload when an FC
+     * counterpart exists — the item lookup mirrors ItemStackMixin.btw$getFcItem
+     * exactly, so precisely one of the two paths applies. Modern-only foods
+     * (no FC counterpart, Pattern-E) fall through to the eat(IF) conversion.
+     */
+    @Inject(method = "eat(Lnet/minecraft/world/item/Item;Lnet/minecraft/world/item/ItemStack;)V",
+            at = @At("HEAD"), cancellable = true)
+    private void btw$eatItem(net.minecraft.world.item.Item item,
+                             net.minecraft.world.item.ItemStack stack, CallbackInfo ci) {
+        int legacyId;
+        if (item instanceof net.minecraft.world.item.BlockItem bi) {
+            legacyId = btw.forge.ProxyRegistry.getBlockId(bi.getBlock());
+        } else {
+            legacyId = btw.forge.ProxyRegistry.getItemId(item);
+        }
+        if (legacyId > 0 && legacyId < btw.modern.Item.itemsList.length
+                && btw.modern.Item.itemsList[legacyId] != null) {
+            ci.cancel();
+        }
+    }
+
+    /**
      * Redirect vanilla food eating to FC food system.
      * Vanilla items call FoodData.eat(nutrition, saturation) — we convert
      * to FC's 3x scale and forward to the FC FoodStats.

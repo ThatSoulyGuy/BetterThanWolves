@@ -865,6 +865,18 @@ public abstract class World implements IBlockAccess {
 
     // --- Player location ---
 
+    // 1.5.2 World.getPlayerEntityByName — frozen EntityTameable.getOwner calls
+    // it every AI tick for tamed wolves/cats; EntityThrowable.getThrower uses
+    // it after NBT reload. WorldBridge overrides with the live player list.
+    public EntityPlayer getPlayerEntityByName(String name) {
+        for (int i = 0; i < this.playerEntities.size(); i++) {
+            if (name.equals(((EntityPlayer) this.playerEntities.get(i)).username)) {
+                return (EntityPlayer) this.playerEntities.get(i);
+            }
+        }
+        return null;
+    }
+
     public EntityPlayer getClosestPlayer(double x, double y, double z, double range) { return null; }
     public EntityPlayer getClosestPlayerToEntity(Entity entity, double range) { return null; }
     public EntityPlayer getClosestVulnerablePlayerToEntity(Entity entity, double range) { return null; }

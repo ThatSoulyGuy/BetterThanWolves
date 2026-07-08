@@ -196,25 +196,18 @@ public abstract class LivingEntityMixin {
     // ================================================================
 
     /**
-     * Hook for FC's modified {@code decreaseAirSupply()} logic.
-     * When soulforged items are fully wired, wearing a soulforged helm
-     * combined with the Respiration enchantment gives better underwater
-     * protection than vanilla. For now, this is a no-op placeholder
-     * that lets vanilla handle air supply decrease until
-     * {@code IsWearingSoulforgedHelm()} is implemented.
-     *
-     * @see btw.modern.EntityPlayer#IsWearingSoulforgedHelm()
+     * Hook: route player air-supply decrease to FC. The behavior (soulforged-helm
+     * Respiration bonus, etc.) lives in {@link btw.modern.EntityPlayer#decreaseAirSupply(int)};
+     * this mixin only forwards the call and returns FC's result.
      */
     @Inject(method = "decreaseAirSupply", at = @At("HEAD"), cancellable = true)
     private void btw$decreaseAirSupply(int currentAir, CallbackInfoReturnable<Integer> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
-        if (self instanceof ServerPlayer sp) {
-            PlayerBridge pb = PlayerBridge.getOrCreate(sp);
-            // FC's air supply logic runs through EntityPlayer.
-            // When IsWearingSoulforgedHelm() returns true, override the
-            // vanilla Respiration calculation with FC's improved version.
-            // For now, let vanilla handle it until soulforged items are wired.
-        }
+        if (!(self instanceof ServerPlayer sp)) return;
+
+        PlayerBridge pb = PlayerBridge.getOrCreate(sp);
+        pb.syncFromReal();
+        cir.setReturnValue(pb.decreaseAirSupply(currentAir));
     }
 
     // ================================================================

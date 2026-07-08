@@ -1,6 +1,8 @@
 package btw.forge.mixin;
 
 import btw.forge.PlayerBridge;
+import btw.forge.LivingEntityBridge;
+import btw.forge.LegacyProxyItem;
 import btw.forge.ProxyRegistry;
 import btw.forge.WorldBridge;
 import btw.forge.ItemStackHelper;
@@ -53,6 +55,10 @@ public abstract class ItemStackMixin {
     @Inject(method = "finishUsingItem", at = @At("HEAD"))
     private void btw$finishUsing(Level level, LivingEntity entity,
                                   CallbackInfoReturnable<ItemStack> cir) {
+        // ProxyItems run onEaten in ProxyItem.finishUsingItem. Doing it here too
+        // would double-apply nutrition now that ItemFood.onEaten is no longer a
+        // no-op. This path handles only vanilla items with FC replacements.
+        if (((ItemStack) (Object) this).getItem() instanceof LegacyProxyItem) return;
         btw.modern.Item fcItem = btw$getFcItem();
         if (fcItem == null) return;
         if (level instanceof ServerLevel sl && entity instanceof Player player) {
@@ -61,6 +67,7 @@ public abstract class ItemStackMixin {
             btw.modern.ItemStack fcStack = pb.getCurrentEquippedItem();
             if (fcStack != null) {
                 fcItem.onEaten(fcStack, WorldBridge.getOrCreate(sl), pb);
+                pb.syncToReal();
             }
         }
     }
@@ -90,11 +97,17 @@ public abstract class ItemStackMixin {
 
     @Inject(method = "hurtEnemy", at = @At("HEAD"))
     private void btw$hurtEnemy(LivingEntity target, Player player, CallbackInfo ci) {
+        // ProxyItems wrap target/attacker in ProxyItem.hurtEnemy; skip here to
+        // avoid a second hitEntity call (e.g. double tool-durability loss on FC
+        // weapons like the battleaxe). This path is for vanilla-item replacements.
+        if (((ItemStack) (Object) this).getItem() instanceof LegacyProxyItem) return;
         btw.modern.Item fcItem = btw$getFcItem();
         if (fcItem == null) return;
         btw.modern.ItemStack fcStack = ItemStackHelper.toFcStack((ItemStack) (Object) this);
         if (fcStack != null) {
-            fcItem.hitEntity(fcStack, null, null); // TODO: entity wrapping
+            btw.modern.EntityLiving fcTarget = LivingEntityBridge.wrapLiving(target);
+            btw.modern.EntityLiving fcAttacker = LivingEntityBridge.wrapLiving(player);
+            fcItem.hitEntity(fcStack, fcTarget, fcAttacker);
         }
     }
 

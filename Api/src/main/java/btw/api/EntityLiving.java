@@ -384,7 +384,10 @@ public abstract class EntityLiving extends Entity {
     public int GetHungerLevel() { return 0; }
     public int GetGrazeHungerGain() { return 0; }
     public void AttemptToPossessNearbyCreatureOnDeath() {}
-    public void AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) {}
+    // boolean, matching real 1.5.2 EntityCreature.AttemptToPossessNearbyCreature —
+    // a void stub makes FC callers (FCEntityWolf) emit a (DZ)V descriptor that
+    // doesn't exist on the runtime hierarchy (NoSuchMethodError).
+    public boolean AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) { return false; }
     public boolean CanEntityCenterOfMassBeSeen(Entity entity) { return false; }
 
     // --- Client-side methods ---

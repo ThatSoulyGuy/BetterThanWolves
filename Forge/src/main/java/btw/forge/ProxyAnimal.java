@@ -412,10 +412,17 @@ public class ProxyAnimal extends Animal
     @Override
     public void die(DamageSource source) {
         if (fcEntity != null) {
-            btw.modern.DamageSource fcSource = ProxyMob.translateDamageSource(source);
-            fcEntity.onDeath(fcSource);
-            syncFromFc();
-            suppressVanillaLoot = true;
+            try {
+                btw.modern.DamageSource fcSource = ProxyMob.translateDamageSource(source);
+                fcEntity.onDeath(fcSource);
+                syncFromFc();
+                suppressVanillaLoot = true;
+            } catch (Throwable t) {
+                // Bridge-gap Errors (e.g. frozen EntityAnimal.onDeath reading FC
+                // statics) must not crash the server; vanilla loot is the fallback.
+                LOGGER.warn("FC entity onDeath() threw: {}: {}",
+                        t.getClass().getSimpleName(), t.getMessage());
+            }
         }
         super.die(source);
         suppressVanillaLoot = false;
@@ -487,7 +494,7 @@ public class ProxyAnimal extends Animal
             try {
                 fcEntity.readFromNBT(wrapper);
                 fcEntity.readEntityFromNBT(wrapper);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 LOGGER.warn("Failed to read FC entity NBT data: {}", e.getMessage());
             }
         }
@@ -503,7 +510,7 @@ public class ProxyAnimal extends Animal
             try {
                 fcEntity.writeToNBT(wrapper);
                 fcEntity.writeEntityToNBT(wrapper);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 LOGGER.warn("Failed to write FC entity NBT data: {}", e.getMessage());
             }
             tag.put("FCData", fcCompound);

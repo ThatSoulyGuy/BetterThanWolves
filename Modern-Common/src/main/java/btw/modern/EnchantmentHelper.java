@@ -191,7 +191,15 @@ public class EnchantmentHelper {
     }
 
     public static boolean getSilkTouchModifier(EntityLiving entity) {
-        return entity.getSilkTouchEnchant();
+        // getSilkTouchEnchant is a bridge method and must live on the
+        // NON-shadowed EntityPlayer (the runtime EntityLiving is FC's real
+        // 1.5.2 class, which doesn't have it — calling it there is a
+        // NoSuchMethodError). PlayerBridge overrides it with the modern
+        // player's held item. Non-player mobs take the real 1.5.2 path.
+        if (entity instanceof EntityPlayer) {
+            return ((EntityPlayer) entity).getSilkTouchEnchant();
+        }
+        return getEnchantmentLevel(Enchantment.silkTouch.effectId, entity.getHeldItem()) > 0;
     }
 
     public static int func_92098_i(EntityLiving entity) { return 0; }

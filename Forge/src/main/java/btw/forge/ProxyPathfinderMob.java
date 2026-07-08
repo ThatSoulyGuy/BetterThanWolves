@@ -327,7 +327,7 @@ public class ProxyPathfinderMob extends PathfinderMob
             try {
                 fcEntity.readFromNBT(wrapper);
                 fcEntity.readEntityFromNBT(wrapper);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 LOGGER.warn("Failed to read FC entity NBT data: {}", e.getMessage());
             }
         }
@@ -343,7 +343,7 @@ public class ProxyPathfinderMob extends PathfinderMob
             try {
                 fcEntity.writeToNBT(wrapper);
                 fcEntity.writeEntityToNBT(wrapper);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 LOGGER.warn("Failed to write FC entity NBT data: {}", e.getMessage());
             }
             tag.put("FCData", fcCompound);

@@ -29,6 +29,26 @@ public class DamageSource {
         this.damageType = type;
     }
 
+    // 1.5.2 DamageSource.causeArrowDamage — called by EntityArrow.onUpdate's
+    // hit path (FC broadhead/rotten/infinite arrows and FC skeleton shots).
+    public static DamageSource causeArrowDamage(EntityArrow arrow, Entity shooter) {
+        return new EntityDamageSourceIndirect("arrow", arrow, shooter).setProjectile();
+    }
+
+    // 1.5.2 DamageSource.causeThornsDamage — referenced by the now-included
+    // EnchantmentThorns.func_92096_a retaliation branch.
+    public static DamageSource causeThornsDamage(Entity entity) {
+        return new EntityDamageSource("thorns", entity).setMagicDamage();
+    }
+
+    // 1.5.2 DamageSource.causeFireballDamage — called by EntitySmallFireball /
+    // EntityLargeFireball.onImpact (FC blaze and ghast shots).
+    public static DamageSource causeFireballDamage(EntityFireball fireball, Entity shooter) {
+        return shooter == null
+            ? new EntityDamageSourceIndirect("onFire", fireball, fireball).setFireDamage().setProjectile()
+            : new EntityDamageSourceIndirect("fireball", fireball, shooter).setFireDamage().setProjectile();
+    }
+
     public DamageSource setDamageBypassesArmor() {
         this.isUnblockable = true;
         return this;

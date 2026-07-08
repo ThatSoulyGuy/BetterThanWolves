@@ -28,6 +28,26 @@ public abstract class Container {
         return this.inventorySlots.get(slotIndex);
     }
 
+    // 1.5.2 Container.calcRedstoneFromInventory — comparator fill level;
+    // referenced by the frozen EntityMinecartContainer.
+    public static int calcRedstoneFromInventory(IInventory inventory) {
+        if (inventory == null) {
+            return 0;
+        }
+        int itemsFound = 0;
+        float fill = 0.0F;
+        for (int i = 0; i < inventory.getSizeInventory(); i++) {
+            ItemStack stack = inventory.getStackInSlot(i);
+            if (stack != null) {
+                fill += (float) stack.stackSize
+                        / (float) Math.min(inventory.getInventoryStackLimit(), stack.getMaxStackSize());
+                itemsFound++;
+            }
+        }
+        fill /= (float) inventory.getSizeInventory();
+        return MathHelper.floor_float(fill * 14.0F) + (itemsFound > 0 ? 1 : 0);
+    }
+
     public void detectAndSendChanges() {
         for (int i = 0; i < this.inventorySlots.size(); i++) {
             ItemStack currentStack = this.inventorySlots.get(i).getStack();

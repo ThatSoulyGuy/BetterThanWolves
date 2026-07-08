@@ -44,4 +44,55 @@ public class ItemFood extends Item {
     public ItemFood setPotionEffect(int potionId, int duration, int amplifier, float probability) {
         return this;
     }
+
+    // --- 1.5.2 eat-start sequence (verbatim vanilla ItemFood + FCMOD hook) ---
+    // FC food classes (FCItemFood and subclasses) do NOT override these; they
+    // rely on this base class. ProxyItem.getUseAnimation/getUseDuration and
+    // PlayerBridge.setItemInUse -> ServerPlayer.startUsingItem bridge them to
+    // the modern engine. Without all three, right-clicking FC food does
+    // nothing: use action null, duration 0, and no startUsingItem call.
+
+    @Override
+    public int getMaxItemUseDuration(ItemStack stack) {
+        return this.itemUseDuration;
+    }
+
+    @Override
+    public EnumAction getItemUseAction(ItemStack stack) {
+        return EnumAction.eat;
+    }
+
+    @Override
+    public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
+        if (player.canEat(this.alwaysEdible)) {
+            player.setItemInUse(stack, this.getMaxItemUseDuration(stack));
+        } else {
+            // FCMOD: Added
+            player.OnCantConsume();
+        }
+        return stack;
+    }
+
+    /**
+     * Base ItemFood stores its heal amount in vanilla (0-20) units, but FC's
+     * food bar is high-res (0-60), so the restored value is tripled. FC's
+     * {@code FCItemFoodHighRes} overrides this to return the raw amount (its
+     * heal value is already expressed in high-res units).
+     */
+    @Override
+    public int GetHungerRestored() {
+        return getHealAmount() * 3;
+    }
+
+    /**
+     * Restores hunger/saturation through FC's high-res {@link FoodStats}.
+     * Mirrors the original FC {@code ItemFood.onEaten -> FoodStats.addStats(this)}.
+     * The MC-side stack decrement and HUD sync are performed by the bridge layer
+     * (ProxyItem / ItemStackMixin), so this only applies nutrition.
+     */
+    @Override
+    public ItemStack onEaten(ItemStack stack, World world, EntityPlayer player) {
+        player.getFoodStats().addStats(this);
+        return stack;
+    }
 }

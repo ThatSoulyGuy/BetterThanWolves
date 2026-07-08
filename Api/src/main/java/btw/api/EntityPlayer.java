@@ -130,7 +130,8 @@ public abstract class EntityPlayer extends EntityLiving {
     public void OnNearbyFireStartAttempt(EntityPlayer player) {}
     public int GetHungerLevel() { return 0; }
     public void AttemptToPossessNearbyCreatureOnDeath() {}
-    public void AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) {}
+    // boolean to match real 1.5.2 EntityCreature and the EntityLiving stub decl
+    public boolean AttemptToPossessNearbyCreature(double range, boolean persistentSpirit) { return false; }
     public void AttemptToPossessCreaturesAroundBlock(World world, int x, int y, int z, int range, int dim) {}
     public void OnCantConsume() {}
     public boolean CanDrink() { return false; }

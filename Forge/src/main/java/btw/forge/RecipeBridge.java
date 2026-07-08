@@ -30,16 +30,25 @@ public class RecipeBridge {
     public static void injectRecipes(net.minecraft.server.MinecraftServer server) {
         RecipeManager recipeManager = server.getRecipeManager();
 
-        // Get the mutable recipe map. The field is named `recipes` in MCP
-        // mappings and `f_44007_` in SRG; use Forge's ObfuscationReflectionHelper
-        // which accepts the MCP name and resolves to the runtime obf name.
+        // Get the mutable recipe map. `ObfuscationReflectionHelper` expects
+        // the SRG name and resolves it to the runtime name via Forge's
+        // naming service. RecipeManager's
+        // Map<RecipeType, Map<ResourceLocation, Recipe>> field is SRG
+        // `f_44007_` (Mojang name `recipes`). Passing the Mojang name
+        // works in dev (mojmap-named classes) but throws
+        // NoSuchFieldException in the reobfuscated production JAR — which
+        // silently aborts ALL FC recipe injection (nothing craftable).
+        // Always pass the SRG name; it resolves correctly in both
+        // environments (dev: f_44007_ -> recipes; jar: f_44007_ -> f_44007_).
+        final String RECIPES_FIELD_SRG = "f_44007_";
         Map<RecipeType<?>, Map<ResourceLocation, Recipe<?>>> recipesByType;
         try {
             Map<RecipeType<?>, Map<ResourceLocation, Recipe<?>>> immutableMap =
                     net.minecraftforge.fml.util.ObfuscationReflectionHelper.getPrivateValue(
-                            RecipeManager.class, recipeManager, "recipes");
+                            RecipeManager.class, recipeManager, RECIPES_FIELD_SRG);
             if (immutableMap == null) {
-                LOGGER.error("RecipeManager.recipes was null — FC recipes will not be injected");
+                LOGGER.error("RecipeManager.{} was null — FC recipes will not be injected",
+                        RECIPES_FIELD_SRG);
                 return;
             }
 
@@ -49,7 +58,7 @@ public class RecipeBridge {
                 recipesByType.put(entry.getKey(), new HashMap<>(entry.getValue()));
             }
             net.minecraftforge.fml.util.ObfuscationReflectionHelper.setPrivateValue(
-                    RecipeManager.class, recipeManager, recipesByType, "recipes");
+                    RecipeManager.class, recipeManager, recipesByType, RECIPES_FIELD_SRG);
         } catch (Exception e) {
             LOGGER.error("Failed to access RecipeManager.recipes — FC recipes will not be injected", e);
             return;

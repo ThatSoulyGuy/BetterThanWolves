@@ -43,7 +43,12 @@ java {
 sourceSets {
     main {
         java.srcDirs = ['src/main/java']
-        resources.srcDirs = ['src/main/resources']
+        // Generated data (loot tables, recipes, tags) ride on the main
+        // resources output. Datapack providers write into
+        // src/generated/resources/ via `runData`; we keep it as an
+        // additional resource srcDir so the gen output is packaged
+        // into the jar alongside hand-authored resources.
+        resources.srcDirs = ['src/main/resources', 'src/generated/resources']
     }
     // FC source set — holds remapped FC class files so ForgeGradle's
     // TRANSFORMER classloader includes them in the mod's module layer.
@@ -115,6 +120,26 @@ minecraft {
                 }
             }
         }
+        // Data-gen run: `gradlew :Forge:runData` invokes our
+        // GatherDataEvent subscriber. Generated datapack content lands in
+        // src/generated/resources/ and is then picked up by the main
+        // resources srcDir (see sourceSets { main { resources } }).
+        data {
+            workingDirectory project.file('run/data')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            args '--mod', 'betterthanwolves', '--all',
+                 '--output', file('src/generated/resources/'),
+                 '--existing', file('src/main/resources/')
+            mods {
+                betterthanwolves {
+                    source sourceSets.main
+                    source project(':Api').sourceSets.main
+                    source sourceSets.fc
+                    source project(':Modern-Common').sourceSets.main
+                }
+            }
+        }
     }
 }
 
@@ -124,6 +149,10 @@ task remapFcCode(type: ShadowJar) {
     description = 'Remaps btw.api.* to btw.modern.* in FC code and packages it'
     archiveBaseName = 'fc-remapped'
     archiveClassifier = ''
+    // No version in the name: versioned jars accumulated in build/remapped
+    // across version bumps, and extractFcClasses (first-in-wins) extracted
+    // the OLDEST jar's classes over the current build's.
+    archiveVersion = ''
     destinationDirectory = file("$buildDir/remapped")
 
     // FC code from the subproject modules
@@ -342,6 +371,31 @@ task remapFcCode(type: ShadowJar) {
         include 'net/minecraft/src/SlotBrewingStandIngredient.class'
         include 'net/minecraft/src/SlotArmor.class'
         include 'net/minecraft/src/SlotCrafting.class'
+        // Frozen Entity.setFire() calls EnchantmentProtection.func_92093_a and
+        // EntityLiving.MeleeAttack calls EnchantmentThorns.func_92096_a
+        // UNCONDITIONALLY — without these classes the first burning zombie /
+        // first mob melee hit raises NoClassDefFoundError (link-audit P0).
+        include 'net/minecraft/src/EnchantmentProtection.class'
+        include 'net/minecraft/src/EnchantmentThorns.class'
+        // EntityPainting extends EntityHanging; FCEntityCanvas.onValidSurface
+        // does `instanceof EntityPainting`, which loads the superclass chain.
+        include 'net/minecraft/src/EntityHanging.class'
+        // EntityMinecart.createMinecart news all six subclasses; reachable via
+        // FCItemMinecart.OnItemUsedByBlockDispenser (Block Dispenser).
+        include 'net/minecraft/src/EntityMinecartEmpty.class'
+        include 'net/minecraft/src/EntityMinecartChest.class'
+        include 'net/minecraft/src/EntityMinecartFurnace.class'
+        include 'net/minecraft/src/EntityMinecartHopper.class'
+        include 'net/minecraft/src/EntityMinecartTNT.class'
+        include 'net/minecraft/src/EntityMinecartMobSpawner.class'
+        include 'net/minecraft/src/EntityMinecartContainer.class'
+        include 'net/minecraft/src/EntityMinecartMobSpawnerLogic.class'
+        include 'net/minecraft/src/MobSpawnerBaseLogic.class'
+        include 'net/minecraft/src/WeightedRandomMinecart.class'
+        // Crash-report Callables used by EntityLiving.updatePotionEffects'
+        // catch block — without them a potion-tick exception is masked by
+        // NoClassDefFoundError instead of producing the real crash report.
+        include 'net/minecraft/src/CallableEffect*.class'
     }
     from(rootProject.file('build/classes/java/server')) {
         include 'net/minecraft/src/EntityAI*.class'
@@ -540,9 +594,40 @@ task remapFcCode(type: ShadowJar) {
         include 'net/minecraft/src/SlotBrewingStandIngredient.class'
         include 'net/minecraft/src/SlotArmor.class'
         include 'net/minecraft/src/SlotCrafting.class'
+        // Server-side twins of the client-block additions above (see comments there)
+        include 'net/minecraft/src/EnchantmentProtection.class'
+        include 'net/minecraft/src/EnchantmentThorns.class'
+        include 'net/minecraft/src/EntityHanging.class'
+        include 'net/minecraft/src/EntityMinecartEmpty.class'
+        include 'net/minecraft/src/EntityMinecartChest.class'
+        include 'net/minecraft/src/EntityMinecartFurnace.class'
+        include 'net/minecraft/src/EntityMinecartHopper.class'
+        include 'net/minecraft/src/EntityMinecartTNT.class'
+        include 'net/minecraft/src/EntityMinecartMobSpawner.class'
+        include 'net/minecraft/src/EntityMinecartContainer.class'
+        include 'net/minecraft/src/EntityMinecartMobSpawnerLogic.class'
+        include 'net/minecraft/src/MobSpawnerBaseLogic.class'
+        include 'net/minecraft/src/WeightedRandomMinecart.class'
+        include 'net/minecraft/src/CallableEffect*.class'
     }
 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // The frozen 1.5.2 artifact (build/classes/java/{main,server}) was compiled
+    // BEFORE the FC source restructure, so its bytecode references FLAT FC names
+    // (net.minecraft.src.FCX). The general rule below would relocate those to
+    // btw.modern.FCX — classes that do not exist. Map each flat name that a
+    // LOADABLE frozen class references to its restructured home instead, so the
+    // frozen bytecode links against the live FC classes. Specific rules must
+    // precede the general net.minecraft.src rule (first match wins).
+    // (Member signatures verified identical on both sides — link audit 2026-07-08.)
+    relocate 'net.minecraft.src.FCBetterThanWolves', 'net.minecraft.src.btw.core.FCBetterThanWolves'
+    relocate 'net.minecraft.src.FCUtilsItem', 'net.minecraft.src.btw.util.FCUtilsItem'
+    relocate 'net.minecraft.src.FCUtilsRandomPositionGenerator', 'net.minecraft.src.btw.util.FCUtilsRandomPositionGenerator'
+    relocate 'net.minecraft.src.FCBlockSilverfish', 'net.minecraft.src.btw.block.FCBlockSilverfish'
+    relocate 'net.minecraft.src.FCBlockMycelium', 'net.minecraft.src.btw.block.FCBlockMycelium'
+    relocate 'net.minecraft.src.FCBlockGroundCover', 'net.minecraft.src.btw.block.FCBlockGroundCover'
+
     relocate 'btw.api', 'btw.modern'
     // Remap vanilla MC 1.5.2 classes (Entity, EntityAI*, PathNavigate, etc.)
     // into btw.modern.* so FC code can reach the REAL vanilla AI
@@ -562,12 +647,14 @@ task remapFcCode(type: ShadowJar) {
 
 remapFcCode.dependsOn ':Api:compileJava', ':Common:compileJava', ':Client:compileJava', ':Server:compileJava'
 
-// Extract remapped JAR into fc source set so ForgeGradle's classloader loads it
-task extractFcClasses(type: Copy) {
+// Extract remapped JAR into fc source set so ForgeGradle's classloader loads it.
+// Sync (not Copy) from exactly the current archive: Copy over a *.jar glob
+// used to merge every stale versioned jar in build/remapped first-in-wins,
+// and never purged classes deleted from the remap — dev ran old bytecode.
+task extractFcClasses(type: Sync) {
     dependsOn remapFcCode
-    from { fileTree(dir: "$buildDir/remapped", include: '*.jar').collect { zipTree(it) } }
+    from { zipTree(remapFcCode.archiveFile) }
     into sourceSets.fc.output.classesDirs.files.first()
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 // Wire task dependencies
@@ -612,6 +699,7 @@ task removeModernCommonShadowedClasses {
          'EntityGolem.class', 'EntityFlying.class', 'EntityTameable.class',
          'EntityArrow.class', 'EntityBoat.class', 'EntityFX.class', 'EntityFallingSand.class',
          'EntityFireball.class', 'EntityFishHook.class', 'EntityItem.class', 'EntityMinecart.class',
+         'EntityMinecartHopper.class',
          'EntityPainting.class', 'EntityTNTPrimed.class', 'EntityThrowable.class',
          'EntityWeatherEffect.class', 'EntityXPOrb.class', 'FCEntityLightningBolt.class',
          // Movement / AI / pathfinding helpers — these are in the remap
@@ -623,12 +711,23 @@ task removeModernCommonShadowedClasses {
          'PathFinder.class', 'RandomPositionGenerator.class',
          'EntityMoveHelper.class', 'EntityJumpHelper.class',
          'EntityLookHelper.class',
+         // Frozen EntityTameable needs the real EntityAISit(EntityTameable) ctor
+         'EntityAISit.class',
          // Projectile classes already remapped but stub still on dev classpath
+         // (EntityLightningBolt removed: Modern-Common has no such class — the
+         // entry was a no-op; btw.modern.EntityLightningBolt comes only from fc)
          'EntityLargeFireball.class', 'EntityWitherSkull.class',
-         'EntityEgg.class', 'EntityLightningBolt.class',
+         'EntityEgg.class',
          // ChunkCache — vanilla PathFinder uses methods on ChunkCache
          // (doesBlockHaveSolidTopSurface, etc.) that the stub lacks.
-         'ChunkCache.class'].each { name ->
+         'ChunkCache.class',
+         // Model rendering: the dist jar already excludes these so FC's real
+         // 1.5.2 versions win (correct UVs). Delete the Modern-Common stubs in
+         // dev too so dev matches the jar's class binding. ModelBox/TexturedQuad/
+         // PositionTextureVertex are a self-contained cluster; ModelRenderer (the
+         // only boundary, single-sourced) uses the 10-arg ModelBox ctor that both
+         // versions share — the jar already binds MC ModelRenderer to FC ModelBox.
+         'ModelBox.class', 'TexturedQuad.class', 'PositionTextureVertex.class'].each { name ->
             def f = file("$base/$name")
             if (f.exists()) {
                 logger.lifecycle("Removing Modern-Common shadowed class: $name")
@@ -722,10 +821,124 @@ task openUpEntityAccess {
         }
     }
 }
+
+// ------------------------------------------------------------------
+// ASM bytecode patch #2: widen pre-restructure FC hook descriptors.
+//
+// The frozen 1.5.2 artifact predates the hook-widening now present in
+// vanilla/ — it declares Entity.OnKickedByCow(FCEntityCow),
+// OnFlungBySquidTentacle(FCEntitySquid), OnStruckByLightning(FCEntity-
+// LightningBolt) and OnHeadCrabbedBySquid(FCEntitySquid) with narrow
+// FC-subclass params. Live restructured FC callers (FCEntityCow.java:551,
+// FCEntitySquid.java:884/1278, FCEntityLightningBolt.java:100) compile
+// against the widened Api hooks and emit (Lbtw/modern/Entity;)V — a
+// descriptor that does not exist on the frozen classes: NoSuchMethodError
+// the first time a cow kick or squid attack connects.
+//
+// Fix: widen the frozen declarations on the loaded base hierarchy
+// (Entity, EntityLiving, EntityAnimal) and rewrite the narrow call sites
+// (FCEntityLightningBolt.onUpdate is the only one). Bytecode-verified
+// safe: every body uses the param only as Entity — except EntityAnimal,
+// which passes it to DamageSource.causeMobDamage(EntityLiving), so a
+// CHECKCAST EntityLiving is injected after each param load there (all
+// real callers pass EntityLiving subclasses, the cast always succeeds).
+// StackMapTable check: only Entity.OnStruckByLightning has frames, all
+// 'same'-type (no local types recorded), so ClassWriter(0) is safe.
+// Flat FCEntityCreeper/Pig/Zombie keep narrow overrides — they are
+// shadowed by Modern-Common stubs / dead code and never dispatch.
+// ------------------------------------------------------------------
+task widenFcHookDescriptors {
+    dependsOn extractFcClasses
+    doLast {
+        def hookNames = ['OnKickedByCow', 'OnFlungBySquidTentacle',
+                         'OnStruckByLightning', 'OnHeadCrabbedBySquid'] as Set
+        def narrowDesc = ~/\(Lbtw\/modern\/FCEntity[^;]*;\)V/
+        def wideDesc = '(Lbtw/modern/Entity;)V'
+
+        // (a) widen declarations; EntityAnimal additionally gets checkcasts
+        ['Entity.class', 'EntityLiving.class', 'EntityAnimal.class'].each { fileName ->
+            def classFile = file("${buildDir}/classes/java/fc/btw/modern/${fileName}")
+            if (!classFile.exists()) {
+                logger.warn("widenFcHookDescriptors: ${classFile} not found — skipping")
+                return
+            }
+            boolean needsCast = fileName == 'EntityAnimal.class'
+            ClassReader reader = new ClassReader(classFile.bytes)
+            ClassWriter writer = new ClassWriter(0)
+            reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
+                @Override
+                MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] exceptions) {
+                    if (hookNames.contains(name) && desc ==~ narrowDesc) {
+                        logger.lifecycle("Widened ${fileName} ${name}${desc} -> ${wideDesc}")
+                        MethodVisitor mv = super.visitMethod(access, name, wideDesc, sig, exceptions)
+                        if (!needsCast) {
+                            return mv
+                        }
+                        return new MethodVisitor(Opcodes.ASM9, mv) {
+                            @Override
+                            void visitVarInsn(int opcode, int varIdx) {
+                                super.visitVarInsn(opcode, varIdx)
+                                if (opcode == Opcodes.ALOAD && varIdx == 1) {
+                                    super.visitTypeInsn(Opcodes.CHECKCAST, 'btw/modern/EntityLiving')
+                                }
+                            }
+                        }
+                    }
+                    return super.visitMethod(access, name, desc, sig, exceptions)
+                }
+            }, 0)
+            classFile.bytes = writer.toByteArray()
+        }
+
+        // (b) rewrite narrow call sites anywhere in the fc output
+        fileTree(dir: "${buildDir}/classes/java/fc", include: '**/*.class').each { f ->
+            boolean[] changed = [false]
+            ClassReader reader = new ClassReader(f.bytes)
+            ClassWriter writer = new ClassWriter(0)
+            reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
+                @Override
+                MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] exceptions) {
+                    return new MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, desc, sig, exceptions)) {
+                        @Override
+                        void visitMethodInsn(int opcode, String owner, String mName, String mDesc, boolean isInterface) {
+                            if (hookNames.contains(mName) && mDesc ==~ narrowDesc) {
+                                changed[0] = true
+                                super.visitMethodInsn(opcode, owner, mName, wideDesc, isInterface)
+                            } else {
+                                super.visitMethodInsn(opcode, owner, mName, mDesc, isInterface)
+                            }
+                        }
+                    }
+                }
+            }, 0)
+            if (changed[0]) {
+                f.bytes = writer.toByteArray()
+                logger.lifecycle("Rewrote narrow FC hook call site(s) in ${f.name}")
+            }
+        }
+    }
+}
+openUpEntityAccess.dependsOn widenFcHookDescriptors
+
 tasks.matching { it.name.startsWith('prepareRun') || it.name.startsWith('run') || it.name == 'classes' || it.name == 'jar' }.configureEach {
     dependsOn openUpEntityAccess
 }
-tasks.matching { it.name.startsWith('prepareRun') || it.name.startsWith('run') || it.name == 'classes' || it.name == 'jar' }.configureEach {
+// IMPORTANT: removeModernCommonShadowedClasses is DESTRUCTIVE — it deletes
+// .class files from Modern-Common's *shared* compile output. It must be
+// wired ONLY to the dev-run tasks (prepareRun*/run*), where the
+// ForgeGradle classloader resolves duplicate btw.modern.* classes
+// first-found-wins and the physical deletion is the only way to make the
+// FC remapped versions win.
+//
+// It must NOT be wired to `classes` or `jar`: the `jar` task already
+// excludes every shadowed class from Modern-Common's output AND pulls the
+// FC versions from sourceSets.fc.output (see the jar { } block), so the
+// JAR is correct without the deletion. Wiring it to `classes`/`jar`
+// previously corrupted Modern-Common's output during the publish path —
+// a subsequent :Forge:compileJava then failed with 200+
+// "cannot access btw.modern.EntityLiving" errors because Modern-Common
+// was "up-to-date" and never regenerated the deleted stubs.
+tasks.matching { it.name.startsWith('prepareRun') || it.name.startsWith('run') }.configureEach {
     dependsOn removeModernCommonShadowedClasses
 }
 
@@ -775,15 +988,24 @@ jar {
     from(project(':Modern-Common').sourceSets.main.output) {
         exclude 'btw/api/**'
         // Let vanilla versions win for classes with MATCHING constructors
-        // and better implementations. Keep Modern-Common's versions for
+        // and better implementations. Keep Modern-Common's versions only for
         // classes where the bridge uses a different constructor signature
-        // (EntityLookHelper, EntitySenses use no-arg; vanilla needs entity arg).
+        // (e.g. EntitySenses no-arg; vanilla needs an entity arg). NOTE:
+        // EntityLookHelper is NOT kept here — the runtime EntityLiving is FC's
+        // (Modern-Common's EntityLiving is excluded below), and it calls
+        // new EntityLookHelper(this); Modern-Common's look helper is an empty
+        // stub, so FC's real one must win.
         exclude 'btw/modern/PathNavigate.class'
         exclude 'btw/modern/PathEntity.class'
         exclude 'btw/modern/PathPoint.class'
         exclude 'btw/modern/PathFinder.class'
         exclude 'btw/modern/EntityMoveHelper.class'
         exclude 'btw/modern/EntityJumpHelper.class'
+        // Frozen EntityTameable's field initializer news EntityAISit(EntityTameable);
+        // the Modern-Common shim only has an (EntityLiving) ctor, so every FC wolf
+        // construction threw NoSuchMethodError (silently caught — wolves were inert
+        // husks). The real 1.5.2 EntityAISit is already in the remap via EntityAI*.
+        exclude 'btw/modern/EntityAISit.class'
         // FC's vanilla 1.5.2 Entity/EntityLiving own collision and
         // mob state. Exclude Modern-Common's stubs so FC's versions
         // win in the JAR. Access-level issues are resolved by ASM
@@ -834,12 +1056,26 @@ jar {
         exclude 'btw/modern/EntityFishHook.class'
         exclude 'btw/modern/EntityItem.class'
         exclude 'btw/modern/EntityMinecart.class'
+        exclude 'btw/modern/EntityMinecartHopper.class'
         exclude 'btw/modern/EntityPainting.class'
         exclude 'btw/modern/EntityTNTPrimed.class'
         exclude 'btw/modern/EntityThrowable.class'
         exclude 'btw/modern/EntityWeatherEffect.class'
         exclude 'btw/modern/EntityXPOrb.class'
         exclude 'btw/modern/FCEntityLightningBolt.class'
+        // Reconcile with removeModernCommonShadowedClasses (dev): these collide
+        // and the FC version is authoritative, but were previously only deleted
+        // in dev — so the Modern-Common stub shipped in the jar and shadowed FC
+        // in PROD ONLY. ChunkCache (PathFinder needs its methods), the projectile
+        // entities, RandomPositionGenerator (AI), and EntityLookHelper (whose
+        // Modern-Common version is an empty stub while FC's EntityLiving calls
+        // new EntityLookHelper(this)).
+        exclude 'btw/modern/ChunkCache.class'
+        exclude 'btw/modern/EntityEgg.class'
+        exclude 'btw/modern/EntityLargeFireball.class'
+        exclude 'btw/modern/EntityWitherSkull.class'
+        exclude 'btw/modern/RandomPositionGenerator.class'
+        exclude 'btw/modern/EntityLookHelper.class'
         // Model rendering: real 1.5.2 classes replace stubs for correct UVs
         exclude 'btw/modern/ModelBox.class'
         exclude 'btw/modern/TexturedQuad.class'

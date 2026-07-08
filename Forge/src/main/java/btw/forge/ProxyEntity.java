@@ -276,8 +276,11 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
             boolean wasDead = fcEntity.isDead;
             try {
                 fcEntity.onUpdate();
-            } catch (Exception e) {
-                LOGGER.debug("FC entity onUpdate() threw: {}", e.getMessage());
+            } catch (Throwable e) {
+                // Throwable, not Exception: a NoSuchMethodError/NoClassDefFoundError
+                // from a bridge gap is an Error and would kill the server tick.
+                LOGGER.warn("FC entity onUpdate() threw: {}: {}",
+                        e.getClass().getSimpleName(), e.getMessage());
             }
             if (!wasDead && fcEntity.isDead) {
                 LOGGER.info("[ENTITY-DIED] {} at ({},{},{}) on tick after onUpdate. worldObj={} worldRemote={}",
