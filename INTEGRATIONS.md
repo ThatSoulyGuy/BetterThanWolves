@@ -124,12 +124,12 @@ the combination.
 | **Added** | MC 1.14 |
 | **Conflict** | Stonecutter turns 1 stone → 2 stone slabs, while the crafting table gives 6 slabs from 3 stone (2 per stone). Net: stonecutter matches crafting-table efficiency *and* lets the player skip all shape-swap intermediate crafts. In FC's economy, where stone is a foundational tier the player earns through mining with a wood/stone pickaxe, the shortcut erodes the early-game mining loop |
 | **Pattern** | **C** (rebalance via data — halve stonecutter slab output to 1, matching its output pattern for stairs/walls/etc.) |
-| **Implementation** | [`FCRecipeOverrides`](Forge/src/main/java/btw/forge/data/FCRecipeOverrides.java) — 33 stonecutter recipes regenerated at their vanilla resource locations with `count=1` |
+| **Implementation** | [`FCRecipeOverrides`](Forge/src/main/java/btw/forge/data/FCRecipeOverrides.java) — 30 stonecutter recipes regenerated at their vanilla resource locations with `count=1` |
 | **Effect** | Stonecutter-produced slabs across stone, cobblestone, mossy, smooth, bricks, granite, diorite, andesite, sandstone (regular/smooth/cut/red), prismarine family, nether bricks, end stone bricks, blackstone family, deepslate family, and mud bricks: output count halved from 2 → 1 |
 | **Dual-sourced?** | Yes — players can still craft slabs via the 3-stone → 6-slab crafting-table recipe (vanilla, untouched). Stonecutter remains functional, just no longer a strict improvement |
 | **Data or code?** | Pure data (generated JSON at `data/minecraft/recipes/*_stonecutting.json` override paths) |
 | **Alt rejected** | Remove stonecutter slab recipes entirely. Rejected under Protocol #5 — removes a vanilla affordance rather than rebalancing it; would also break compat with mods that expect stonecutter-to-slab paths |
-| **Verified by** | `gradlew :Forge:runData` emits 33 JSON files under `src/generated/resources/data/minecraft/recipes/`. In-world: load recipe book → stonecutter with 1 stone shows `1 stone_slab` output (was `2`) |
+| **Verified by** | `gradlew :Forge:runData` emits 30 JSON files under `src/generated/resources/data/minecraft/recipes/` (committed; the Forge jar task fails if the generated dir is missing). In-world: load recipe book → stonecutter with 1 stone shows `1 stone_slab` output (was `2`) |
 | **Net effect on FC loop** | Early-game stone economy retains its weight. Stonecutter is still the "right tool" for non-slab shapes (stairs, walls, cut variants) since those were already 1:1 |
 
 ### #006 — Frost Walker radius cap

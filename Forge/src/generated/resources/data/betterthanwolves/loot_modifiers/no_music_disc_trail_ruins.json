@@ -1,0 +1,10 @@
+{
+  "type": "betterthanwolves:remove_item",
+  "conditions": [
+    {
+      "condition": "forge:loot_table_id",
+      "loot_table_id": "minecraft:archaeology/trail_ruins_rare"
+    }
+  ],
+  "item": "minecraft:music_disc_relic"
+}

@@ -49,11 +49,27 @@ sourceSets {
             exclude '**/*.txt'
         }
     }
+    // Server-side twin of the client sourceSet. Exists so the root
+    // regenerateFrozenClasses task can rebuild build/classes/java/server
+    // (the frozen artifact Forge:remapFcCode mines) from vanilla/server.
+    server {
+        java {
+            srcDirs = ["${rootDir}/vanilla/server"]
+            exclude '**/*.txt'
+        }
+    }
 }
 
 dependencies {
     // Vanilla sees the remapped FC code (btw.api.* is now net.minecraft.src.*)
     clientImplementation fileTree(dir: "$buildDir/remapped", include: ['*.jar'])
+
+    // Server compiles against the same remapped FC jar. The 1.5.2 server
+    // tree is JDK-only apart from crypto (CryptManager references
+    // BouncyCastle, which the real server bundles at runtime).
+    serverImplementation fileTree(dir: "$buildDir/remapped", include: ['*.jar'])
+    serverCompileOnly 'org.bouncycastle:bcprov-jdk15on:1.47'
+    serverImplementation fileTree(dir: "${rootDir}/libs", include: ['*.jar'])
 
     // Third-party libraries needed by vanilla
     clientImplementation 'org.lwjgl.lwjgl:lwjgl:2.9.0'
@@ -77,6 +93,7 @@ dependencies {
 }
 
 compileClientJava.dependsOn remapFcCode, ':setupVanilla'
+compileServerJava.dependsOn remapFcCode, ':setupVanilla'
 
 // --- Step 3: Parity verification ---
 

@@ -1,0 +1,598 @@
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/client/Minecraft.java vanilla/client/net/minecraft/client/Minecraft.java
+--- vanilla-pristine/client/net/minecraft/client/Minecraft.java	2026-07-08 15:39:41.788434300 -0500
++++ vanilla/client/net/minecraft/client/Minecraft.java	2026-03-18 07:30:08.425452500 -0500
+@@ -142,7 +142,7 @@
+ import org.lwjgl.opengl.PixelFormat;
+ import org.lwjgl.util.glu.GLU;
+ 
+-public abstract class Minecraft implements Runnable, IPlayerUsage
++public abstract class Minecraft extends net.minecraft.src.Minecraft implements Runnable, IPlayerUsage
+ {
+     /** A 10MiB preallocation to ensure the heap is reasonably sized. */
+     public static byte[] memoryReserve = new byte[10485760];
+@@ -153,7 +153,7 @@
+      * Set to 'this' in Minecraft constructor; used by some settings get methods
+      */
+     private static Minecraft theMinecraft;
+-    public PlayerControllerMP playerController;
++    // playerController inherited from net.minecraft.src.Minecraft
+     private boolean fullscreen = false;
+     private boolean hasCrashed = false;
+ 
+@@ -165,9 +165,9 @@
+ 
+     /** Instance of PlayerUsageSnooper. */
+     private PlayerUsageSnooper usageSnooper = new PlayerUsageSnooper("client", this);
+-    public WorldClient theWorld;
++    // theWorld inherited from net.minecraft.src.Minecraft
+     public RenderGlobal renderGlobal;
+-    public EntityClientPlayerMP thePlayer;
++    // thePlayer inherited from net.minecraft.src.Minecraft
+ 
+     /**
+      * The Entity from which the renderer determines the render viewpoint. Currently is always the parent Minecraft
+@@ -177,7 +177,7 @@
+      */
+     public EntityLiving renderViewEntity;
+     public EntityLiving pointedEntityLiving;
+-    public EffectRenderer effectRenderer;
++    // effectRenderer inherited from net.minecraft.src.Minecraft
+     public Session session = null;
+     public String minecraftUri;
+     public Canvas mcCanvas;
+@@ -186,12 +186,9 @@
+     public boolean hideQuitButton = false;
+     public volatile boolean isGamePaused = false;
+ 
+-    /** The RenderEngine instance used by Minecraft */
+-    public RenderEngine renderEngine;
++    // renderEngine inherited from net.minecraft.src.Minecraft
+ 
+-    /** The font renderer used for displaying and measuring text. */
+-    public FontRenderer fontRenderer;
+-    public FontRenderer standardGalacticFontRenderer;
++    // fontRenderer, standardGalacticFontRenderer inherited from net.minecraft.src.Minecraft
+ 
+     /** The GuiScreen that's being displayed at the moment. */
+     public GuiScreen currentScreen = null;
+@@ -223,8 +220,7 @@
+     /** The ray trace hit that the mouse is over. */
+     public MovingObjectPosition objectMouseOver = null;
+ 
+-    /** The game settings that currently hold effect. */
+-    public GameSettings gameSettings;
++    // gameSettings inherited from net.minecraft.src.Minecraft
+     protected MinecraftApplet mcApplet;
+     public SoundManager sndManager = new SoundManager();
+ 
+@@ -312,6 +308,7 @@
+         this.displayHeight = par4;
+         this.fullscreen = par5;
+         theMinecraft = this;
++        net.minecraft.src.Minecraft.setInstance(this);
+         TextureManager.init();
+         this.guiAchievement = new GuiAchievement(this);
+         // FCMOD: Code added to handle initialization of mods on client
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/server/MinecraftServer.java vanilla/client/net/minecraft/server/MinecraftServer.java
+--- vanilla-pristine/client/net/minecraft/server/MinecraftServer.java	2026-07-08 15:39:40.850197600 -0500
++++ vanilla/client/net/minecraft/server/MinecraftServer.java	2026-03-18 01:20:34.303710800 -0500
+@@ -66,7 +66,7 @@
+ import net.minecraft.src.WorldSettings;
+ import net.minecraft.src.WorldType;
+ 
+-public abstract class MinecraftServer implements ICommandSender, Runnable, IPlayerUsage
++public abstract class MinecraftServer extends net.minecraft.src.MinecraftServer implements ICommandSender, Runnable, IPlayerUsage
+ {
+     /** Instance of Minecraft Server. */
+     private static MinecraftServer mcServer = null;
+@@ -89,8 +89,8 @@
+     /** The server's port. */
+     private int serverPort = -1;
+ 
+-    /** The server world instances. */
+-    public WorldServer[] worldServers;
++    /** The server world instances. (inherited from net.minecraft.src.MinecraftServer) */
++    // public WorldServer[] worldServers;  -- uses parent's field
+ 
+     /** The ServerConfigurationManager instance. */
+     private ServerConfigurationManager serverConfigManager;
+@@ -171,6 +171,7 @@
+     public MinecraftServer(File par1File)
+     {
+         mcServer = this;
++        net.minecraft.src.MinecraftServer.setInstance(this);
+         this.anvilFile = par1File;
+         this.commandManager = new ServerCommandManager();
+         this.anvilConverterForAnvilFile = new AnvilSaveConverter(par1File);
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/AxisAlignedBB.java vanilla/client/net/minecraft/src/AxisAlignedBB.java
+--- vanilla-pristine/client/net/minecraft/src/AxisAlignedBB.java	2026-07-08 15:39:41.800602800 -0500
++++ vanilla/client/net/minecraft/src/AxisAlignedBB.java	2026-03-17 23:55:48.132690600 -0500
+@@ -558,9 +558,9 @@
+     }
+     
+     @Override
+-	public void AddToRayTrace( FCUtilsRayTraceVsComplexBlock rayTrace )
++	public void AddToRayTrace( Object rayTrace )
+     {
+-    	rayTrace.AddBoxWithLocalCoordsToIntersectionList( minX, minY, minZ, maxX, maxY, maxZ );
++    	((FCUtilsRayTraceVsComplexBlock)rayTrace).AddBoxWithLocalCoordsToIntersectionList( minX, minY, minZ, maxX, maxY, maxZ );
+     }
+ 	
+     @Override
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/Block.java vanilla/client/net/minecraft/src/Block.java
+--- vanilla-pristine/client/net/minecraft/src/Block.java	2026-07-08 15:39:41.810458700 -0500
++++ vanilla/client/net/minecraft/src/Block.java	2026-03-18 02:05:45.222004400 -0500
+@@ -2872,7 +2872,7 @@
+     	NotifyNearbyAnimalsFinishedFalling( world, i, j, k );
+     }
+ 
+-    public void OnFallingUpdate( FCEntityFallingBlock entity ) {}
++    public void OnFallingUpdate( EntityFallingSand entity ) {}
+     
+     public void NotifyNearbyAnimalsFinishedFalling( World world, int i, int j, int k )
+     {
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/ChunkProviderHell.java vanilla/client/net/minecraft/src/ChunkProviderHell.java
+--- vanilla-pristine/client/net/minecraft/src/ChunkProviderHell.java	2026-07-08 15:39:41.884380500 -0500
++++ vanilla/client/net/minecraft/src/ChunkProviderHell.java	2026-03-18 02:29:38.618199800 -0500
+@@ -41,7 +41,7 @@
+     private double[] noiseField;
+     // FCMOD: Changed
+     //public MapGenNetherBridge genNetherBridge = new MapGenNetherBridge();
+-    public FCMapGenNetherBridge genNetherBridge = new FCMapGenNetherBridge();
++    public MapGenNetherBridge genNetherBridge = new FCMapGenNetherBridge();
+     // END FCMOD
+ 
+     /**
+@@ -575,8 +575,8 @@
+     	/*
+         if (par1EnumCreatureType == EnumCreatureType.monster && this.genNetherBridge.hasStructureAt(par2, par3, par4))
+         */
+-        if ( par1EnumCreatureType == EnumCreatureType.monster && 
+-        	genNetherBridge.HasStructureAtLoose( par2, par3, par4 ) )
++        if ( par1EnumCreatureType == EnumCreatureType.monster &&
++        	((FCMapGenNetherBridge) genNetherBridge).HasStructureAtLoose( par2, par3, par4 ) )
+     	// END FCMOD
+         {
+             return this.genNetherBridge.getSpawnList();
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/Entity.java vanilla/client/net/minecraft/src/Entity.java
+--- vanilla-pristine/client/net/minecraft/src/Entity.java	2026-07-08 15:39:41.956214400 -0500
++++ vanilla/client/net/minecraft/src/Entity.java	2026-03-18 02:08:22.467300900 -0500
+@@ -2178,7 +2178,7 @@
+     /**
+      * Called when a lightning bolt hits the entity.
+      */
+-    public void onStruckByLightning(EntityLightningBolt par1EntityLightningBolt)
++    public void onStruckByLightning(Entity par1EntityLightningBolt)
+     {
+         this.dealFireDamage(5);
+         ++this.fire;
+@@ -2532,11 +2532,11 @@
+     	return IsSecondaryTargetForSquid() && isEntityAlive();
+     }
+     
+-    public void OnFlungBySquidTentacle( FCEntitySquid squid )
++    public void OnFlungBySquidTentacle( Entity squid )
+     {
+     }
+-    
+-    public void OnHeadCrabbedBySquid( FCEntitySquid squid )
++
++    public void OnHeadCrabbedBySquid( Entity squid )
+     {
+     }
+     
+@@ -2555,7 +2555,7 @@
+ 		return false;
+ 	}
+ 	
+-    public void OnKickedByCow( FCEntityCow cow )
++    public void OnKickedByCow( Entity cow )
+ 	{
+     	FlingAwayFromEntity( cow, GetCowKickMovementMultiplier() );    	
+     }
+@@ -2654,7 +2654,7 @@
+     	return false;
+     }
+     
+-    public void OnStruckByLightning( FCEntityLightningBolt boltEntity )
++    public void OnStruckByLightning( Entity boltEntity )
+     {
+         dealFireDamage( 7 );
+         
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/EntityAnimal.java vanilla/client/net/minecraft/src/EntityAnimal.java
+--- vanilla-pristine/client/net/minecraft/src/EntityAnimal.java	2026-07-08 15:39:42.364425500 -0500
++++ vanilla/client/net/minecraft/src/EntityAnimal.java	2026-03-18 01:43:27.405817200 -0500
+@@ -698,18 +698,18 @@
+     }
+     
+     @Override
+-    public void OnFlungBySquidTentacle( FCEntitySquid squid )
++    public void OnFlungBySquidTentacle( Entity squid )
+     {
+-		DamageSource squidSource = DamageSource.causeMobDamage( squid );
+-		
++		DamageSource squidSource = DamageSource.causeMobDamage( (EntityLiving)squid );
++
+ 		attackEntityFrom( squidSource, 0 );
+     }
+-    
++
+     @Override
+-    public void OnHeadCrabbedBySquid( FCEntitySquid squid )
++    public void OnHeadCrabbedBySquid( Entity squid )
+     {
+-		DamageSource squidSource = DamageSource.causeMobDamage( squid );
+-		
++		DamageSource squidSource = DamageSource.causeMobDamage( (EntityLiving)squid );
++
+ 		attackEntityFrom( squidSource, 0 );
+     }
+     
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/EntityCreeper.java vanilla/client/net/minecraft/src/EntityCreeper.java
+--- vanilla-pristine/client/net/minecraft/src/EntityCreeper.java	2026-07-08 15:39:41.983375800 -0500
++++ vanilla/client/net/minecraft/src/EntityCreeper.java	2026-03-18 01:42:11.967329300 -0500
+@@ -247,7 +247,7 @@
+     /**
+      * Called when a lightning bolt hits the entity.
+      */
+-    public void onStruckByLightning(EntityLightningBolt par1EntityLightningBolt)
++    public void onStruckByLightning(Entity par1EntityLightningBolt)
+     {
+         super.onStruckByLightning(par1EntityLightningBolt);
+         this.dataWatcher.updateObject(17, Byte.valueOf((byte)1));
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/EntityLiving.java vanilla/client/net/minecraft/src/EntityLiving.java
+--- vanilla-pristine/client/net/minecraft/src/EntityLiving.java	2026-07-08 15:39:41.999121500 -0500
++++ vanilla/client/net/minecraft/src/EntityLiving.java	2026-03-18 01:41:48.787274800 -0500
+@@ -3592,7 +3592,7 @@
+     }
+     
+     @Override
+-    public void OnFlungBySquidTentacle( FCEntitySquid squid )
++    public void OnFlungBySquidTentacle( Entity squid )
+     {
+     	// doesn't call attackEntityFrom() by default so that monsters remain chill about it and don't attack back
+     	
+@@ -3600,7 +3600,7 @@
+     }
+     
+     @Override
+-    public void OnHeadCrabbedBySquid( FCEntitySquid squid )
++    public void OnHeadCrabbedBySquid( Entity squid )
+     {
+     	// doesn't call attackEntityFrom() by default so that monsters remain chill about it and don't attack back
+     	
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/EntityPig.java vanilla/client/net/minecraft/src/EntityPig.java
+--- vanilla-pristine/client/net/minecraft/src/EntityPig.java	2026-07-08 15:39:42.007121200 -0500
++++ vanilla/client/net/minecraft/src/EntityPig.java	2026-03-18 01:42:13.167038800 -0500
+@@ -207,7 +207,7 @@
+     /**
+      * Called when a lightning bolt hits the entity.
+      */
+-    public void onStruckByLightning(EntityLightningBolt par1EntityLightningBolt)
++    public void onStruckByLightning(Entity par1EntityLightningBolt)
+     {
+         if (!this.worldObj.isRemote)
+         {
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/EntityPlayerMP.java vanilla/client/net/minecraft/src/EntityPlayerMP.java
+--- vanilla-pristine/client/net/minecraft/src/EntityPlayerMP.java	2026-07-08 15:39:42.740392300 -0500
++++ vanilla/client/net/minecraft/src/EntityPlayerMP.java	2026-03-18 02:08:22.480407500 -0500
+@@ -1402,7 +1402,7 @@
+     }
+ 	
+ 	@Override
+-    public void OnStruckByLightning( FCEntityLightningBolt boltEntity )
++    public void OnStruckByLightning( Entity boltEntity )
+     {
+         if ( !capabilities.disableDamage )
+         {
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/NetHandler.java vanilla/client/net/minecraft/src/NetHandler.java
+--- vanilla-pristine/client/net/minecraft/src/NetHandler.java	2026-07-08 15:39:42.192037200 -0500
++++ vanilla/client/net/minecraft/src/NetHandler.java	2026-03-18 01:54:32.108344200 -0500
+@@ -474,9 +474,9 @@
+     }
+     
+     // FCMOD: Added
+-    public void HandleStartBlockHarvest( FCPacket166StartBlockHarvest packet )
++    public void HandleStartBlockHarvest( Object packet )
+     {
+-        unexpectedPacket( packet );
++        unexpectedPacket( (Packet)packet );
+     }
+     // END FCMOD
+ }
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/NetServerHandler.java vanilla/client/net/minecraft/src/NetServerHandler.java
+--- vanilla-pristine/client/net/minecraft/src/NetServerHandler.java	2026-07-08 15:39:42.193037200 -0500
++++ vanilla/client/net/minecraft/src/NetServerHandler.java	2026-03-18 01:53:18.611386700 -0500
+@@ -1345,8 +1345,9 @@
+ 	    return collidingBoundingBoxes;
+ 	}
+     
+-    public void HandleStartBlockHarvest( FCPacket166StartBlockHarvest packet )
++    public void HandleStartBlockHarvest( Object packetObj )
+     {
++        FCPacket166StartBlockHarvest packet = (FCPacket166StartBlockHarvest)packetObj;
+         WorldServer world = mcServer.worldServerForDimension( playerEntity.dimension );
+ 
+         int i = packet.iIPos;
+diff -ruN -x .setup-complete vanilla-pristine/client/net/minecraft/src/World.java vanilla/client/net/minecraft/src/World.java
+--- vanilla-pristine/client/net/minecraft/src/World.java	2026-07-08 15:39:42.331357400 -0500
++++ vanilla/client/net/minecraft/src/World.java	2026-03-18 01:46:00.952365800 -0500
+@@ -4996,7 +4996,7 @@
+         playSound( par1, par3, par5, par7Str, par8, par9, false );    	
+     }
+     
+-    public Entity GetClosestEntityMatchingCriteriaWithinRange( double dSourcePosX, double dSourcePosY, double dSourcePosZ, double dRange, FCClosestEntitySelectionCriteria criteria )
++    public Entity GetClosestEntityMatchingCriteriaWithinRange( double dSourcePosX, double dSourcePosY, double dSourcePosZ, double dRange, Object criteria )
+     {
+ 		int iChunkEntityListMinVerticalIndex = MathHelper.floor_double( ( dSourcePosY - dRange ) / 16.0D );
+ 		int iChunkEntityListMaxVerticalIndex = MathHelper.floor_double( ( dSourcePosY + dRange ) / 16.0D ) + 1;
+@@ -5013,8 +5013,8 @@
+ 			iChunkEntityListMinVerticalIndex = Math.min( iChunkEntityListMinVerticalIndex, iChunkEntityListMaxVerticalIndex );			
+ 		}
+ 		
+-    	FCClosestEntityInfo closestEntityInfo = 
+-    		new FCClosestEntityInfo( dSourcePosX, dSourcePosY, dSourcePosZ, dRange * dRange, null, criteria, iChunkEntityListMinVerticalIndex, iChunkEntityListMaxVerticalIndex );
++    	FCClosestEntityInfo closestEntityInfo =
++    		new FCClosestEntityInfo( dSourcePosX, dSourcePosY, dSourcePosZ, dRange * dRange, null, (FCClosestEntitySelectionCriteria)criteria, iChunkEntityListMinVerticalIndex, iChunkEntityListMaxVerticalIndex );
+     	
+         int iMinChunkX = MathHelper.floor_double( ( dSourcePosX - dRange ) / 16D  );
+         int iMaxChunkX = MathHelper.floor_double( ( dSourcePosX + dRange ) / 16D  ) + 1;
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/server/MinecraftServer.java vanilla/server/net/minecraft/server/MinecraftServer.java
+--- vanilla-pristine/server/net/minecraft/server/MinecraftServer.java	2026-07-08 15:39:41.408408100 -0500
++++ vanilla/server/net/minecraft/server/MinecraftServer.java	2026-03-18 01:20:49.054695300 -0500
+@@ -70,7 +70,7 @@
+ import net.minecraft.src.WorldSettings;
+ import net.minecraft.src.WorldType;
+ 
+-public abstract class MinecraftServer implements ICommandSender, Runnable, IPlayerUsage
++public abstract class MinecraftServer extends net.minecraft.src.MinecraftServer implements ICommandSender, Runnable, IPlayerUsage
+ {
+     /** Instance of Minecraft Server. */
+     private static MinecraftServer mcServer = null;
+@@ -91,8 +91,8 @@
+     /** The server's port. */
+     private int serverPort = -1;
+ 
+-    /** The server world instances. */
+-    public WorldServer[] worldServers;
++    /** The server world instances. (inherited from net.minecraft.src.MinecraftServer) */
++    // public WorldServer[] worldServers;  -- uses parent's field
+ 
+     /** The ServerConfigurationManager instance. */
+     private ServerConfigurationManager serverConfigManager;
+@@ -172,6 +172,7 @@
+     public MinecraftServer(File par1File)
+     {
+         mcServer = this;
++        net.minecraft.src.MinecraftServer.setInstance(this);
+         this.anvilFile = par1File;
+         this.commandManager = new ServerCommandManager();
+         this.anvilConverterForAnvilFile = new AnvilSaveConverter(par1File);
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/AxisAlignedBB.java vanilla/server/net/minecraft/src/AxisAlignedBB.java
+--- vanilla-pristine/server/net/minecraft/src/AxisAlignedBB.java	2026-07-08 15:39:42.373450300 -0500
++++ vanilla/server/net/minecraft/src/AxisAlignedBB.java	2026-03-17 23:55:55.744588400 -0500
+@@ -557,9 +557,9 @@
+     }
+     
+     @Override
+-	public void AddToRayTrace( FCUtilsRayTraceVsComplexBlock rayTrace )
++	public void AddToRayTrace( Object rayTrace )
+     {
+-    	rayTrace.AddBoxWithLocalCoordsToIntersectionList( minX, minY, minZ, maxX, maxY, maxZ );
++    	((FCUtilsRayTraceVsComplexBlock)rayTrace).AddBoxWithLocalCoordsToIntersectionList( minX, minY, minZ, maxX, maxY, maxZ );
+     }
+ 	
+     @Override
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/Block.java vanilla/server/net/minecraft/src/Block.java
+--- vanilla-pristine/server/net/minecraft/src/Block.java	2026-07-08 15:39:42.382347800 -0500
++++ vanilla/server/net/minecraft/src/Block.java	2026-03-18 02:05:45.236425800 -0500
+@@ -2709,7 +2709,7 @@
+     	NotifyNearbyAnimalsFinishedFalling( world, i, j, k );
+     }
+     
+-    public void OnFallingUpdate( FCEntityFallingBlock entity ) {}
++    public void OnFallingUpdate( EntityFallingSand entity ) {}
+     
+     public void NotifyNearbyAnimalsFinishedFalling( World world, int i, int j, int k )
+     {
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/ChunkProviderHell.java vanilla/server/net/minecraft/src/ChunkProviderHell.java
+--- vanilla-pristine/server/net/minecraft/src/ChunkProviderHell.java	2026-07-08 15:39:42.443417000 -0500
++++ vanilla/server/net/minecraft/src/ChunkProviderHell.java	2026-03-18 02:29:45.660734700 -0500
+@@ -40,7 +40,7 @@
+     private double[] noiseField;
+     // FCMOD: Changed
+     //public MapGenNetherBridge genNetherBridge = new MapGenNetherBridge();
+-    public FCMapGenNetherBridge genNetherBridge = new FCMapGenNetherBridge();
++    public MapGenNetherBridge genNetherBridge = new FCMapGenNetherBridge();
+     // END FCMOD
+ 
+     /**
+@@ -574,8 +574,8 @@
+     	/*
+         if (par1EnumCreatureType == EnumCreatureType.monster && this.genNetherBridge.hasStructureAt(par2, par3, par4))
+         */
+-        if ( par1EnumCreatureType == EnumCreatureType.monster && 
+-        	genNetherBridge.HasStructureAtLoose( par2, par3, par4 ) )
++        if ( par1EnumCreatureType == EnumCreatureType.monster &&
++        	((FCMapGenNetherBridge) genNetherBridge).HasStructureAtLoose( par2, par3, par4 ) )
+     	// END FCMOD
+         {
+             return this.genNetherBridge.getSpawnList();
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/Entity.java vanilla/server/net/minecraft/src/Entity.java
+--- vanilla-pristine/server/net/minecraft/src/Entity.java	2026-07-08 15:39:42.504336300 -0500
++++ vanilla/server/net/minecraft/src/Entity.java	2026-03-18 02:08:22.483286300 -0500
+@@ -2010,7 +2010,7 @@
+     /**
+      * Called when a lightning bolt hits the entity.
+      */
+-    public void onStruckByLightning(EntityLightningBolt par1EntityLightningBolt)
++    public void onStruckByLightning(Entity par1EntityLightningBolt)
+     {
+         this.dealFireDamage(5);
+         ++this.fire;
+@@ -2348,11 +2348,11 @@
+     	return IsSecondaryTargetForSquid() && isEntityAlive();
+     }
+     
+-    public void OnFlungBySquidTentacle( FCEntitySquid squid )
++    public void OnFlungBySquidTentacle( Entity squid )
+     {
+     }
+     
+-    public void OnHeadCrabbedBySquid( FCEntitySquid squid )
++    public void OnHeadCrabbedBySquid( Entity squid )
+     {
+     }    
+     
+@@ -2371,7 +2371,7 @@
+ 		return false;
+ 	}
+ 	
+-    public void OnKickedByCow( FCEntityCow cow )
++    public void OnKickedByCow( Entity cow )
+ 	{
+     	FlingAwayFromEntity( cow, GetCowKickMovementMultiplier() );    	
+     }
+@@ -2470,7 +2470,7 @@
+     	return false;
+     }
+     
+-    public void OnStruckByLightning( FCEntityLightningBolt boltEntity )
++    public void OnStruckByLightning( Entity boltEntity )
+     {
+         dealFireDamage( 7 );
+         
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/EntityAnimal.java vanilla/server/net/minecraft/src/EntityAnimal.java
+--- vanilla-pristine/server/net/minecraft/src/EntityAnimal.java	2026-07-08 15:39:42.736152800 -0500
++++ vanilla/server/net/minecraft/src/EntityAnimal.java	2026-07-08 15:31:01.655826000 -0500
+@@ -697,17 +697,17 @@
+     }
+     
+     @Override
+-    public void OnFlungBySquidTentacle( FCEntitySquid squid )
++    public void OnFlungBySquidTentacle( Entity squid )
+     {
+-		DamageSource squidSource = DamageSource.causeMobDamage( squid );
++		DamageSource squidSource = DamageSource.causeMobDamage( (EntityLiving)squid );
+ 		
+ 		attackEntityFrom( squidSource, 0 );
+     }
+     
+     @Override
+-    public void OnHeadCrabbedBySquid( FCEntitySquid squid )
++    public void OnHeadCrabbedBySquid( Entity squid )
+     {
+-		DamageSource squidSource = DamageSource.causeMobDamage( squid );
++		DamageSource squidSource = DamageSource.causeMobDamage( (EntityLiving)squid );
+ 		
+ 		attackEntityFrom( squidSource, 0 );
+     }
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/EntityCreeper.java vanilla/server/net/minecraft/src/EntityCreeper.java
+--- vanilla-pristine/server/net/minecraft/src/EntityCreeper.java	2026-07-08 15:39:42.525381200 -0500
++++ vanilla/server/net/minecraft/src/EntityCreeper.java	2026-03-18 01:42:39.725047600 -0500
+@@ -238,7 +238,7 @@
+     /**
+      * Called when a lightning bolt hits the entity.
+      */
+-    public void onStruckByLightning(EntityLightningBolt par1EntityLightningBolt)
++    public void onStruckByLightning(Entity par1EntityLightningBolt)
+     {
+         super.onStruckByLightning(par1EntityLightningBolt);
+         this.dataWatcher.updateObject(17, Byte.valueOf((byte)1));
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/EntityLiving.java vanilla/server/net/minecraft/src/EntityLiving.java
+--- vanilla-pristine/server/net/minecraft/src/EntityLiving.java	2026-07-08 15:39:42.535406600 -0500
++++ vanilla/server/net/minecraft/src/EntityLiving.java	2026-03-18 01:41:18.166850800 -0500
+@@ -3455,7 +3455,7 @@
+     }
+     
+     @Override
+-    public void OnFlungBySquidTentacle( FCEntitySquid squid )
++    public void OnFlungBySquidTentacle( Entity squid )
+     {
+     	// doesn't call attackEntityFrom() by default so that monsters remain chill about it and don't attack back
+     	
+@@ -3463,7 +3463,7 @@
+     }
+     
+     @Override
+-    public void OnHeadCrabbedBySquid( FCEntitySquid squid )
++    public void OnHeadCrabbedBySquid( Entity squid )
+     {
+     	// doesn't call attackEntityFrom() by default so that monsters remain chill about it and don't attack back
+     	
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/EntityPig.java vanilla/server/net/minecraft/src/EntityPig.java
+--- vanilla-pristine/server/net/minecraft/src/EntityPig.java	2026-07-08 15:39:42.542430400 -0500
++++ vanilla/server/net/minecraft/src/EntityPig.java	2026-03-18 01:42:40.654923600 -0500
+@@ -205,7 +205,7 @@
+     /**
+      * Called when a lightning bolt hits the entity.
+      */
+-    public void onStruckByLightning(EntityLightningBolt par1EntityLightningBolt)
++    public void onStruckByLightning(Entity par1EntityLightningBolt)
+     {
+         if (!this.worldObj.isRemote)
+         {
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/EntityPlayerMP.java vanilla/server/net/minecraft/src/EntityPlayerMP.java
+--- vanilla-pristine/server/net/minecraft/src/EntityPlayerMP.java	2026-07-08 15:39:42.741392400 -0500
++++ vanilla/server/net/minecraft/src/EntityPlayerMP.java	2026-03-18 02:08:22.484802400 -0500
+@@ -1407,7 +1407,7 @@
+     }
+ 
+ 	@Override
+-    public void OnStruckByLightning( FCEntityLightningBolt boltEntity )
++    public void OnStruckByLightning( Entity boltEntity )
+     {
+         if ( !capabilities.disableDamage )
+         {
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/NetHandler.java vanilla/server/net/minecraft/src/NetHandler.java
+--- vanilla-pristine/server/net/minecraft/src/NetHandler.java	2026-07-08 15:39:42.623303000 -0500
++++ vanilla/server/net/minecraft/src/NetHandler.java	2026-03-18 01:54:46.408492600 -0500
+@@ -473,9 +473,9 @@
+     }
+     
+     // FCMOD: Added
+-    public void HandleStartBlockHarvest( FCPacket166StartBlockHarvest packet )
++    public void HandleStartBlockHarvest( Object packet )
+     {
+-        unexpectedPacket( packet );
++        unexpectedPacket( (Packet)packet );
+     }
+     // END FCMOD
+ }
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/NetServerHandler.java vanilla/server/net/minecraft/src/NetServerHandler.java
+--- vanilla-pristine/server/net/minecraft/src/NetServerHandler.java	2026-07-08 15:39:42.624302800 -0500
++++ vanilla/server/net/minecraft/src/NetServerHandler.java	2026-03-18 01:54:00.874166900 -0500
+@@ -1341,8 +1341,9 @@
+ 	    return collidingBoundingBoxes;
+ 	}
+ 	
+-    public void HandleStartBlockHarvest( FCPacket166StartBlockHarvest packet )
++    public void HandleStartBlockHarvest( Object packetObj )
+     {
++        FCPacket166StartBlockHarvest packet = (FCPacket166StartBlockHarvest)packetObj;
+         WorldServer world = mcServer.worldServerForDimension( playerEntity.dimension );
+ 
+         int i = packet.iIPos;
+diff -ruN -x .setup-complete vanilla-pristine/server/net/minecraft/src/World.java vanilla/server/net/minecraft/src/World.java
+--- vanilla-pristine/server/net/minecraft/src/World.java	2026-07-08 15:39:42.709449000 -0500
++++ vanilla/server/net/minecraft/src/World.java	2026-03-18 02:09:47.012847300 -0500
+@@ -4592,7 +4592,7 @@
+         playSound( par1, par3, par5, par7Str, par8, par9, false );    	
+     }
+     
+-    public Entity GetClosestEntityMatchingCriteriaWithinRange( double dSourcePosX, double dSourcePosY, double dSourcePosZ, double dRange, FCClosestEntitySelectionCriteria criteria )
++    public Entity GetClosestEntityMatchingCriteriaWithinRange( double dSourcePosX, double dSourcePosY, double dSourcePosZ, double dRange, Object criteria )
+     {
+ 		int iChunkEntityListMinVerticalIndex = MathHelper.floor_double( ( dSourcePosY - dRange ) / 16.0D );
+ 		int iChunkEntityListMaxVerticalIndex = MathHelper.floor_double( ( dSourcePosY + dRange ) / 16.0D ) + 1;
+@@ -4609,8 +4609,8 @@
+ 			iChunkEntityListMinVerticalIndex = Math.min( iChunkEntityListMinVerticalIndex, iChunkEntityListMaxVerticalIndex );			
+ 		}
+ 		
+-    	FCClosestEntityInfo closestEntityInfo = 
+-    		new FCClosestEntityInfo( dSourcePosX, dSourcePosY, dSourcePosZ, dRange * dRange, null, criteria, iChunkEntityListMinVerticalIndex, iChunkEntityListMaxVerticalIndex );
++    	FCClosestEntityInfo closestEntityInfo =
++    		new FCClosestEntityInfo( dSourcePosX, dSourcePosY, dSourcePosZ, dRange * dRange, null, (FCClosestEntitySelectionCriteria)criteria, iChunkEntityListMinVerticalIndex, iChunkEntityListMaxVerticalIndex );
+     	
+         int iMinChunkX = MathHelper.floor_double( ( dSourcePosX - dRange ) / 16D  );
+         int iMaxChunkX = MathHelper.floor_double( ( dSourcePosX + dRange ) / 16D  ) + 1;

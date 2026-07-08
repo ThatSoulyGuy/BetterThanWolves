@@ -1,0 +1,4 @@
+# Patch files must stay byte-exact (LF) — CRLF conversion on checkout would
+# make them fail to apply against the LF-normalized vanilla/ tree.
+patches/*.patch -text
+*/patch.txt -text

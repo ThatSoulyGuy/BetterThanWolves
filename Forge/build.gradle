@@ -1100,6 +1100,21 @@ jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
+// The dist jar must contain the data-gen output — the loot/recipe rebalance
+// (INTEGRATIONS #004/#005) lives in src/generated/resources, which is
+// committed to git. Fail loudly if it's missing so a wiped tree can't
+// silently ship a jar without the overrides. (Guard is on `jar`, not
+// processResources, so runData itself can regenerate from an empty dir.)
+tasks.named('jar').configure {
+    doFirst {
+        def genData = file('src/generated/resources/data')
+        if (!genData.isDirectory() || (genData.list()?.length ?: 0) == 0) {
+            throw new GradleException('Forge/src/generated/resources is missing or empty — ' +
+                'the loot/recipe overrides (#004/#005) would not ship. Run: gradlew :Forge:runData')
+        }
+    }
+}
+
 repositories {
     // JEI
     maven {
