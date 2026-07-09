@@ -74,6 +74,12 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
             tryDirectRegistration();
         }
 
+        // Register the vanilla renderers for frozen-vanilla entities that FC's
+        // ClientAddEntityRenderers doesn't cover (it only registers FC subclasses).
+        // Without these, fc_arrow/fc_snowball/fc_egg/fc_tnt_primed/fc_fish_hook have no
+        // FC Render and fall back to the debug box.
+        registerMissingVanillaRenderers();
+
         // Populate from FC's RenderManager renderer map
         try {
             Map<?, ?> rendererMap = btw.modern.RenderManager.instance.getEntityRenderMap();
@@ -127,6 +133,35 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
             } catch (Exception e) {
                 LOGGER.debug("Could not direct-register {}: {}", className, e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Registers the ported vanilla renderers for the frozen-vanilla entities FC does not
+     * subclass (real 1.5.2 registered these in the base RenderManager ctor; our shim only
+     * registered RenderItem + RenderXPOrb). Uses reflection for the entity class so we
+     * don't need a Modern-Common stub for every one (EntitySnowball has none), and skips
+     * any that already have a renderer.
+     */
+    private static void registerMissingVanillaRenderers() {
+        reg("btw.modern.EntityArrow", new btw.modern.RenderArrow());
+        reg("btw.modern.EntityTNTPrimed", new btw.modern.RenderTNTPrimed());
+        reg("btw.modern.EntityFishHook", new btw.modern.RenderFish());
+        reg("btw.modern.EntitySnowball", new btw.modern.RenderSnowball(btw.modern.Item.snowball));
+        reg("btw.modern.EntityEgg", new btw.modern.RenderSnowball(btw.modern.Item.egg));
+    }
+
+    private static void reg(String entityClassName, btw.modern.Render renderer) {
+        try {
+            Class<?> entityClass = Class.forName(entityClassName);
+            if (btw.modern.RenderManager.instance.getEntityClassRenderObject(entityClass) == null) {
+                btw.modern.RenderManager.AddEntityRenderer(entityClass, renderer);
+                LOGGER.info("Registered vanilla renderer {} for {}",
+                        renderer.getClass().getSimpleName(), entityClass.getSimpleName());
+            }
+        } catch (Throwable t) {
+            LOGGER.warn("Could not register {} for {}: {}",
+                    renderer.getClass().getSimpleName(), entityClassName, t.toString());
         }
     }
 

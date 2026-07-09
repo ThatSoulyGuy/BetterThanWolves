@@ -52,8 +52,37 @@ to the Modern-Common `EntityXPOrb` compile-stub (the frozen class wins at runtim
 provides the live values; the stub only needs the signatures so RenderXPOrb links).
 Registered it in the `RenderManager` shim ctor next to `RenderItem`.
 
-Remaining (same port-and-register pattern, not yet done): RenderArrow, RenderSnowball
-(snowball+egg), RenderTNTPrimed, RenderFish.
+Remaining frozen-vanilla renderers — DONE (2026-07-09 (h) below).
+
+## 2026-07-09 (h) Remaining frozen-vanilla entity renderers ported
+
+Ported the rest of the missing vanilla renderers to Modern-Common and registered them via
+`FCEntityRenderer.registerMissingVanillaRenderers` (reflection on the entity class, so no
+Modern-Common stub is required — EntitySnowball has none):
+
+- `RenderArrow` (fc_arrow) — 6-quad model, texture `/item/arrows.png` (shipped) -> renders
+  with the correct texture.
+- `RenderTNTPrimed` (fc_tnt_primed) — TNT block via `RenderBlocks.renderBlockAsItem`
+  (same capture path as RenderFallingSand); swells as the fuse runs; the blended
+  fuse-blink overlay is omitted.
+- `RenderSnowball` (fc_snowball + fc_egg) — item-icon billboard, mirrors RenderItem's
+  icon path (loadTexture "/gui/items.png" + item Icon UVs).
+- `RenderFish` (fc_fish_hook) — bobber billboard from `/particles.png`; the fishing LINE
+  (angler->hook) is omitted (needs client Minecraft.thePlayer + line-mode capture the
+  pipeline doesn't support).
+
+Geometry verified (compile + LinkAudit: 0 missing classes, 11 documented members). Texture
+status differs by entity because the entity capture pipeline (FCEntityRenderer) binds ONE
+path-resolved texture per entity (first quad's name -> betterthanwolves:textures/<name>):
+arrow is confirmed correct (dedicated shipped texture); TNT/snowball/egg go through the
+block/item icon-name path (like FallingSand/tile-items) and the fish bobber's
+`/particles.png` is not shipped, so those may show a placeholder texture pending an in-game
+check. Making those correct is a texture-layer follow-up (ship the FC atlas/particle
+textures and/or teach the entity pipeline to resolve atlas icons), not a geometry issue.
+
+Billboard note: RenderSnowball/RenderFish/RenderXPOrb use RenderManager.playerViewY/X,
+which the capture pipeline leaves at 0, so they face a fixed direction rather than the
+camera.
 
 ## 2026-07-09 (f) "Random ghast_hurt in a fresh world" — instrumentation
 
