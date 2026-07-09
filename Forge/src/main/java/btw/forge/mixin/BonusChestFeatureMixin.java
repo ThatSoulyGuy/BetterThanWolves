@@ -32,7 +32,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BonusChestFeatureMixin {
 
     private static final int BASKET_ID = 1031;
-    private static final int GOLDEN_DUNG_ID = 22290;
 
     @Inject(method = "place", at = @At("HEAD"), cancellable = true)
     private void btw$bonusBasket(FeaturePlaceContext<NoneFeatureConfiguration> context,
@@ -55,14 +54,17 @@ public abstract class BonusChestFeatureMixin {
                     level.setBlock(pos, basket.defaultBlockState(), 2);
                     try {
                         BlockEntity be = level.getBlockEntity(pos);
-                        btw.modern.Item dungItem = GOLDEN_DUNG_ID < btw.modern.Item.itemsList.length
-                                ? btw.modern.Item.itemsList[GOLDEN_DUNG_ID] : null;
+                        // Resolve golden dung by its FC field, not itemsList[22290]: the FC Item
+                        // ctor offsets itemID by 256, so the raw id is the wrong slot.
+                        btw.modern.Item dungItem = (btw.modern.Item) Class.forName("btw.modern.FCBetterThanWolves")
+                                .getField("fcItemGoldenDung").get(null);
                         if (be instanceof ProxyBlockEntity pbe && pbe.getFcTileEntity() != null
                                 && dungItem != null) {
                             btw.modern.TileEntity fcTe = pbe.getFcTileEntity();
                             btw.modern.ItemStack dung = new btw.modern.ItemStack(dungItem, 1);
                             fcTe.getClass().getMethod("SetStorageStack", btw.modern.ItemStack.class)
                                     .invoke(fcTe, dung);
+                            pbe.setChanged();
                         }
                     } catch (Throwable ignored) {
                     }
