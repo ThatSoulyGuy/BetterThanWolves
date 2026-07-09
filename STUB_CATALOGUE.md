@@ -4,6 +4,30 @@ Originally audited 2026-03-28. Re-audited 2026-06-05 (see below). Link-audited
 2026-07-08 (see below). Every remaining stub, no-op, empty body, hardcoded
 return, and TODO across the btw.modern and btw.forge layers.
 
+## 2026-07-09 Double-application sweep (movement "super fast" bug)
+
+Symptom: player moves too fast. Root cause: DOUBLE application of FC's block
+GetMovementModifier. Vanilla `Entity.getBlockSpeedFactor()` already calls
+`Block.getSpeedFactor()` on the feet/below blocks — which BlockMixin (vanilla-
+with-FC-counterpart) and ProxyBlock (FC blocks) multiply by GetMovementModifier
+(×1.2 on hard surfaces). `LivingEntityMixin.btw$getBlockSpeedFactor` then
+multiplied the RETURNED value by GetMovementModifier AGAIN → ×1.44. The
+soul-sand review fix (replace→multiply) is what turned it from single into
+double (the old replace discarded the block-level contribution). FIX: removed
+the redundant LivingEntityMixin hook; the block-level getSpeedFactor is the
+single, correct application point (matches vanilla's flow). Now ×1.2 single on
+hard surfaces, ×0.48 on soul sand.
+
+Swept the sibling FC property systems for the same block-vs-entity double
+pattern: friction (block-level only — single), getSpeed/GetLandMovementModifier
+(single, a different factor), mining getDestroyProgress (single). All clean.
+FOUND a separate UNDER-application: PlayerBridge.pendingMeleeDamageModifier is
+stored (PlayerMixin.attack@HEAD = GetMeleeDamageModifier()) but NEVER consumed —
+FC melee damage scaling is a no-op. Not the speed bug (opposite direction);
+needs a Player.attack damage @ModifyVariable to actually apply it. Open.
+
+
+
 **Remaining estimated stubs: ~400** — SUPERSEDED by the 2026-07-08 stub
 elimination below: a 9-agent verified triage reduced the claim to **103 real
 live stubs**, of which ~100 are now implemented. See that section for what

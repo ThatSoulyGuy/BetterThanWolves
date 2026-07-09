@@ -35,45 +35,13 @@ public abstract class LivingEntityMixin {
 
     @Shadow protected boolean jumping;
 
-    /**
-     * Intercepts the block speed factor calculation. In vanilla this calls
-     * {@code Block.getSpeedFactor()} which our BlockMixin already handles.
-     * This mixin provides a safety net for cases where the vanilla code
-     * bypasses the Block method and reads the speed factor directly from
-     * the block state.
-     */
-    // @At("RETURN") + multiply: FC's GetMovementModifier COMPOSES with the modern block
-    // speed factor rather than replacing it. Replacing overwrote soul sand's modern 0.4
-    // slowdown with FC's 1.2 hard-surface bonus, making soul sand 20% FASTER than stone.
-    // Composed: stone 1.0*1.2=1.2, soul sand 0.4*1.2=0.48 — matches 1.5.2's net.
-    @Inject(method = "getBlockSpeedFactor", at = @At("RETURN"), cancellable = true)
-    private void btw$getBlockSpeedFactor(CallbackInfoReturnable<Float> cir) {
-        LivingEntity self = (LivingEntity) (Object) this;
-
-        // Get FC world — works for both server (ServerLevel) and client
-        btw.modern.World fcWorld = null;
-        if (self.level() instanceof net.minecraft.server.level.ServerLevel sl) {
-            fcWorld = WorldBridge.getOrCreate(sl);
-        }
-
-        // Standing surface first (below), else the block the entity is inside.
-        BlockPos pos = self.blockPosition().below();
-        btw.modern.Block fcBlock = ProxyRegistry.getFcBlock(self.level().getBlockState(pos).getBlock());
-        if (fcBlock == null) {
-            pos = self.blockPosition();
-            fcBlock = ProxyRegistry.getFcBlock(self.level().getBlockState(pos).getBlock());
-        }
-        if (fcBlock != null) {
-            try {
-                float modifier = fcBlock.GetMovementModifier(fcWorld, pos.getX(), pos.getY(), pos.getZ());
-                if (modifier > 0) {
-                    cir.setReturnValue(cir.getReturnValue() * modifier);
-                }
-            } catch (Exception e) {
-                // FC code may fail if world is null on client — leave the modern value
-            }
-        }
-    }
+    // NO getBlockSpeedFactor hook here — DELIBERATELY removed. Vanilla
+    // Entity.getBlockSpeedFactor already calls Block.getSpeedFactor() on the feet/below
+    // blocks, which BlockMixin (vanilla-with-FC-counterpart) and ProxyBlock (FC blocks)
+    // already multiply by FC's GetMovementModifier. Applying GetMovementModifier AGAIN at
+    // the LivingEntity level double-counted it — ×1.44 on hard surfaces (the "moving super
+    // fast" bug). The block-level hook is the single, correct application point; the
+    // old "safety net" here was wrong (vanilla does NOT bypass Block.getSpeedFactor).
 
     // Suppress vanilla FoodProperties effect application for any food with an FC counterpart:
     // FC's ItemFood.onFoodEaten already applies the FC effect via ItemStackMixin.finishUsingItem,
