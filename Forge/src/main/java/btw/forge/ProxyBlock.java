@@ -244,70 +244,8 @@ public class ProxyBlock extends Block implements EntityBlock {
     @Override
     public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
         try {
-            // Create a lightweight client-side World wrapper for particle spawning
-            btw.modern.World clientWorld = new btw.modern.World() {
-                { this.isRemote = true; this.rand = new Random(); }
-                public int getBlockId(int x, int y, int z) {
-                    return ProxyRegistry.getBlockId(level.getBlockState(new BlockPos(x, y, z)).getBlock());
-                }
-                public int getBlockMetadata(int x, int y, int z) {
-                    BlockState s = level.getBlockState(new BlockPos(x, y, z));
-                    return s.hasProperty(META) ? s.getValue(META) : 0;
-                }
-                public btw.modern.Material getBlockMaterial(int x, int y, int z) {
-                    return fc().blockMaterial;
-                }
-                public boolean isAirBlock(int x, int y, int z) {
-                    return level.getBlockState(new BlockPos(x, y, z)).isAir();
-                }
-                public boolean isBlockNormalCube(int x, int y, int z) { return false; }
-                public void spawnParticle(String name, double x, double y, double z,
-                                          double vx, double vy, double vz) {
-                    try {
-                        // Map FC particle names to MC 1.20.1 ParticleTypes
-                        net.minecraft.core.particles.ParticleOptions particle = mapParticle(name);
-                        if (particle != null) {
-                            level.addParticle(particle, x, y, z, vx, vy, vz);
-                        }
-                    } catch (Exception ignored) {}
-                }
-                public void playSoundEffect(double x, double y, double z,
-                                             String sound, float vol, float pitch) {}
-                public boolean canBlockSeeTheSky(int x, int y, int z) {
-                    return level.canSeeSky(new BlockPos(x, y, z));
-                }
-                public boolean setBlock(int x, int y, int z, int id, int meta, int flags) { return false; }
-                public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {
-                    net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(new BlockPos(x, y, z));
-                    if (be instanceof ProxyBlockEntity pbe) return pbe.getFcTileEntity();
-                    return null;
-                }
-                public boolean canPlaceEntityOnSide(int id, int x, int y, int z, boolean b, int s, btw.modern.Entity e, btw.modern.ItemStack st) { return false; }
-                public java.util.List getEntitiesWithinAABB(Class c, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
-                public java.util.List getEntitiesWithinAABBExcludingEntity(btw.modern.Entity e, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
-                public void scheduleBlockUpdate(int x, int y, int z, int id, int delay) {}
-                public void notifyBlockChange(int x, int y, int z, int id) {}
-                public boolean spawnEntityInWorld(btw.modern.Entity e) { return false; }
-                public boolean canMineBlock(btw.modern.EntityPlayer p, int x, int y, int z) { return true; }
-                public boolean doesBlockHaveSolidTopSurface(int x, int y, int z) { return true; }
-                public int getSavedLightValue(btw.modern.EnumSkyBlock type, int x, int y, int z) { return 15; }
-                public int getFullBlockLightValue(int x, int y, int z) { return 15; }
-                public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) { return true; }
-                public boolean checkNoEntityCollision(btw.modern.AxisAlignedBB bb) { return true; }
-                public void playSoundAtEntity(btw.modern.Entity e, String s, float v, float p) {}
-                public void playAuxSFX(int id, int x, int y, int z, int data) {}
-                public void playAuxSFXAtEntity(btw.modern.EntityPlayer p, int id, int x, int y, int z, int data) {}
-                public boolean isRaining() { return false; }
-                public boolean isBlockGettingPowered(int x, int y, int z) { return false; }
-                public boolean isBlockIndirectlyGettingPowered(int x, int y, int z) { return false; }
-                public btw.modern.IChunkProvider createChunkProvider() { return null; }
-                public boolean destroyBlock(int x, int y, int z, boolean drop) { return false; }
-                public void markBlockRangeForRenderUpdate(int x1, int y1, int z1, int x2, int y2, int z2) {}
-                public btw.modern.WorldChunkManager getWorldChunkManager() { return null; }
-                public boolean setBlockToAir(int x, int y, int z) { return false; }
-                public boolean setBlockMetadata(int x, int y, int z, int meta, int flags) { return false; }
-                public btw.modern.BiomeGenBase getBiomeGenForCoords(int x, int z) { return btw.modern.BiomeGenBase.plains; }
-            };
+            // Lightweight FC World over the modern level (see createFcWorld).
+            btw.modern.World clientWorld = createFcWorld(level);
             fc().randomDisplayTick(clientWorld, pos.getX(), pos.getY(), pos.getZ(),
                     new Random(random.nextLong()));
         } catch (Exception ignored) {
@@ -725,9 +663,100 @@ public class ProxyBlock extends Block implements EntityBlock {
         } catch (Exception ignored) {
             // If setBlockBoundsBasedOnState fails, use default bounds
         }
+
+        // FCBlockSpike (lightning rod, iron spike) and similar define their real shape in
+        // getCollisionBoundingBoxFromPool, NOT the minX..maxZ fields — so when the fields are
+        // still a full cube on a non-cube block, read the real collision box instead. Fixes the
+        // lightning rod's full-block collision under its ~1px model.
+        boolean fullCube = fcBlock.minX <= 0.001 && fcBlock.minY <= 0.001 && fcBlock.minZ <= 0.001
+                && fcBlock.maxX >= 0.999 && fcBlock.maxY >= 0.999 && fcBlock.maxZ >= 0.999;
+        if (fullCube && !fcBlock.renderAsNormalBlock()) {
+            try {
+                btw.modern.AxisAlignedBB bb = fcBlock.getCollisionBoundingBoxFromPool(
+                        createFcWorld(level), pos.getX(), pos.getY(), pos.getZ());
+                if (bb != null) {
+                    double ox = pos.getX(), oy = pos.getY(), oz = pos.getZ();
+                    return net.minecraft.world.phys.shapes.Shapes.box(
+                            clamp01(bb.minX - ox), clamp01(bb.minY - oy), clamp01(bb.minZ - oz),
+                            clamp01(bb.maxX - ox), clamp01(bb.maxY - oy), clamp01(bb.maxZ - oz));
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
         return net.minecraft.world.phys.shapes.Shapes.box(
                 fcBlock.minX, fcBlock.minY, fcBlock.minZ,
                 fcBlock.maxX, fcBlock.maxY, fcBlock.maxZ);
+    }
+
+    private static double clamp01(double v) {
+        return v < 0 ? 0 : (v > 1 ? 1 : v);
+    }
+
+    /**
+     * Builds a lightweight {@link btw.modern.World} over a modern {@link net.minecraft.world.level.BlockGetter},
+     * enough for FC block queries that only read the world (randomDisplayTick particles;
+     * getCollisionBoundingBoxFromPool bounds, which read metadata). Level-only calls are guarded
+     * so it also works from collision queries where the accessor may not be a full Level.
+     */
+    private btw.modern.World createFcWorld(net.minecraft.world.level.BlockGetter level) {
+        return new btw.modern.World() {
+            { this.isRemote = true; this.rand = new Random(); }
+            public int getBlockId(int x, int y, int z) {
+                return ProxyRegistry.getBlockId(level.getBlockState(new BlockPos(x, y, z)).getBlock());
+            }
+            public int getBlockMetadata(int x, int y, int z) {
+                BlockState s = level.getBlockState(new BlockPos(x, y, z));
+                return s.hasProperty(META) ? s.getValue(META) : 0;
+            }
+            public btw.modern.Material getBlockMaterial(int x, int y, int z) { return fc().blockMaterial; }
+            public boolean isAirBlock(int x, int y, int z) { return level.getBlockState(new BlockPos(x, y, z)).isAir(); }
+            public boolean isBlockNormalCube(int x, int y, int z) { return false; }
+            public void spawnParticle(String name, double x, double y, double z, double vx, double vy, double vz) {
+                try {
+                    net.minecraft.core.particles.ParticleOptions particle = mapParticle(name);
+                    if (particle != null && level instanceof net.minecraft.world.level.Level lvl) {
+                        lvl.addParticle(particle, x, y, z, vx, vy, vz);
+                    }
+                } catch (Exception ignored) {}
+            }
+            public void playSoundEffect(double x, double y, double z, String sound, float vol, float pitch) {}
+            public boolean canBlockSeeTheSky(int x, int y, int z) {
+                return !(level instanceof net.minecraft.world.level.LevelReader lr)
+                        || lr.canSeeSky(new BlockPos(x, y, z));
+            }
+            public boolean setBlock(int x, int y, int z, int id, int meta, int flags) { return false; }
+            public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {
+                net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(new BlockPos(x, y, z));
+                if (be instanceof ProxyBlockEntity pbe) return pbe.getFcTileEntity();
+                return null;
+            }
+            public boolean canPlaceEntityOnSide(int id, int x, int y, int z, boolean b, int s, btw.modern.Entity e, btw.modern.ItemStack st) { return false; }
+            public java.util.List getEntitiesWithinAABB(Class c, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
+            public java.util.List getEntitiesWithinAABBExcludingEntity(btw.modern.Entity e, btw.modern.AxisAlignedBB bb) { return java.util.Collections.emptyList(); }
+            public void scheduleBlockUpdate(int x, int y, int z, int id, int delay) {}
+            public void notifyBlockChange(int x, int y, int z, int id) {}
+            public boolean spawnEntityInWorld(btw.modern.Entity e) { return false; }
+            public boolean canMineBlock(btw.modern.EntityPlayer p, int x, int y, int z) { return true; }
+            public boolean doesBlockHaveSolidTopSurface(int x, int y, int z) { return true; }
+            public int getSavedLightValue(btw.modern.EnumSkyBlock type, int x, int y, int z) { return 15; }
+            public int getFullBlockLightValue(int x, int y, int z) { return 15; }
+            public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) { return true; }
+            public boolean checkNoEntityCollision(btw.modern.AxisAlignedBB bb) { return true; }
+            public void playSoundAtEntity(btw.modern.Entity e, String s, float v, float p) {}
+            public void playAuxSFX(int id, int x, int y, int z, int data) {}
+            public void playAuxSFXAtEntity(btw.modern.EntityPlayer p, int id, int x, int y, int z, int data) {}
+            public boolean isRaining() { return false; }
+            public boolean isBlockGettingPowered(int x, int y, int z) { return false; }
+            public boolean isBlockIndirectlyGettingPowered(int x, int y, int z) { return false; }
+            public btw.modern.IChunkProvider createChunkProvider() { return null; }
+            public boolean destroyBlock(int x, int y, int z, boolean drop) { return false; }
+            public void markBlockRangeForRenderUpdate(int x1, int y1, int z1, int x2, int y2, int z2) {}
+            public btw.modern.WorldChunkManager getWorldChunkManager() { return null; }
+            public boolean setBlockToAir(int x, int y, int z) { return false; }
+            public boolean setBlockMetadata(int x, int y, int z, int meta, int flags) { return false; }
+            public btw.modern.BiomeGenBase getBiomeGenForCoords(int x, int z) { return btw.modern.BiomeGenBase.plains; }
+        };
     }
 
     @Override

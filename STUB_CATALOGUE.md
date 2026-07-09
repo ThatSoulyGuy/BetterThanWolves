@@ -1000,3 +1000,16 @@ Phase 1 shipped: Lightning Rod in jungle temples. New `add_item` GLM
 generated JSON (data/betterthanwolves/loot_modifiers/jungle_temple_lightning_rod.json) targeting
 minecraft:chests/jungle_temple with betterthanwolves:block_1067 at chance 0.2. Compiles clean.
 Next: wood species-drop fix, bonus basket, mineshaft GLM, plants features, strata, nether spawns.
+
+## 2026-07-09 (o) Lightning rod (FCBlockSpike) full-block collision under a 1px model
+
+The FC Lightning Rod (fcBlockLightningRod, an FCBlockSpike) renders as a thin spike but
+collided as a full block. FCBlockSpike defines its shape only via getCollisionBoundingBoxFromPool
+(a thin strut/center box from FCModelBlockSpike) — it never sets minX..maxZ — but ProxyBlock's
+getFcShape read minX..maxZ (default full cube). Fix: when the FC bounds are still a full cube on
+a non-normal-cube block, getFcShape now calls getCollisionBoundingBoxFromPool (via a lightweight
+FC world, extracted from animateTick into ProxyBlock.createFcWorld) and returns that box instead;
+falls back to minX..maxZ on any failure. Targeted guard (fullCube && !renderAsNormalBlock) keeps
+it off normal blocks. Fixes collision + selection outline for all FCBlockSpike variants.
+(FYI the rod's function: it attracts thunderstorm lightning strikes — WorldServer:1477 /
+FCEntityLightningBolt redirect bolts to it, an iron lightning rod predating vanilla's 1.17 one.)
