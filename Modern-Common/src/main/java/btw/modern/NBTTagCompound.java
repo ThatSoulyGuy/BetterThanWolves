@@ -8,6 +8,12 @@ public class NBTTagCompound extends NBTBase {
     private Map tagMap = new HashMap();
     public NBTTagCompound() {}
 
+    // 1.5.2 NBTTagCompound.getTags — the tag collection; used by NBT-copy paths and
+    // MobSpawnerBaseLogic. ForgeNBTCompound overrides for the disk-backed case.
+    public java.util.Collection getTags() {
+        return tagMap.values();
+    }
+
     // 1.5.2 ctor — frozen Entity.writeToNBT news NBTTagCompound("Riding") when
     // an entity is mounted (FC squid head-crab). The name is redundant with the
     // setCompoundTag key, so this shim discards it like the no-arg ctor does.

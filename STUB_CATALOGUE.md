@@ -98,17 +98,40 @@ fcGloom → magic (armor bypass); FCContainerMenu openContainer reset; and more.
   minor gap, the right trade. Lesson: a review recommendation can have second-order effects
   the reviewer missed; adversarially verify fixes, not just findings.
 
-**Still open (verified NOT worth stubbing — no live caller, per no-BS-stubs rule):**
-- 21 LinkAudit missing-members, all dead/gated: portal trio (dead — WorldBridge is World
-  again), frozen EntityFallingSand (FC uses restructured), flat FCEntityCreeper AI (live
-  creepers use restructured AI), hopper/spawner minecart internals (no EntityType), SlotArmor
-  GUI icon, Item.appleGold (fc_zombie never registers), ILogAgent.logSevere (FC items become
-  modern), FCClientRenderSpider render-pass (shouldRenderPass never called). Stubbing these
-  would be BS — they have no live caller.
-- 68 intentional bridge no-ops (GUI display methods, GL state, client-only paths handled by
-  the modern engine) — correct as designed.
-- VillageSiege (zombie sieges) — no LinkAudit caller; a pure gameplay-feature addition, not
-  a gap. RenderItem enchantment-glint pass — cosmetic, omitted with a comment.
+**Functionality pass (2026-07-09) — real bodies, not stubs, for every reachable member.**
+Re-verified all 21 against ACTUAL class existence (the earlier inventory falsely claimed
+several FC mobs "were never restructured" — they exist and are live). 10 had a genuine
+1.5.2 body + a real (if gated) FC caller and got faithful implementations:
+- BlockBed.isBlockHeadOfBed — REACHABLE: live FC ocelots (EntityAIOcelotSit) sit on beds.
+- BlockSilverfish.getPosingIdByMetadata — REACHABLE: mutant silverfish from FCEntityCow.BirthMutant.
+- Item.appleGold — REACHABLE: right-clicking a live FC zombie (EntityZombie.interact). id 322.
+- BlockRailBase.isRailBlock/isRailBlockAt — dispensed FC minecart follows track.
+- BlockSand.canFallBelow, Direction.getMovementDirection, ItemSword.func_82803_g,
+  Chunk.getRandomWithSeed (+ World.getSeed / WorldBridge override), NBTTagCompound.getTags —
+  real 1.5.2 logic, faithful bodies (some behind gated features; correct when the gate opens).
+
+**Genuinely NOT patchable — 11 remaining LinkAudit members (no functionality to add):**
+Each is a dead frozen-flat DUPLICATE (behavior already runs in the restructured path), or
+SUPERSEDED by the modern engine, or ARCHITECTURALLY undeclarable. Adding bodies would either
+change nothing (dead duplicate) or duplicate the modern engine (net-harmful — proven by the
+WorldServer revert):
+- Block.OnFallingUpdate(FCEntityFallingBlock), FCEntityCreeper.GetIsDeterminedToExplode/
+  GetNeuteredState — flat frozen duplicates; the live restructured FCEntityFallingBlock/
+  FCEntityCreeper already do this (shim has the OnFallingUpdate(EntityFallingSand) live overload).
+- WorldServer.getMinecraftServer — returns the MODERN net.minecraft.server.MinecraftServer
+  type, which Modern-Common structurally cannot declare; also portal-only (dead).
+- ServerConfigurationManager.transferEntityToWorld, WorldServer.resetUpdateEntityTick — FC
+  dimension travel; the modern engine handles proxy dimension travel (portal path dead).
+- TileEntityHopper.suckItemsIntoHopper/func_96114_a — hopper minecart; modern handles it and
+  FCItemMinecart never dispenses a hopper cart.
+- ItemArmor.func_94602_b — empty-armor-slot GUI icon; modern GUI owns slot backgrounds.
+- ILogAgent.logSevere — frozen EntityItem.onUpdate log; FC items are converted to modern
+  ItemEntity (never ticks); adding to the interface only churns implementors.
+- FCClientRenderSpider.setSpiderEyeBrightness — FC multi-pass render; the modern engine
+  renders the proxy spider (render passes not wired).
+- 68 intentional bridge no-ops (GUI display, GL state, client-only) — correct as designed.
+- VillageSiege — a gameplay feature with no caller, not a gap. RenderItem enchant-glint —
+  cosmetic, omitted with a comment.
 
 ---
 

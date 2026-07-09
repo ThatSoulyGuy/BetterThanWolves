@@ -19,4 +19,10 @@ public class ItemSword extends Item {
     public EnumToolMaterial getToolMaterial() {
         return this.toolMaterial;
     }
+
+    // 1.5.2 ItemSword.func_82803_g (vanilla ItemSword.java:33) — raw weapon damage, used by
+    // EntityLiving.onLivingUpdate's canPickUpLoot better-weapon comparison.
+    public int func_82803_g() {
+        return this.toolMaterial.getDamageVsEntity();
+    }
 }

@@ -2170,4 +2170,10 @@ public class WorldBridge extends btw.modern.World {
         villageCollectionObj.func_82566_a(this);
         villageCollectionObj.tick();
     }
+
+    // Live world seed — Chunk.getRandomWithSeed (slime-chunk determination) needs the real seed.
+    @Override
+    public long getSeed() {
+        return level.getSeed();
+    }
 }

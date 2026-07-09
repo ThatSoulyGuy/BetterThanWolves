@@ -22,6 +22,17 @@ public abstract class BlockRailBase extends Block {
         this.setBlockBounds(0.0F, 0.0F, 0.0F, 1.0F, 0.125F, 1.0F);
     }
 
+    // 1.5.2 (FCMOD) BlockRailBase.isRailBlock / isRailBlockAt (vanilla BlockRailBase.java:27,35)
+    // — FCMOD widened to "any BlockRailBase". EntityMinecart (dispensed via a Block Dispenser)
+    // uses these to follow track.
+    public static final boolean isRailBlockAt(World world, int x, int y, int z) {
+        return isRailBlock(world.getBlockId(x, y, z));
+    }
+
+    public static final boolean isRailBlock(int blockId) {
+        return Block.blocksList[blockId] instanceof BlockRailBase;
+    }
+
     // --- Rendering properties ---
 
     @Override

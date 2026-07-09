@@ -1071,6 +1071,8 @@ public abstract class World implements IBlockAccess {
     public long getWorldTime() { return worldInfo != null ? worldInfo.getWorldTime() : 0; }
     public void setWorldTime(long time) { if (worldInfo != null) worldInfo.setWorldTime(time); }
     public long getTotalWorldTime() { return worldInfo != null ? worldInfo.getTotalWorldTime() : 0; }
+    // World seed — Chunk.getRandomWithSeed (slime-chunk RNG); WorldBridge overrides with the live seed.
+    public long getSeed() { return worldInfo != null ? worldInfo.getSeed() : 0L; }
 
     // --- World info ---
 

@@ -103,6 +103,16 @@ public class Chunk {
         return 0;
     }
 
+    // 1.5.2 Chunk.getRandomWithSeed (vanilla Chunk.java:1106) — deterministic per-chunk RNG
+    // (slime chunks); EntitySlime.getCanSpawnHere uses it.
+    public java.util.Random getRandomWithSeed(long seed) {
+        return new java.util.Random(worldObj.getSeed()
+                + (long) (xPosition * xPosition * 4987142)
+                + (long) (xPosition * 5947611)
+                + (long) (zPosition * zPosition) * 4392871L
+                + (long) (zPosition * 389711) ^ seed);
+    }
+
     // 1.5.2 Chunk.GetBlockNaturalLightValue (BTW-patched vanilla/server Chunk.java:1352) —
     // called by World.GetBlockNaturalLightValue_do; modified version of getBlockLightValue
     // that only considers natural (sky) light. The shim has no section storage, so it

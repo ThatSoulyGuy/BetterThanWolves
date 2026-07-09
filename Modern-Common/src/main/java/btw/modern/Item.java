@@ -154,6 +154,8 @@ public class Item {
     // live fc_skeleton) drops a random disc id in [record13.itemID, recordWait.itemID].
     public static Item record13;
     public static Item recordWait;
+    // Golden apple — frozen EntityZombie.interact reads it (curing path); id 322.
+    public static Item appleGold;
     public static ItemArmor helmetLeather;
     public static ItemArmor helmetChain;
     public static ItemArmor helmetIron;
@@ -836,6 +838,7 @@ public class Item {
         // real disc. Only the two range endpoints are referenced by FC code.
         record13 = new Item(2000);         // 2256 (music_disc_13)
         recordWait = new Item(2011);       // 2267 (music_disc_wait)
+        appleGold = new Item(66);          // 322 (golden_apple), mapped by ProxyRegistry
     }
 
     // Concrete subclass for ItemMap (protected constructor)
