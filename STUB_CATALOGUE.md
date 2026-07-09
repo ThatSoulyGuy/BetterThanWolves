@@ -27,6 +27,34 @@ synced each tick by `BTWNetwork.PenaltySync` (`clientHealthPenalty`/`clientHunge
 `clientFatPenalty`/`clientGloomLevel`). Client prediction and server correction now
 agree, so the debuff is felt consistently.
 
+## 2026-07-09 (g) Frozen-vanilla entities don't render (fc_xp_orb, arrows, ...)
+
+Symptom: some FC entities never render, e.g. `fc_xp_orb` (XP orbs invisible).
+
+Root cause: `FCEntityRenderer` (the generic capture renderer) needs an FC `Render`
+instance per entity class, looked up from `RenderManager.getEntityRenderMap()`. That map
+is filled by (a) the `RenderManager` shim ctor and (b) FC's `ClientAddEntityRenderers`.
+In real 1.5.2 the base `RenderManager` ctor registered ~50 vanilla renderers, but the
+Modern-Common shim ctor only registered `RenderItem`; FC's `ClientAddEntityRenderers` only
+covers FC entity *subclasses* (FCEntityPig→RenderPig, ...). So **frozen vanilla entities
+that FC doesn't subclass have no renderer** and fall back to the debug box. Affected (all
+registered via `registerPlainEntity`): `fc_xp_orb` (EntityXPOrb), `fc_arrow` (EntityArrow),
+`fc_snowball` (EntitySnowball), `fc_tnt_primed` (EntityTNTPrimed), `fc_egg` (EntityEgg),
+`fc_fish_hook` (EntityFishHook). The projectile/orb renderers were never ported to
+Modern-Common (unlike the mob renderers) and aren't relocated, so `btw.modern.RenderXPOrb`
+etc. didn't exist at runtime.
+
+Fix (fc_xp_orb): ported `RenderXPOrb` to Modern-Common (billboard quad; drops the
+lightmap/GL-state calls per the RenderFallingSand port convention; texture `/item/xporb.png`
+recorded via `Render.loadTexture` for the capture pipeline, resolves to the shipped
+`betterthanwolves:textures/item/xporb.png`). Added the `xpColor` field + `getTextureByXP()`
+to the Modern-Common `EntityXPOrb` compile-stub (the frozen class wins at runtime and
+provides the live values; the stub only needs the signatures so RenderXPOrb links).
+Registered it in the `RenderManager` shim ctor next to `RenderItem`.
+
+Remaining (same port-and-register pattern, not yet done): RenderArrow, RenderSnowball
+(snowball+egg), RenderTNTPrimed, RenderFish.
+
 ## 2026-07-09 (f) "Random ghast_hurt in a fresh world" — instrumentation
 
 Symptom: in a fresh world (nothing built), `entity.ghast.hurt` plays at random.

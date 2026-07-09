@@ -16,6 +16,11 @@ public class RenderManager {
         // matching vanilla RenderManager's ctor loop — RenderItem.renderDroppedItem reads
         // renderManager.playerViewY.
         AddEntityRenderer(EntityItem.class, new RenderItem());
+        // 1.5.2 RenderManager ctor also registered RenderXPOrb for EntityXPOrb. FC's
+        // ClientAddEntityRenderers only covers FC entity subclasses, so the frozen vanilla
+        // EntityXPOrb (fc_xp_orb) had no renderer and fell back to FCEntityRenderer's debug
+        // box. Register it here so the capture pipeline finds an FC Render.
+        AddEntityRenderer(EntityXPOrb.class, new RenderXPOrb());
     }
 
     public static double renderPosX;
