@@ -50,21 +50,25 @@ classes we kept finding in game get caught automatically. Three tiers:
 
 Backlog surfaced by the first BridgeAudit run — CLEARED 2026-07-09 (l) below.
 
-## 2026-07-09 (m) Stoked-fire (Hibachi) custom flame effect — animate it
+## 2026-07-09 (m) Stoked-fire (Hibachi) custom flame — authentic runtime procedural fire
 
-The stoked fire that forms over a stoked Hibachi already rendered its custom flame geometry
-(FCBakedModel captures FCBlockFireStoked.RenderBlock for every ProxyBlock) with its authentic
-texture (the block atlas force-stitches all block/ textures, so resolveTexture step 1 finds
-betterthanwolves:block/fcblockfirestokedstub_0 before the soul_fire fallback). But FC's flame
-is procedurally ANIMATED (FCClientTextureFireStoked) and only two STATIC 16x16 frames ship, so
-the bridge showed a dead, non-flickering flame.
+The stoked fire over a stoked Hibachi already rendered its custom flame geometry (FCBakedModel
+captures FCBlockFireStoked.RenderBlock for every ProxyBlock) with its authentic texture (the
+block atlas force-stitches all block/ textures, so resolveTexture step 1 finds
+betterthanwolves:block/fcblockfirestokedstub_0 before the soul_fire fallback). But FC's flame is
+procedurally ANIMATED (FCClientAnimationFire) and only two static 16x16 frames ship, so the
+bridge showed a dead, non-flickering flame.
 
-Fix: tools/GenStokedFireAnim.java stitches the two shipped frames into 2-frame 16x32 animated
-strips (each variant flickering into the other) + writes .mcmeta, so MC's block atlas animates
-them. No code change needed (FCBakedModel already resolves + captures the flame); the FCBakedModel
-soul_fire entries are now just a fallback. Result: a flickering "stoked" flame using BTW's own
-art, distinct from vanilla fire (custom geometry + texture). Caveat: a 2-frame flicker, not FC's
-smooth procedural animation.
+First pass baked the two frames into a 2-frame mcmeta strip — reverted. Now done FC-authentic:
+btw.forge.client.StokedFireTexture ports FCClientAnimationFire's cellular fire simulation (random
+seeded bottom row drifting upward with weighted decay; white-hot core -> orange-edge color ramp)
+and, each client tick, re-uploads the generated 16x16 RGBA frame straight onto the block atlas at
+the stoked-fire sprite (RenderSystem.bindTexture + NativeImage.upload) — exactly what FC's 1.5.2
+TextureFX did. Two independent sims drive the two checkerboard variants; the stoked variant reads
+the hotter lower half of the 16x32 field. Registered via @Mod.EventBusSubscriber (forge bus,
+Dist.CLIENT); self-disables on any failure. Caveat: only atlas mip 0 is re-uploaded (distant
+flame falls back to the static stub mips). Untested visually (no launch here) — needs an in-game
+look at a stoked Hibachi.
 
 ## 2026-07-09 (l) Clear the BridgeAudit backlog (silent effects/sounds, fish texture)
 

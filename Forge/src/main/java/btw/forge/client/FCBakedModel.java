@@ -677,12 +677,12 @@ public class FCBakedModel implements BakedModel {
         // Fire
         VANILLA_TEXTURE_MAP.put("fire_layer_0", "fire_0");
         VANILLA_TEXTURE_MAP.put("fire_layer_1", "fire_1");
-        // Stoked fire (Hibachi) — FC used a procedural animated texture (FCClientTextureFireStoked)
-        // the bridge can't run. The shipped fcblockfirestokedstub_0/1 textures are now 2-frame
-        // animated strips (+ .mcmeta; see tools/GenStokedFireAnim.java), so texture-resolution
-        // step 1 (betterthanwolves:block/<name>, stitched via the block atlas) renders the
-        // authentic flickering flame over the block's custom RenderBlock geometry. These
-        // soul-fire entries remain only as a fallback if that sprite is ever missing.
+        // Stoked fire (Hibachi): texture-resolution step 1 finds the stitched
+        // betterthanwolves:block/fcblockfirestokedstub_0/1 sprites, over which the block's
+        // custom RenderBlock flame geometry is baked. StokedFireTexture then drives those
+        // sprites at runtime with FC's actual procedural fire simulation (re-uploaded to the
+        // atlas each tick), reproducing FC's FCClientAnimationFire. These soul-fire entries
+        // are only a fallback if that sprite is ever missing.
         VANILLA_TEXTURE_MAP.put("fcblockfirestokedstub_0", "soul_fire_0");
         VANILLA_TEXTURE_MAP.put("fcblockfirestokedstub_1", "soul_fire_1");
         VANILLA_TEXTURE_MAP.put("tallgrass", "short_grass");
