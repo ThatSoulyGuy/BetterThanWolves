@@ -1064,3 +1064,18 @@ also pointed the model at the CamelCase name. With core.ignorecase=true (Windows
 was invisible locally. Fixed by renaming all four textures to lowercase in git (temp-name
 two-step, required on a case-insensitive FS) and reverting the model to the lowercase reference.
 The atlas/blockstate/StokedFireTexture already used lowercase, so no other change was needed.
+
+## 2026-07-09 (s) Fix all FC mobs going red / randomly dying (spurious MC suffocation)
+
+Symptom: every FC-replaced mob rendered with the red hurt tint and died at random over ~30s
+(log: repeated ProxyMob.remove(KILLED) via LivingEntity.tickDeath). Deductively traced: MC
+owns puppet HP, so death means MC hurt() drove HP to 0. Ruled out by static analysis —
+fire (FC Entity.fire is -1 when not burning -> flow-back sends 0), void (mobs above y=-64),
+drown (on land), cramming (ProxyMob no-ops pushEntities), freeze (powder snow), fall (gated
+behind the no-op travel()). Decompiling 1.20.1 LivingEntity.baseTick() (which DOES run on the
+puppet via super.tick()) left exactly one land-applicable damage: inWall (suffocation), guarded
+only by isInWall(). The puppet's MC position/eye box is FC-driven and doesn't match FC's world
+view, so isInWall() fired spuriously on essentially every mob. Fix: override isInWall()->false
+on ProxyMob/ProxyAnimal/ProxyPathfinderMob — FC already applies its own suffocation inside
+fcEntity.onUpdate(), so MC's check is redundant as well as wrong. A temporary [MOB-DMG] WARN in
+ProxyMob.hurt() (logs src/amount) is kept for one confirming run and will be removed after.

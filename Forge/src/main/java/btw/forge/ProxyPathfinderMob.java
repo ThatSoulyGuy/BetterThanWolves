@@ -117,6 +117,8 @@ public class ProxyPathfinderMob extends PathfinderMob
 
     @Override protected void customServerAiStep() {}
     @Override public void travel(net.minecraft.world.phys.Vec3 travelVector) {}
+    // FC owns collision/suffocation; MC's isInWall() check is spurious here (see ProxyMob.isInWall).
+    @Override public boolean isInWall() { return false; }
     @Override protected float tickHeadTurn(float yRot, float animStep) { return animStep; }
     @Override public void push(double x, double y, double z) {}
     @Override public boolean isPushable() { return false; }

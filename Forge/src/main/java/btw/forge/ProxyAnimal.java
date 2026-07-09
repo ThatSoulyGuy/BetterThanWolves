@@ -203,6 +203,11 @@ public class ProxyAnimal extends Animal
     @Override
     public void travel(net.minecraft.world.phys.Vec3 travelVector) {}
 
+    /** FC owns collision/suffocation; MC's isInWall() suffocation check is spurious
+     *  on a position-driven puppet (see ProxyMob.isInWall). */
+    @Override
+    public boolean isInWall() { return false; }
+
     /** No-op: FC owns body/head rotation — see ProxyMob. */
     @Override
     protected float tickHeadTurn(float yRot, float animStep) { return animStep; }

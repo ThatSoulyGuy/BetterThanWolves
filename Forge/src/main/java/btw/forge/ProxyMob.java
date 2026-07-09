@@ -235,6 +235,18 @@ public class ProxyMob extends Mob
     @Override
     public void travel(net.minecraft.world.phys.Vec3 travelVector) {}
 
+    /**
+     * FC-driven puppets are never "stuck in a wall" from MC's perspective. FC owns
+     * this entity's collision and applies its own suffocation damage inside
+     * fcEntity.onUpdate(); MC's LivingEntity.baseTick() also checks isInWall() and
+     * deals 1 suffocation damage/tick, but it runs on the puppet's MC position/eye
+     * box (which does not match FC's), so it fired spuriously on essentially every
+     * FC mob — the "all mobs red / randomly dying" bug. Returning false disables the
+     * redundant MC check without affecting FC's authoritative simulation.
+     */
+    @Override
+    public boolean isInWall() { return false; }
+
     /** No-op: FC owns body/head rotation. Prevents MC's LivingEntity.aiStep
      *  from overwriting yBodyRot/yHeadRot that we set from FC's values. */
     @Override
@@ -518,6 +530,10 @@ public class ProxyMob extends Mob
     private boolean forwardingHurtToFc = false;
 
     public boolean hurt(DamageSource source, float amount) {
+        // [DIAG] capture what is damaging puppet mobs (red-flash + random-death bug)
+        LOGGER.warn("[MOB-DMG] fc={} src={} amt={} hpBefore={} y={} fire={} inWall={}",
+                fcClassName, source.type().msgId(), amount, getHealth(), getY(),
+                fcEntity != null ? fcEntity.fire : -999, isInWall());
         // Let MC's full hurt() pipeline run: hurt sound, red flash,
         // knockback, hit particles, hurt animation, AI revenge target,
         // damage application, death/loot. We do not short-circuit any
