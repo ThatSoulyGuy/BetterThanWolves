@@ -390,6 +390,9 @@ task remapFcCode(type: ShadowJar) {
         include 'net/minecraft/src/EntityMinecartMobSpawner.class'
         include 'net/minecraft/src/EntityMinecartContainer.class'
         include 'net/minecraft/src/EntityMinecartMobSpawnerLogic.class'
+        // Hopper interface — frozen EntityMinecartHopper (and hopper TE) implement it;
+        // without it EntityList.<clinit> loading EntityMinecartHopper NoClassDefFoundErrors.
+        include 'net/minecraft/src/Hopper.class'
         include 'net/minecraft/src/MobSpawnerBaseLogic.class'
         include 'net/minecraft/src/WeightedRandomMinecart.class'
         // Crash-report Callables used by EntityLiving.updatePotionEffects'
@@ -609,6 +612,9 @@ task remapFcCode(type: ShadowJar) {
         include 'net/minecraft/src/EntityMinecartMobSpawner.class'
         include 'net/minecraft/src/EntityMinecartContainer.class'
         include 'net/minecraft/src/EntityMinecartMobSpawnerLogic.class'
+        // Hopper interface — frozen EntityMinecartHopper (and hopper TE) implement it;
+        // without it EntityList.<clinit> loading EntityMinecartHopper NoClassDefFoundErrors.
+        include 'net/minecraft/src/Hopper.class'
         include 'net/minecraft/src/MobSpawnerBaseLogic.class'
         include 'net/minecraft/src/WeightedRandomMinecart.class'
         include 'net/minecraft/src/CallableEffect*.class'
@@ -656,6 +662,11 @@ task remapFcCode(type: ShadowJar) {
     relocate 'net.minecraft.src.FCTileEntityPulley', 'net.minecraft.src.btw.tileentity.FCTileEntityPulley'
     relocate 'net.minecraft.src.FCEnumCanvasArt', 'net.minecraft.src.btw.properties.FCEnumCanvasArt'
     relocate 'net.minecraft.src.FCIBlockFluidSource', 'net.minecraft.src.btw.api.FCIBlockFluidSource'
+    // Interfaces the flat FCEntity* shotgun-include copies implement (the live restructured
+    // entities implement the net.minecraft.src.btw.api versions, which stay put). Without
+    // these, loading any flat copy NoClassDefFoundErrors on the missing supertype.
+    relocate 'net.minecraft.src.FCIEntityPacketHandler', 'net.minecraft.src.btw.api.FCIEntityPacketHandler'
+    relocate 'net.minecraft.src.FCIEntityIgnoreServerValidation', 'net.minecraft.src.btw.api.FCIEntityIgnoreServerValidation'
 
     relocate 'btw.api', 'btw.modern'
     // Remap vanilla MC 1.5.2 classes (Entity, EntityAI*, PathNavigate, etc.)

@@ -87,6 +87,23 @@ public class LinkAudit {
         Map<String, Set<String>> apiRefs = new TreeMap<>();
         Set<String> missingClasses = new TreeSet<>();
 
+        // Supertype resolution: a class whose superclass or an implemented interface is an
+        // "ours" class missing from the runtime set fails to LINK (NoClassDefFoundError at
+        // class load) — e.g. `EntityMinecartHopper implements btw.modern.Hopper` when Hopper
+        // isn't shipped. This is a class-level ref not present in the method/field constant
+        // pool, so it must be checked separately.
+        for (ClassInfo ci : runtime.values()) {
+            java.util.List<String> supers = new java.util.ArrayList<>(ci.interfaces);
+            if (ci.superName != null) supers.add(ci.superName);
+            for (String sup : supers) {
+                boolean ours = sup.startsWith("btw/modern/") || sup.startsWith("net/minecraft/src/")
+                        || sup.startsWith("btw/forge/") || sup.startsWith("btw/api/");
+                if (ours && !sup.startsWith("btw/api/") && !runtime.containsKey(sup)) {
+                    missingClasses.add(sup + "  (SUPERTYPE of " + ci.name + ")");
+                }
+            }
+        }
+
         for (ClassInfo ci : runtime.values()) {
             for (String[] r : ci.refs) {
                 String kind = r[0], owner = r[1], name = r[2], desc = r[3];

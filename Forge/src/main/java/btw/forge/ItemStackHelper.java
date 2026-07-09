@@ -211,14 +211,20 @@ public class ItemStackHelper {
 
     private static int legacyEntityIdForEgg(net.minecraft.world.item.SpawnEggItem eggItem,
                                             net.minecraft.world.item.ItemStack mcStack) {
-        net.minecraft.world.entity.EntityType<?> type = eggItem.getType(mcStack.getTag());
-        net.minecraft.resources.ResourceLocation key =
-                net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(type);
-        if (key == null) return 0;
-        String fcName = LEGACY_ENTITY_NAMES.get(key.getPath());
-        if (fcName == null) return 0;
-        Object id = btw.modern.EntityList.stringToIDMapping.get(fcName);
-        return id instanceof Integer ? (Integer) id : 0;
+        // Defensive: this runs on the combat path (hurtEnemy) among others; a spawn-egg id
+        // lookup must never crash the hit. Any failure -> no damage value set (id 0).
+        try {
+            net.minecraft.world.entity.EntityType<?> type = eggItem.getType(mcStack.getTag());
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(type);
+            if (key == null) return 0;
+            String fcName = LEGACY_ENTITY_NAMES.get(key.getPath());
+            if (fcName == null) return 0;
+            Object id = btw.modern.EntityList.stringToIDMapping.get(fcName);
+            return id instanceof Integer ? (Integer) id : 0;
+        } catch (Throwable t) {
+            return 0;
+        }
     }
 
     /**

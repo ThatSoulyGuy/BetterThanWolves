@@ -154,8 +154,12 @@ public class EntityList {
     private static void addMapping(String simpleName, String name, int id) {
         try {
             addMapping(Class.forName("btw.modern." + simpleName), name, id);
-        } catch (ClassNotFoundException e) {
-            // Frozen class not on this classpath — skip the entry.
+        } catch (Throwable e) {
+            // Catch Throwable, not just ClassNotFoundException: a class that is PRESENT but
+            // fails to link (e.g. it implements/references a missing type -> NoClassDefFoundError)
+            // must SKIP its mapping, never abort EntityList.<clinit> — a failed <clinit> makes
+            // EntityList permanently uninitializable and breaks the entire entity-id registry
+            // (spawn eggs, entity-string lookups, every downstream FC entity mapping).
         }
     }
 
