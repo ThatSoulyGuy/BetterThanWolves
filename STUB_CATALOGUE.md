@@ -27,6 +27,35 @@ synced each tick by `BTWNetwork.PenaltySync` (`clientHealthPenalty`/`clientHunge
 `clientFatPenalty`/`clientGloomLevel`). Client prediction and server correction now
 agree, so the debuff is felt consistently.
 
+## 2026-07-09 (k) Automated audit tooling (catch bugs before gameplay)
+
+Started a comprehensive audit suite so the "compiles + links fine, silently wrong at runtime"
+classes we kept finding in game get caught automatically. Three tiers:
+
+1. `tools/LinkAudit.java` (existing) — bytecode-static: member/class resolution + shadow
+   winner. Catches NoSuchMethodError / NoClassDefFoundError families.
+2. `tools/BridgeAudit.java` (NEW) — source-static, runnable standalone (javac + java, exit 1
+   on high-severity). Checks:
+   - SOUND COVERAGE: FC sound-name literals vs SoundMapping -> unmapped = silent.
+   - AUX-FX COVERAGE: FC playAuxSFX ids (>=2222) vs WorldBridge.playFcAuxSFX switch ->
+     unhandled = silent.
+   - TEXTURE EXISTENCE: renderer loadTexture paths + FC item icon names, resolved via the
+     FCEntityRenderer rules, vs shipped resource files -> missing = placeholder/invisible.
+3. `btw.forge.BridgeSelfAudit` + `FCEntityRenderer.auditRendererCoverage()` (NEW) — init-time,
+   logs `[SELF-AUDIT/...]` at launch:
+   - RENDERER COVERAGE (client): every registered FC entity resolves to a real renderer, not
+     the debug box (the fc_xp_orb/arrow invisibility class).
+   - BLOCK SPEED-FACTOR (common): no block's getSpeedFactor > 1.0 (the sprint-"flying" class —
+     a >1 factor compounds into airborne momentum). Regression guard for 2026-07-09 (j).
+
+Backlog surfaced by the first BridgeAudit run (real gaps, not yet fixed):
+- 1 missing renderer texture: `/particles.png` (RenderFish bobber) — placeholder bobber.
+- 6 unmapped sounds (silent): mob.cow.say2, mob.cow.say4, "mob.ghast.affectionate scream",
+  mob.wolf.howl, mob.zombiepig.zpigangry, random.glass.
+- 37 aux-FX ids fired but unhandled in playFcAuxSFX (silent effect + no particles), incl.
+  2225/2228 ghast scream/moan, 2248 soul-urn shatter, saw damage, mining-charge explosion,
+  hopper XP eject, animal births/milking, all the possession-transform FX, etc.
+
 ## 2026-07-09 (j) Speed buffs / "flying" when sprinting
 
 Symptom: random speed buffs while walking (on some blocks); sprinting → practically flying.

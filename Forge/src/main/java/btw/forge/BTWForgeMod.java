@@ -92,6 +92,9 @@ public class BTWForgeMod {
     private void commonSetup(FMLCommonSetupEvent event) {
         // BTW init already done during RegisterEvent
         LOGGER.info("Better Than Wolves: FMLCommonSetupEvent (post-init).");
+        // Startup self-audit: catch registry/physics regressions at launch (renderer coverage
+        // runs client-side after the render map is built; block speed-factor sanity here).
+        event.enqueueWork(BridgeSelfAudit::runCommon);
     }
 
     @SubscribeEvent

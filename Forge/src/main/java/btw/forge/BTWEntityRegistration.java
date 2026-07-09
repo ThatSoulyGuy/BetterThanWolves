@@ -44,6 +44,11 @@ public class BTWEntityRegistration {
         return name != null ? name : "";
     }
 
+    /** Registered EntityType -> FC class name, for the startup self-audit (renderer coverage). */
+    public static Map<EntityType<?>, String> getRegisteredFcEntities() {
+        return java.util.Collections.unmodifiableMap(entityTypeToFcClassName);
+    }
+
     /**
      * Maps FC entity class -> EntityType for external lookup
      * (used by {@link EntityProxyFactory}).

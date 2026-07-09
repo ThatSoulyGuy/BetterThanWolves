@@ -96,6 +96,52 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
             LOGGER.warn("Failed to read FC renderer map: {}", e.getMessage());
         }
         LOGGER.info("Initialized {} FC entity renderers.", fcRenderers.size());
+
+        auditRendererCoverage();
+    }
+
+    /**
+     * Startup self-audit: every registered FC entity type must resolve to a real FC renderer,
+     * else it renders as the debug box (invisible-looking). This is exactly the class of bug
+     * that made fc_xp_orb / fc_arrow / etc. invisible — now caught at launch instead of in
+     * game. Runs right after the renderer map is populated.
+     */
+    private static void auditRendererCoverage() {
+        try {
+            Map<net.minecraft.world.entity.EntityType<?>, String> registered =
+                    btw.forge.BTWEntityRegistration.getRegisteredFcEntities();
+            int missing = 0;
+            for (Map.Entry<net.minecraft.world.entity.EntityType<?>, String> e : registered.entrySet()) {
+                if (!hasRendererForFcClass(e.getValue())) {
+                    LOGGER.warn("[SELF-AUDIT/renderer] {} ({}) has NO FC renderer -> renders as debug box",
+                            net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(e.getKey()),
+                            e.getValue());
+                    missing++;
+                }
+            }
+            LOGGER.info("[SELF-AUDIT/renderer] {} registered FC entities, {} missing a renderer (0 expected).",
+                    registered.size(), missing);
+        } catch (Throwable t) {
+            LOGGER.warn("[SELF-AUDIT/renderer] audit failed: {}", t.toString());
+        }
+    }
+
+    /**
+     * Does a registered FC entity class resolve to a renderer? Mirrors the render path's
+     * class-hierarchy walk (an entity inherits its superclass's renderer). Used by the audit.
+     */
+    public static boolean hasRendererForFcClass(String fcClassName) {
+        if (fcClassName == null || fcClassName.isEmpty()) return false;
+        try {
+            Class<?> c = Class.forName(fcClassName);
+            while (c != null && c != Object.class) {
+                if (fcRenderers.containsKey(c.getName())) return true;
+                c = c.getSuperclass();
+            }
+        } catch (Throwable t) {
+            return fcRenderers.containsKey(fcClassName);
+        }
+        return false;
     }
 
     /** Fallback: try to instantiate known FC renderer classes directly. */
