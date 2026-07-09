@@ -67,24 +67,48 @@ inversion (Forge speed hooks now COMPOSE FC's modifier with the modern factor in
 replacing — was making soul sand faster than stone); Block.GetDoesFireDamageToEntities
 5-arg delegation (fire/lava contact damage was dead); WeightedRandom dead stub (broke
 enchanting); Potion heal/harm PotionHealth (isInstant); EntityPotion.onImpact splash;
-WorldBridge extends WorldServer (EntityTracker packet bridge was unreachable);
 getLightBrightness table lookup + skylightSubtracted ticked (gloom/Nether light);
 proxy hurt/die guards (double-drop / resurrection on burn death); translateDamageSource
 indirect (arrows were direct melee); Enchantment.func_92089_a → canApply; DamageSource
 fcGloom → magic (armor bypass); FCContainerMenu openContainer reset; and more.
 
-**Still open (the honest remaining list):**
-- **ItemFood modern-effect double-application** — vanilla foods with FC counterparts that
-  carry modern FoodProperties effects (rotten flesh, pufferfish, spider eye...) apply BOTH
-  the modern effect and FC's onFoodEaten effect. Fix spec'd: a LivingEntity.addEatEffect
-  mixin cancelling for FC-counterpart items (mirrors FoodDataMixin.btw$eatItem). Narrow.
-- **Spawn-egg itemDamage → entity-id** — eggs map to legacy id 383 but the FC stack's
-  itemDamage isn't set to the 1.5.2 entity id, so EntityAgeable baby-spawn picks wrong.
-  Needs a modern-EntityType → legacy-id table in ItemStackHelper.toFcStack.
-- 68 intentional bridge no-ops (GUI display methods, GL state, client-only
-  paths handled by the modern engine) — correct as designed, not gaps.
-- The dead flat-FC graph (mech-power/urn/canvas/lightning FCEntity* copies) + WatchableObject
-  — LinkAudit-flagged but verified unreachable (nothing instantiates the flat copies).
+**Gap-patching pass (2026-07-09) — the last functional gaps closed:**
+- **ItemFood modern-effect double-application FIXED** — LivingEntityMixin.btw$addEatEffect
+  cancels the vanilla FoodProperties effect for any FC-counterpart food (refmap-verified
+  addEatEffect → SRG m_21063_ for prod). No more double rotten-flesh-hunger / pufferfish-poison.
+- **Spawn-egg itemDamage → entity-id FIXED** — ItemStackHelper.toFcStack sets the FC stack
+  damage from the egg's EntityType via a modern-path → 1.5.2-EntityList-name table resolved
+  through EntityList.stringToIDMapping, so EntityAgeable baby-spawn picks the right mob.
+- **Village NBT persistence DONE** — FcWorldSavedData now round-trips villageCollectionObj
+  through ForgeNBTCompound, so reputation + breeding cooldown survive restart (not just
+  in-memory door rediscovery). Global (tier-3) ender chest also persisted.
+- **Dead flat-FC graph + WatchableObject RESOLVED** — 17 relocate rules map the flat FC
+  names the frozen artifact references to their restructured homes, plus a WatchableObject
+  remap include. LinkAudit MISSING CLASSES now zero.
+- **Item.record13/recordWait added** — a live fc_creeper killed by a live fc_skeleton drops
+  a music disc; these were null (reachable NPE after the mob-replacement fixes). Mapped to
+  legacy 2256/2267 → modern discs via ProxyRegistry.
+- **REVERTED WorldBridge extends WorldServer** (the review's own recommendation): making it
+  a WorldServer satisfied FCUtilsWorld's entity-tracker cast, but ALSO made
+  `worldObj instanceof WorldServer` true in frozen Entity.onEntityUpdate's portal block,
+  which then calls getMinecraftServer() (returns the modern net.minecraft.server type
+  Modern-Common can't declare) EVERY TICK for every FC entity. Net-negative: traded a
+  caught cosmetic gap for a per-tick caught crash. Back to extends World; the entity-tracker
+  packet sync (cow-kick / squid-tentacle client visuals) stays a caught no-op — a KNOWN
+  minor gap, the right trade. Lesson: a review recommendation can have second-order effects
+  the reviewer missed; adversarially verify fixes, not just findings.
+
+**Still open (verified NOT worth stubbing — no live caller, per no-BS-stubs rule):**
+- 21 LinkAudit missing-members, all dead/gated: portal trio (dead — WorldBridge is World
+  again), frozen EntityFallingSand (FC uses restructured), flat FCEntityCreeper AI (live
+  creepers use restructured AI), hopper/spawner minecart internals (no EntityType), SlotArmor
+  GUI icon, Item.appleGold (fc_zombie never registers), ILogAgent.logSevere (FC items become
+  modern), FCClientRenderSpider render-pass (shouldRenderPass never called). Stubbing these
+  would be BS — they have no live caller.
+- 68 intentional bridge no-ops (GUI display methods, GL state, client-only paths handled by
+  the modern engine) — correct as designed.
+- VillageSiege (zombie sieges) — no LinkAudit caller; a pure gameplay-feature addition, not
+  a gap. RenderItem enchantment-glint pass — cosmetic, omitted with a comment.
 
 ---
 

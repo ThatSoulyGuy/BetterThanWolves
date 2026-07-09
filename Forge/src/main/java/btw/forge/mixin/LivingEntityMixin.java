@@ -75,6 +75,26 @@ public abstract class LivingEntityMixin {
         }
     }
 
+    // Suppress vanilla FoodProperties effect application for any food with an FC counterpart:
+    // FC's ItemFood.onFoodEaten already applies the FC effect via ItemStackMixin.finishUsingItem,
+    // so without this the modern effect (rotten flesh hunger, pufferfish poison, spider eye
+    // poison, ...) would apply a SECOND time. Pattern-E foods (no FC counterpart) fall through.
+    @Inject(method = "addEatEffect", at = @At("HEAD"), cancellable = true)
+    private void btw$addEatEffect(net.minecraft.world.item.ItemStack stack,
+                                  net.minecraft.world.level.Level level,
+                                  LivingEntity entity, CallbackInfo ci) {
+        int legacyId;
+        if (stack.getItem() instanceof net.minecraft.world.item.BlockItem bi) {
+            legacyId = ProxyRegistry.getBlockId(bi.getBlock());
+        } else {
+            legacyId = ProxyRegistry.getItemId(stack.getItem());
+        }
+        if (legacyId > 0 && legacyId < btw.modern.Item.itemsList.length
+                && btw.modern.Item.itemsList[legacyId] != null) {
+            ci.cancel();
+        }
+    }
+
     // ================================================================
     // FC movement penalty modifier — applies to ALL movement
     // ================================================================

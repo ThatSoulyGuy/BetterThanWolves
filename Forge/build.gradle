@@ -396,6 +396,9 @@ task remapFcCode(type: ShadowJar) {
         // catch block — without them a potion-tick exception is masked by
         // NoClassDefFoundError instead of producing the real crash report.
         include 'net/minecraft/src/CallableEffect*.class'
+        // WatchableObject: frozen Entity.FlagAllWatchedObjectsDirty references it (dead path,
+        // but the class must resolve for the audit); self-contained, no extra deps.
+        include 'net/minecraft/src/WatchableObject.class'
     }
     from(rootProject.file('build/classes/java/server')) {
         include 'net/minecraft/src/EntityAI*.class'
@@ -609,6 +612,9 @@ task remapFcCode(type: ShadowJar) {
         include 'net/minecraft/src/MobSpawnerBaseLogic.class'
         include 'net/minecraft/src/WeightedRandomMinecart.class'
         include 'net/minecraft/src/CallableEffect*.class'
+        // WatchableObject: frozen Entity.FlagAllWatchedObjectsDirty references it (dead path,
+        // but the class must resolve for the audit); self-contained, no extra deps.
+        include 'net/minecraft/src/WatchableObject.class'
     }
 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
@@ -627,6 +633,29 @@ task remapFcCode(type: ShadowJar) {
     relocate 'net.minecraft.src.FCBlockSilverfish', 'net.minecraft.src.btw.block.FCBlockSilverfish'
     relocate 'net.minecraft.src.FCBlockMycelium', 'net.minecraft.src.btw.block.FCBlockMycelium'
     relocate 'net.minecraft.src.FCBlockGroundCover', 'net.minecraft.src.btw.block.FCBlockGroundCover'
+    // Dead flat-FC graph (mech-power / urn / canvas / lightning FCEntity* copies that
+    // nothing instantiates — verified unreachable by the 2026-07-08 link audit). These
+    // relocate rules resolve their dangling refs to the restructured classes so the audit
+    // reads clean; prefix collisions (FCBlockFire->FCBlockFireStoked, FCBlockLog->...Smouldering,
+    // FCBlockAxle->...PowerSource, FCBlockSnowLoose/Solid->...Slab) all map to existing
+    // net.minecraft.src.btw.block.* classes, so they are safe.
+    relocate 'net.minecraft.src.FCBlockAxle', 'net.minecraft.src.btw.block.FCBlockAxle'
+    relocate 'net.minecraft.src.FCBlockAnchor', 'net.minecraft.src.btw.block.FCBlockAnchor'
+    relocate 'net.minecraft.src.FCBlockBBQ', 'net.minecraft.src.btw.block.FCBlockBBQ'
+    relocate 'net.minecraft.src.FCBlockBlockDispenser', 'net.minecraft.src.btw.block.FCBlockBlockDispenser'
+    relocate 'net.minecraft.src.FCBlockLightningRod', 'net.minecraft.src.btw.block.FCBlockLightningRod'
+    relocate 'net.minecraft.src.FCBlockLog', 'net.minecraft.src.btw.block.FCBlockLog'
+    relocate 'net.minecraft.src.FCBlockPlanter', 'net.minecraft.src.btw.block.FCBlockPlanter'
+    relocate 'net.minecraft.src.FCBlockRope', 'net.minecraft.src.btw.block.FCBlockRope'
+    relocate 'net.minecraft.src.FCBlockScrewPump', 'net.minecraft.src.btw.block.FCBlockScrewPump'
+    relocate 'net.minecraft.src.FCBlockSnowLoose', 'net.minecraft.src.btw.block.FCBlockSnowLoose'
+    relocate 'net.minecraft.src.FCBlockSnowSolid', 'net.minecraft.src.btw.block.FCBlockSnowSolid'
+    relocate 'net.minecraft.src.FCBlockFire', 'net.minecraft.src.btw.block.FCBlockFire'
+    relocate 'net.minecraft.src.FCExplosionMining', 'net.minecraft.src.btw.world.FCExplosionMining'
+    relocate 'net.minecraft.src.FCUtilsMechPower', 'net.minecraft.src.btw.util.FCUtilsMechPower'
+    relocate 'net.minecraft.src.FCTileEntityPulley', 'net.minecraft.src.btw.tileentity.FCTileEntityPulley'
+    relocate 'net.minecraft.src.FCEnumCanvasArt', 'net.minecraft.src.btw.properties.FCEnumCanvasArt'
+    relocate 'net.minecraft.src.FCIBlockFluidSource', 'net.minecraft.src.btw.api.FCIBlockFluidSource'
 
     relocate 'btw.api', 'btw.modern'
     // Remap vanilla MC 1.5.2 classes (Entity, EntityAI*, PathNavigate, etc.)

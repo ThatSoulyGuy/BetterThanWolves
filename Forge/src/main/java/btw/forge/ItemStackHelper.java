@@ -153,8 +153,20 @@ public class ItemStackHelper {
             return null;
         }
 
+        int damage = mcStack.getDamageValue();
+
+        // Spawn eggs all map to legacy id 383 (monsterPlacer); 1.5.2 encodes WHICH mob in the
+        // item damage as the EntityList id. EntityAgeable.interact reads getItemDamage() ->
+        // EntityList.getClassFromID to spawn a baby, so set it from the egg's entity type.
+        if (mcStack.getItem() instanceof net.minecraft.world.item.SpawnEggItem eggItem) {
+            int entityId = legacyEntityIdForEgg(eggItem, mcStack);
+            if (entityId > 0) {
+                damage = entityId;
+            }
+        }
+
         btw.modern.ItemStack fcStack = new btw.modern.ItemStack(
-                legacyId, mcStack.getCount(), mcStack.getDamageValue());
+                legacyId, mcStack.getCount(), damage);
 
         // Copy NBT/enchantments from MC CompoundTag to FC NBTTagCompound
         CompoundTag mcTag = mcStack.getTag();
@@ -163,6 +175,50 @@ public class ItemStackHelper {
         }
 
         return fcStack;
+    }
+
+    // Modern spawn-egg entity registry path -> 1.5.2 EntityList name. The numeric id is then
+    // resolved through btw.modern.EntityList.stringToIDMapping so it reflects FC's mapping
+    // replacements. Names that aren't simple capitalizations (MushroomCow, Ozelot, LavaSlime)
+    // follow the 1.5.2 EntityList table.
+    private static final java.util.Map<String, String> LEGACY_ENTITY_NAMES = new java.util.HashMap<>();
+    static {
+        LEGACY_ENTITY_NAMES.put("pig", "Pig");
+        LEGACY_ENTITY_NAMES.put("sheep", "Sheep");
+        LEGACY_ENTITY_NAMES.put("cow", "Cow");
+        LEGACY_ENTITY_NAMES.put("chicken", "Chicken");
+        LEGACY_ENTITY_NAMES.put("wolf", "Wolf");
+        LEGACY_ENTITY_NAMES.put("mooshroom", "MushroomCow");
+        LEGACY_ENTITY_NAMES.put("ocelot", "Ozelot");
+        LEGACY_ENTITY_NAMES.put("cat", "Ozelot");
+        LEGACY_ENTITY_NAMES.put("villager", "Villager");
+        LEGACY_ENTITY_NAMES.put("creeper", "Creeper");
+        LEGACY_ENTITY_NAMES.put("skeleton", "Skeleton");
+        LEGACY_ENTITY_NAMES.put("zombie", "Zombie");
+        LEGACY_ENTITY_NAMES.put("spider", "Spider");
+        LEGACY_ENTITY_NAMES.put("cave_spider", "CaveSpider");
+        LEGACY_ENTITY_NAMES.put("enderman", "Enderman");
+        LEGACY_ENTITY_NAMES.put("silverfish", "Silverfish");
+        LEGACY_ENTITY_NAMES.put("blaze", "Blaze");
+        LEGACY_ENTITY_NAMES.put("slime", "Slime");
+        LEGACY_ENTITY_NAMES.put("magma_cube", "LavaSlime");
+        LEGACY_ENTITY_NAMES.put("ghast", "Ghast");
+        LEGACY_ENTITY_NAMES.put("zombified_piglin", "PigZombie");
+        LEGACY_ENTITY_NAMES.put("squid", "Squid");
+        LEGACY_ENTITY_NAMES.put("bat", "Bat");
+        LEGACY_ENTITY_NAMES.put("witch", "Witch");
+    }
+
+    private static int legacyEntityIdForEgg(net.minecraft.world.item.SpawnEggItem eggItem,
+                                            net.minecraft.world.item.ItemStack mcStack) {
+        net.minecraft.world.entity.EntityType<?> type = eggItem.getType(mcStack.getTag());
+        net.minecraft.resources.ResourceLocation key =
+                net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(type);
+        if (key == null) return 0;
+        String fcName = LEGACY_ENTITY_NAMES.get(key.getPath());
+        if (fcName == null) return 0;
+        Object id = btw.modern.EntityList.stringToIDMapping.get(fcName);
+        return id instanceof Integer ? (Integer) id : 0;
     }
 
     /**

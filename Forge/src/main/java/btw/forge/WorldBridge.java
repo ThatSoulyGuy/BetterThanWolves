@@ -32,11 +32,15 @@ import java.util.WeakHashMap;
  *
  * Instances are cached per-ServerLevel via {@link #getOrCreate(ServerLevel)}.
  */
-// Extends WorldServer (not World): FCUtilsWorld.SendPacketToAllPlayersTrackingEntity
-// casts worldObj to WorldServer to reach getEntityTracker (cow-kick / squid packets),
-// so the FC-side cast must succeed. WorldBridge overrides every abstract World/WorldServer
-// method against the live level, so inheriting WorldServer's stub bodies is harmless.
-public class WorldBridge extends btw.modern.WorldServer {
+// Extends World, NOT WorldServer. Making it a WorldServer would satisfy
+// FCUtilsWorld's (WorldServer)worldObj cast for entity-tracker packets, BUT it also
+// makes `worldObj instanceof WorldServer` true in frozen Entity.onEntityUpdate, whose
+// portal block then calls ((WorldServer)worldObj).getMinecraftServer() every tick — a
+// method that returns the modern net.minecraft.server.MinecraftServer type Modern-Common
+// cannot declare (NoSuchMethodError, caught but per-tick). The entity-tracker packet sync
+// (cow-kick / squid-tentacle client visuals) stays a caught no-op instead — a far smaller
+// cost than aborting every FC entity's onUpdate at the portal check.
+public class WorldBridge extends btw.modern.World {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-WorldBridge");
 

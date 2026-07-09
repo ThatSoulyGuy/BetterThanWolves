@@ -41,6 +41,12 @@ public class FcWorldSavedData extends SavedData {
         if (global != null) {
             readInventory(tag.getList("FCGlobalEnderItems", 10), global);
         }
+        // Village data (reputation, mating cooldown, tick counter) — VillageCollection is a
+        // 1.5.2 WorldSavedData; round-trip its NBT through ForgeNBTCompound like entity data.
+        // Villages themselves also rediscover from doors, but this preserves reputation.
+        if (tag.contains("FCVillages", 10)) {
+            bridge.villageCollectionObj.readFromNBT(new ForgeNBTCompound(tag.getCompound("FCVillages")));
+        }
         return data;
     }
 
@@ -52,6 +58,9 @@ public class FcWorldSavedData extends SavedData {
         if (global != null) {
             tag.put("FCGlobalEnderItems", writeInventory(global));
         }
+        CompoundTag villageTag = new CompoundTag();
+        bridge.villageCollectionObj.writeToNBT(new ForgeNBTCompound(villageTag));
+        tag.put("FCVillages", villageTag);
         return tag;
     }
 

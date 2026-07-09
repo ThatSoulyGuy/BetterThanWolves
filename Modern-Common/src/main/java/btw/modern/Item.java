@@ -150,6 +150,10 @@ public class Item {
     public static Item monsterPlacer;
     public static Item redstoneRepeater;
     public static Item flowerPot;
+    // Music-disc endpoints — frozen EntityCreeper.onDeath (live fc_creeper killed by a
+    // live fc_skeleton) drops a random disc id in [record13.itemID, recordWait.itemID].
+    public static Item record13;
+    public static Item recordWait;
     public static ItemArmor helmetLeather;
     public static ItemArmor helmetChain;
     public static ItemArmor helmetIron;
@@ -827,6 +831,11 @@ public class Item {
         netherQuartz = new Item(150);      // 406
         minecartTnt = new Item(151);       // 407
         minecartHopper = new Item(152);    // 408
+        // Music discs: id 2000+256=2256 (13) .. 2011+256=2267 (wait); ProxyRegistry maps
+        // 2256-2267 to the modern discs, so EntityCreeper's random-in-range drop yields a
+        // real disc. Only the two range endpoints are referenced by FC code.
+        record13 = new Item(2000);         // 2256 (music_disc_13)
+        recordWait = new Item(2011);       // 2267 (music_disc_wait)
     }
 
     // Concrete subclass for ItemMap (protected constructor)
