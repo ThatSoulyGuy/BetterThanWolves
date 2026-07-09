@@ -287,6 +287,22 @@ public class BTWClientEvents {
                 return new btw.forge.NamedIcon(name);
             }
         };
+        // Populate itemIcon on EVERY FC item, not just subtype items. FC entity renderers
+        // read Item.itemsList[id].itemIcon.getMinU() directly (e.g. FCClientRenderUrn draws
+        // its contained item's icon) and NPE if it's null — which is why soul urns didn't
+        // render. NamedIcon captures the texture name so the recording renderer maps it to a
+        // modern sprite; registering is cheap (no atlas lookup) and idempotent with the
+        // subtype pass below.
+        int itemIconsPopulated = 0;
+        for (int id = 0; id < btw.modern.Item.itemsList.length; id++) {
+            btw.modern.Item fcItem = btw.modern.Item.itemsList[id];
+            if (fcItem == null) continue;
+            try {
+                fcItem.registerIcons(iconCapturer);
+                itemIconsPopulated++;
+            } catch (Exception ignored) {}
+        }
+        LOGGER.info("BTW: Populated itemIcon on {} FC items.", itemIconsPopulated);
         int subtypeModels = FCItemSubtypeModel.injectSubtypeModels(models, iconCapturer);
         LOGGER.info("BTW: Injected subtype models for {} items with per-damage textures.", subtypeModels);
     }

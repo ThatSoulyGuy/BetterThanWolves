@@ -12,6 +12,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -173,5 +174,26 @@ public abstract class PlayerMixin {
             pb.syncFromReal();
             pb.pendingMeleeDamageModifier = pb.GetMeleeDamageModifier();
         }
+    }
+
+    /**
+     * Applies the FC melee damage penalty to the BASE attack damage — the first float local
+     * in Player.attack, `getAttributeValue(ATTACK_DAMAGE)`, before enchantment damage is
+     * added. Mirrors 1.5.2 EntityPlayer.attackTargetEntityWithCurrentItem:1226-1230
+     * (`if (fModifier < 0.99F) var2 = (int)(var2 * fModifier)` applied to base, pre-enchant).
+     * Modifier comes from btw$storeMeleeDamageModifier (@HEAD, already synced). This is the
+     * consumer the stored value never had — FC weight/health/exhaustion now actually weakens
+     * hits. Server-only (client attack() also runs but the server value is authoritative).
+     */
+    @ModifyVariable(method = "attack", at = @At("STORE"), ordinal = 0)
+    private float btw$applyMeleeDamageModifier(float baseDamage) {
+        Player self = (Player) (Object) this;
+        if (self instanceof ServerPlayer sp) {
+            float modifier = PlayerBridge.getOrCreate(sp).pendingMeleeDamageModifier;
+            if (modifier < 0.99F) {
+                return baseDamage * modifier;
+            }
+        }
+        return baseDamage;
     }
 }

@@ -21,10 +21,24 @@ hard surfaces, ×0.48 on soul sand.
 Swept the sibling FC property systems for the same block-vs-entity double
 pattern: friction (block-level only — single), getSpeed/GetLandMovementModifier
 (single, a different factor), mining getDestroyProgress (single). All clean.
-FOUND a separate UNDER-application: PlayerBridge.pendingMeleeDamageModifier is
+FOUND a separate UNDER-application: PlayerBridge.pendingMeleeDamageModifier was
 stored (PlayerMixin.attack@HEAD = GetMeleeDamageModifier()) but NEVER consumed —
-FC melee damage scaling is a no-op. Not the speed bug (opposite direction);
-needs a Player.attack damage @ModifyVariable to actually apply it. Open.
+FC melee damage scaling was a no-op.
+
+## 2026-07-09 (b) — melee modifier wired + soul urn rendering
+
+- **Melee damage modifier now applied**: PlayerMixin.btw$applyMeleeDamageModifier
+  (@ModifyVariable STORE ordinal=0 on Player.attack's base ATTACK_DAMAGE float)
+  multiplies base damage by pendingMeleeDamageModifier when < 0.99 — mirrors 1.5.2
+  EntityPlayer.attack:1226 (`if (fModifier < 0.99F) var2 = (int)(var2 * fModifier)`,
+  base damage pre-enchant). Refmap-verified attack -> m_5706_. FC weight/health/
+  exhaustion now actually weakens hits.
+- **Soul urns render**: FCClientRenderUrn.doRender read Item.itemsList[id].itemIcon.
+  getMinU() and NPE'd (0 quads) because itemIcon was null — FC registerIcons was only
+  run for subtype items. BTWClientEvents now calls registerIcons(NamedIcon capturer) on
+  EVERY FC item at model-register time, so itemIcon is non-null and the NamedIcon ->
+  recording-Tessellator -> modern-sprite bridge draws it. (Any FC entity renderer that
+  reads Item.itemIcon directly is now covered, not just the urn.)
 
 
 
