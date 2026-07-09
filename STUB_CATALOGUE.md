@@ -1052,3 +1052,15 @@ A 4-investigator workflow root-caused the wicker-basket scrambled mesh. Two dist
   8-arg variant (never overridden -> inherited no-op; added, mirrors RenderAsBlock but tints via
   setColorOpaque_F). The base box rendered via RenderAsBlock, which is why only the lid vanished.
   The known-good spike/lightning rod use only RenderAsBlock, so they were unaffected.
+
+## 2026-07-09 (r) Stoked-fire textures: fix CamelCase resource paths (Windows case trap)
+
+The stoked-fire procedural flame was disabled at runtime: MC rejects non-lowercase resource
+paths ("Invalid path in pack: betterthanwolves:textures/block/fcBlockFireStokedStub_0.png,
+ignoring"), so the sprites never stitched and StokedFireTexture (which looks up lowercase
+block/fcblockfirestokedstub_0/1) found nothing. Root cause: the four stoked-fire PNGs were
+git-tracked as CamelCase (fcBlockFireStokedStub_0.png etc.), and a stray working-tree edit had
+also pointed the model at the CamelCase name. With core.ignorecase=true (Windows) the mismatch
+was invisible locally. Fixed by renaming all four textures to lowercase in git (temp-name
+two-step, required on a case-insensitive FS) and reverting the model to the lowercase reference.
+The atlas/blockstate/StokedFireTexture already used lowercase, so no other change was needed.
