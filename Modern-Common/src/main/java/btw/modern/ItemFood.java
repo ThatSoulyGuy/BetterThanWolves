@@ -8,21 +8,48 @@ public class ItemFood extends Item {
     private final boolean isWolfsFavoriteMeat;
     private boolean alwaysEdible;
 
+    // 1.5.2 ItemFood potion-effect fields — set by setPotionEffect (FCItemCreeperOysters,
+    // FCItemFood.SetStandardFoodPoisoningEffect), applied by onFoodEaten.
+    private int potionId;
+    private int potionDuration;
+    private int potionAmplifier;
+    private float potionEffectProbability;
+
     public ItemFood(int id, int healAmount, float saturation, boolean wolfFood) {
         super(id);
         this.itemUseDuration = 32;
         this.healAmount = healAmount;
         this.saturationModifier = saturation;
         this.isWolfsFavoriteMeat = wolfFood;
+        // 1.5.2 (FCMOD) ItemFood ctor additions — BTWRegistration reads maxStackSize,
+        // EntityItem.UpdateHardcoreBuoy reads buoyancy, FCTileEntityCrucible reads incineration.
+        // FCMOD: Added
+        maxStackSize = 16;
+        SetBuoyant();
+        SetIncineratedInCrucible();
+        // END FCMOD
     }
 
     public ItemFood(int id, int healAmount, boolean wolfFood) {
         this(id, healAmount, 0.6F, wolfFood);
     }
 
+    // 1.5.2 (FCMOD) ItemFood 5-arg ctor — stores m_bDoZombiesConsume, read by
+    // FCEntityWolfDire.CheckForLooseFood (item.DoZombiesConsume()).
+    // FCMOD: Added New
+    private boolean m_bDoZombiesConsume = false;
+
     public ItemFood(int id, int healAmount, float saturation, boolean wolfFood, boolean zombiesConsume) {
         this(id, healAmount, saturation, wolfFood);
+
+        m_bDoZombiesConsume = zombiesConsume;
     }
+
+    @Override
+    public boolean DoZombiesConsume() {
+        return m_bDoZombiesConsume;
+    }
+    // END FCMOD
 
     public int getHealAmount() {
         return this.healAmount;
@@ -41,7 +68,13 @@ public class ItemFood extends Item {
         return this;
     }
 
+    // 1.5.2 ItemFood.setPotionEffect — stores the effect applied on eating; live via
+    // FCItemCreeperOysters ctor and FCItemFood.Set*FoodPoisoningEffect on raw foods.
     public ItemFood setPotionEffect(int potionId, int duration, int amplifier, float probability) {
+        this.potionId = potionId;
+        this.potionDuration = duration;
+        this.potionAmplifier = amplifier;
+        this.potionEffectProbability = probability;
         return this;
     }
 
@@ -93,6 +126,29 @@ public class ItemFood extends Item {
     @Override
     public ItemStack onEaten(ItemStack stack, World world, EntityPlayer player) {
         player.getFoodStats().addStats(this);
+        this.onFoodEaten(stack, world, player);
         return stack;
     }
+
+    // 1.5.2 ItemFood.onFoodEaten — applies the stored potion effect (food poisoning etc.);
+    // PlayerBridge.addPotionEffect forwards to the modern ServerPlayer.addEffect.
+    public void onFoodEaten(ItemStack stack, World world, EntityPlayer player) {
+        if (!world.isRemote && this.potionId > 0 && world.rand.nextFloat() < this.potionEffectProbability) {
+            player.addPotionEffect(new PotionEffect(this.potionId, this.potionDuration * 20, this.potionAmplifier));
+        }
+    }
+
+    // 1.5.2 (FCMOD) ItemFood.IsWolfFood/GetWolfHealAmount — FCEntityWolf.java:346/386/415
+    // (feeding/taming/loose-food checks) and :726 heal(food.GetWolfHealAmount()).
+    // FCMOD: Added New
+    @Override
+    public boolean IsWolfFood() {
+        return isWolfsFavoriteMeat();
+    }
+
+    @Override
+    public int GetWolfHealAmount() {
+        return getHealAmount();
+    }
+    // END FCMOD
 }

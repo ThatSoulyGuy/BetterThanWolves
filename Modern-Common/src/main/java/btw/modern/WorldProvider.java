@@ -9,6 +9,25 @@ public abstract class WorldProvider {
     public float[] lightBrightnessTable = new float[16];
     public int dimensionId = 0;
 
+    // 1.5.2 WorldProvider.registerWorld calls generateLightBrightnessTable; the shim
+    // has no registerWorld flow, so generate in the constructor. Consumed by
+    // World.getLightBrightness (frozen EntityMob/EntityAnimal.getBlockPathWeight).
+    protected WorldProvider() {
+        generateLightBrightnessTable();
+    }
+
+    // 1.5.2 WorldProvider.generateLightBrightnessTable (vanilla/server WorldProvider.java) —
+    // non-linear light-value → brightness curve. WorldProviderHell overrides with a
+    // 0.1F ambient base; WorldBridge applies that variant for the Nether provider.
+    public void generateLightBrightnessTable() {
+        float fAmbient = 0.0F;
+
+        for (int i = 0; i <= 15; ++i) {
+            float f = 1.0F - (float)i / 15.0F;
+            this.lightBrightnessTable[i] = (1.0F - f) / (f * 3.0F + 1.0F) * (1.0F - fAmbient) + fAmbient;
+        }
+    }
+
     public static WorldProvider getProviderForDimension(int dim) {
         // Factory method - returns null in this stub; Forge bridge provides real providers
         return null;

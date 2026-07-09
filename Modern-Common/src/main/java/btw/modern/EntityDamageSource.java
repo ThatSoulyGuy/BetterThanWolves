@@ -1,7 +1,9 @@
 package btw.modern;
 
 public class EntityDamageSource extends DamageSource {
-    private Entity damageSourceEntity;
+    // 1.5.2 EntityDamageSource — field is protected so EntityDamageSourceIndirect
+    // can return the DIRECT damager (projectile) from getSourceOfDamage().
+    protected Entity damageSourceEntity;
 
     public EntityDamageSource(String type, Entity entity) {
         super(type);

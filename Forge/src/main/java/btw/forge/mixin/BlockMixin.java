@@ -126,16 +126,17 @@ public abstract class BlockMixin {
     // getSpeedFactor -> FC GetMovementModifier
     // ================================================================
 
-    @Inject(method = "getSpeedFactor", at = @At("HEAD"), cancellable = true)
+    // @At("RETURN") + multiply: compose FC's GetMovementModifier with the modern speed
+    // factor instead of replacing it (replacing inverted soul sand — see LivingEntityMixin).
+    @Inject(method = "getSpeedFactor", at = @At("RETURN"), cancellable = true)
     private void btw$getSpeedFactor(CallbackInfoReturnable<Float> cir) {
         btw.modern.Block fcBlock = btw$getFcBlock();
         if (fcBlock == null) return;
 
-        // Bridge to FC's GetMovementModifier — pass through whatever FC returns.
         try {
             float modifier = fcBlock.GetMovementModifier(null, 0, 0, 0);
             if (modifier > 0) {
-                cir.setReturnValue(modifier);
+                cir.setReturnValue(cir.getReturnValue() * modifier);
             }
         } catch (Exception ignored) {}
     }

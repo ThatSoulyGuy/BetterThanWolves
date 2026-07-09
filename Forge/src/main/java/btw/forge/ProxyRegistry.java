@@ -839,7 +839,14 @@ public class ProxyRegistry {
         vanillaItemToLegacyId.put(Items.CAULDRON, 380);
         vanillaItemToLegacyId.put(Items.ENDER_EYE, 381);
         vanillaItemToLegacyId.put(Items.GLISTERING_MELON_SLICE, 382);
-        // 383: Spawn Egg (many variants in modern MC, skip)
+        // 383: Spawn Egg — every modern per-mob egg maps to the single 1.5.2
+        // monsterPlacer id so EntityAgeable.interact's held.itemID ==
+        // Item.monsterPlacer.itemID (383) baby-spawn check can match.
+        for (net.minecraft.world.item.Item eggItem : net.minecraftforge.registries.ForgeRegistries.ITEMS) {
+            if (eggItem instanceof net.minecraft.world.item.SpawnEggItem) {
+                vanillaItemToLegacyId.put(eggItem, 383);
+            }
+        }
         vanillaItemToLegacyId.put(Items.EXPERIENCE_BOTTLE, 384);
         vanillaItemToLegacyId.put(Items.FIRE_CHARGE, 385);
         vanillaItemToLegacyId.put(Items.WRITABLE_BOOK, 386);
@@ -884,8 +891,11 @@ public class ProxyRegistry {
         vanillaItemToLegacyId.put(Items.MUSIC_DISC_11, 2266);
         vanillaItemToLegacyId.put(Items.MUSIC_DISC_WAIT, 2267);
 
-        // Build reverse mapping: legacy ID → modern Item
+        // Build reverse mapping: legacy ID → modern Item. Skip spawn eggs: they all map
+        // to 383, so putIfAbsent would pick an arbitrary egg by iteration order (a
+        // different mob per JVM run). getModernItem(383) stays null instead.
         for (var entry : vanillaItemToLegacyId.entrySet()) {
+            if (entry.getKey() instanceof net.minecraft.world.item.SpawnEggItem) continue;
             legacyIdToVanillaItem.putIfAbsent(entry.getValue(), entry.getKey());
         }
 

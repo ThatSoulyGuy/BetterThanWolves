@@ -32,7 +32,11 @@ import java.util.WeakHashMap;
  *
  * Instances are cached per-ServerLevel via {@link #getOrCreate(ServerLevel)}.
  */
-public class WorldBridge extends btw.modern.World {
+// Extends WorldServer (not World): FCUtilsWorld.SendPacketToAllPlayersTrackingEntity
+// casts worldObj to WorldServer to reach getEntityTracker (cow-kick / squid packets),
+// so the FC-side cast must succeed. WorldBridge overrides every abstract World/WorldServer
+// method against the live level, so inheriting WorldServer's stub bodies is harmless.
+public class WorldBridge extends btw.modern.WorldServer {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-WorldBridge");
 
@@ -80,11 +84,55 @@ public class WorldBridge extends btw.modern.World {
             this.provider.dimensionId = -1;
             this.provider.isHellWorld = true;
             this.provider.hasNoSky = true;
+            // 1.5.2 WorldProviderHell.generateLightBrightnessTable — same curve as the
+            // base table (generated in the WorldProvider shim ctor) but with a 0.1F
+            // ambient floor so the Nether is never pitch black.
+            float fAmbient = 0.1F;
+            for (int i = 0; i <= 15; ++i) {
+                float f = 1.0F - (float) i / 15.0F;
+                this.provider.lightBrightnessTable[i] =
+                        (1.0F - f) / (f * 3.0F + 1.0F) * (1.0F - fAmbient) + fAmbient;
+            }
         } else if (level.dimension() == net.minecraft.world.level.Level.END) {
             this.provider.dimensionId = 1;
             this.provider.hasNoSky = true;
         } else {
             this.provider.dimensionId = 0;
+        }
+
+        // 1.5.2 World.setItemData/loadItemData/getUniqueDataId delegate to mapStorage
+        // (vanilla/server World.java:3873-3894) — FCItemEmptyMap.java:41 map crafting.
+        // Unique IDs come from the live level's map-ID counter so BTW-crafted maps
+        // never collide with modern filled maps; the data itself is held in-memory.
+        this.mapStorage = new MapStorage() {
+            private final Map<String, WorldSavedData> loadedDataMap = new HashMap<>();
+
+            @Override
+            public void setData(String key, WorldSavedData data) {
+                loadedDataMap.put(key, data);
+            }
+
+            @Override
+            public WorldSavedData loadData(Class dataClass, String key) {
+                return loadedDataMap.get(key);
+            }
+
+            @Override
+            public int getUniqueDataId(String key) {
+                return level.getFreeMapId();
+            }
+        };
+
+        // 1.5.2 World.m_localEnderChestInventory / m_localLowPowerEnderChestInventory
+        // (BTW-patched vanilla/server World.java:4861-4862) — FCBlockEnderChest
+        // antenna tiers 1/2 open these per-dimension communal inventories. Persisted
+        // per-dimension like vanilla SaveHandler.java:435-479 ("FCEnderItems"/"FCLPEnderItems").
+        this.m_localEnderChestInventory = new InventoryEnderChest();
+        this.m_localLowPowerEnderChestInventory = new InventoryEnderChest();
+        try {
+            FcWorldSavedData.attach(this);
+        } catch (Exception e) {
+            LOGGER.warn("Could not attach FC world saved data: {}", e.getMessage());
         }
     }
 
@@ -136,6 +184,16 @@ public class WorldBridge extends btw.modern.World {
      */
     private int deriveVanillaMetadata(BlockState state, BlockPos pos) {
         net.minecraft.world.level.block.Block block = state.getBlock();
+
+        // Fluids: MC LEVEL (0 = source, 1-7 = flowing, 8+ = falling) has the same
+        // semantics as 1.5.2 fluid metadata -- required by World.handleMaterialAcceleration's
+        // fluid-surface check and BlockFluid.getFlowVector (vanilla World.java:2186).
+        if (block instanceof net.minecraft.world.level.block.LiquidBlock) {
+            if (state.hasProperty(net.minecraft.world.level.block.LiquidBlock.LEVEL)) {
+                return state.getValue(net.minecraft.world.level.block.LiquidBlock.LEVEL);
+            }
+            return 0;
+        }
 
         // Logs: axis property → orientation, bottom log → stump
         if (block instanceof net.minecraft.world.level.block.RotatedPillarBlock) {
@@ -730,7 +788,25 @@ public class WorldBridge extends btw.modern.World {
     // Light methods
     // ================================================================
 
-    
+    // 1.5.2 World.getLightBrightness -> provider.lightBrightnessTable[getBlockLightValue]
+    // with the overworld generateLightBrightnessTable curve (ambient 0). MUST read the
+    // inherited public skylightSubtracted field: EntityPlayerMP.IsInGloom temporarily
+    // overrides it around its two calls to probe "value at night" (gloom only runs in
+    // dimension 0, so the overworld curve is correct). Without this override the shim
+    // returns 0 and gloom reads perpetual darkness.
+    // 1.5.2 World.getLightBrightness = provider.lightBrightnessTable[getBlockLightValue].
+    // sky is reduced by skylightSubtracted (ticked in ModSpecificTick; also transiently
+    // overridden by EntityPlayerMP.IsInGloom's night-probe), and the provider TABLE — not
+    // an inline curve — supplies the value so the Nether's 0.1 ambient floor is honored.
+    @Override
+    public float getLightBrightness(int x, int y, int z) {
+        BlockPos pos = new BlockPos(x, y, z);
+        int sky = level.getBrightness(net.minecraft.world.level.LightLayer.SKY, pos) - this.skylightSubtracted;
+        int block = level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, pos);
+        int light = Math.min(Math.max(block, Math.max(sky, 0)), 15);
+        return provider.lightBrightnessTable[light];
+    }
+
     public boolean canBlockSeeTheSky(int x, int y, int z) {
         return level.canSeeSky(new BlockPos(x, y, z));
     }
@@ -759,10 +835,10 @@ public class WorldBridge extends btw.modern.World {
         return (sky << 20) | (block << 4);
     }
 
-    @Override
-    public int GetBlockNaturalLightValue(int i, int j, int k) {
-        return level.getBrightness(net.minecraft.world.level.LightLayer.SKY, new net.minecraft.core.BlockPos(i, j, k));
-    }
+    // GetBlockNaturalLightValue is intentionally NOT overridden here: the Modern-Common
+    // World implementation applies skylightSubtracted and the neighbor-brightness pass
+    // (needed by the gloom probe), delegating to getSavedLightValue/getChunkFromChunkCoords
+    // which this bridge provides. A raw-sky override here would dead-shadow it.
 
     @Override
     public int getSavedLightValue(EnumSkyBlock enumSkyBlock, int x, int y, int z) {
@@ -1130,9 +1206,86 @@ public class WorldBridge extends btw.modern.World {
     }
 
 
+    // 1.5.2 World.spawnParticle — bridges FC particle names to ServerLevel.sendParticles.
+    // Name set enumerated from FC spawnParticle callers (smoke, largesmoke, largeexplode,
+    // reddust, snowballpoof, iconcrack_*, fcwhitesmoke/fcwhitecloud/fcsmallflame/fccinders, ...).
+    // count=0 with speed=1 preserves the 1.5.2 single-particle-with-velocity semantics.
     public void spawnParticle(String particle, double x, double y, double z,
                               double velocityX, double velocityY, double velocityZ) {
-        // Particles are client-side; server can send packets but we skip for now
+        if (particle == null || particle.isEmpty()) return;
+        try {
+            // reddust encodes its color in the velocity args (1.5.2 EntityReddustFX:
+            // red defaults to 1.0 when velocityX is 0)
+            if (particle.equals("reddust")) {
+                float red = velocityX == 0.0D ? 1.0F : (float) velocityX;
+                net.minecraft.core.particles.DustParticleOptions dust =
+                        new net.minecraft.core.particles.DustParticleOptions(
+                                new org.joml.Vector3f(red, (float) velocityY, (float) velocityZ), 1.0F);
+                level.sendParticles(dust, x, y, z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                return;
+            }
+            net.minecraft.core.particles.ParticleOptions options = resolveParticleOptions(particle);
+            if (options != null) {
+                level.sendParticles(options, x, y, z, 0, velocityX, velocityY, velocityZ, 1.0D);
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not spawn particle '{}': {}", particle, e.getMessage());
+        }
+    }
+
+    /**
+     * Maps a 1.5.2 particle name (as used by FC code) to a modern ParticleOptions.
+     * Returns null for names with no modern equivalent.
+     */
+    private static net.minecraft.core.particles.ParticleOptions resolveParticleOptions(String name) {
+        // iconcrack_<itemID> → item break particles for the legacy item ID
+        if (name.startsWith("iconcrack_")) {
+            try {
+                int legacyItemId = Integer.parseInt(name.substring("iconcrack_".length()));
+                net.minecraft.world.item.Item item = ProxyRegistry.getModernItem(legacyItemId);
+                if (item != null) {
+                    return new net.minecraft.core.particles.ItemParticleOption(
+                            net.minecraft.core.particles.ParticleTypes.ITEM,
+                            new net.minecraft.world.item.ItemStack(item));
+                }
+            } catch (NumberFormatException ignored) {}
+            return null;
+        }
+        return switch (name) {
+            case "smoke" -> net.minecraft.core.particles.ParticleTypes.SMOKE;
+            case "largesmoke" -> net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE;
+            case "largeexplode" -> net.minecraft.core.particles.ParticleTypes.EXPLOSION;
+            case "hugeexplosion" -> net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER;
+            case "explode" -> net.minecraft.core.particles.ParticleTypes.POOF;
+            case "flame" -> net.minecraft.core.particles.ParticleTypes.FLAME;
+            case "lava" -> net.minecraft.core.particles.ParticleTypes.LAVA;
+            case "note" -> net.minecraft.core.particles.ParticleTypes.NOTE;
+            case "portal" -> net.minecraft.core.particles.ParticleTypes.PORTAL;
+            case "enchantmenttable" -> net.minecraft.core.particles.ParticleTypes.ENCHANT;
+            case "townaura" -> net.minecraft.core.particles.ParticleTypes.MYCELIUM;
+            case "dripWater" -> net.minecraft.core.particles.ParticleTypes.DRIPPING_WATER;
+            case "dripLava" -> net.minecraft.core.particles.ParticleTypes.DRIPPING_LAVA;
+            case "bubble" -> net.minecraft.core.particles.ParticleTypes.BUBBLE;
+            case "splash" -> net.minecraft.core.particles.ParticleTypes.SPLASH;
+            // snowshovel/snowballpoof both rendered snowball puffs in 1.5.2
+            case "snowshovel", "snowballpoof" -> net.minecraft.core.particles.ParticleTypes.ITEM_SNOWBALL;
+            case "slime" -> net.minecraft.core.particles.ParticleTypes.ITEM_SLIME;
+            case "heart" -> net.minecraft.core.particles.ParticleTypes.HEART;
+            case "angryVillager" -> net.minecraft.core.particles.ParticleTypes.ANGRY_VILLAGER;
+            case "happyVillager" -> net.minecraft.core.particles.ParticleTypes.HAPPY_VILLAGER;
+            case "witchMagic" -> net.minecraft.core.particles.ParticleTypes.WITCH;
+            case "mobSpell" -> net.minecraft.core.particles.ParticleTypes.ENTITY_EFFECT;
+            case "mobSpellAmbient" -> net.minecraft.core.particles.ParticleTypes.AMBIENT_ENTITY_EFFECT;
+            case "spell" -> net.minecraft.core.particles.ParticleTypes.EFFECT;
+            case "instantSpell" -> net.minecraft.core.particles.ParticleTypes.INSTANT_EFFECT;
+            case "crit" -> net.minecraft.core.particles.ParticleTypes.CRIT;
+            case "magicCrit" -> net.minecraft.core.particles.ParticleTypes.ENCHANTED_HIT;
+            // FC custom particles — closest modern visual equivalents
+            case "fcwhitesmoke", "fcwhitecloud" -> net.minecraft.core.particles.ParticleTypes.CLOUD;
+            case "fcsmallflame" -> net.minecraft.core.particles.ParticleTypes.SMALL_FLAME;
+            case "fccinders" -> net.minecraft.core.particles.ParticleTypes.ASH;
+            default -> null;
+        };
     }
 
     
@@ -1227,6 +1380,52 @@ public class WorldBridge extends btw.modern.World {
     public void playAuxSFXAtEntity(EntityPlayer player, int effectID,
                                    int x, int y, int z, int data) {
         level.levelEvent(null, effectID, new BlockPos(x, y, z), data);
+    }
+
+    // 1.5.2 World.func_82739_e (vanilla/server World.java:3900) — sends an auxSFX to all
+    // players regardless of distance. Live callers: FCEntityAIWolfHowl.java:117 /
+    // FCEntityAIWolfDireHowl.java:78 (howls), FCEntityWolf.java:894 (dire conversion),
+    // FCEntityLightningBolt.java:82 (strike FX). Sound handling ported from the FC
+    // client aux-FX handler (Client FCBetterThanWolves.java:3448+); high volumes give
+    // the long audible range MC derives from volume.
+    @Override
+    public void func_82739_e(int effectID, int x, int y, int z, int data) {
+        double px = x + 0.5D, py = y + 0.5D, pz = z + 0.5D;
+        switch (effectID) {
+            case 2256: { // FCBetterThanWolves.m_iWolfHowlAuxFXID
+                float fSoundVolume;
+                float fSoundPitch;
+                if (data > 0) {
+                    // dire howl
+                    fSoundVolume = 10F;
+                    fSoundPitch = (rand.nextFloat() - rand.nextFloat()) * 0.05F + 0.55F;
+                } else {
+                    // regular wolf howl
+                    fSoundVolume = 8.5F;
+                    fSoundPitch = (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F;
+                }
+                playSoundEffect(px, py, pz, "mob.wolf.howl", fSoundVolume, fSoundPitch);
+                break;
+            }
+            case 2257: // FCBetterThanWolves.m_iWolfConvertToDireAuxFXID
+                spawnParticle("largeexplode", px, py, pz, 0.0D, 0.0D, 0.0D);
+                playSoundEffect(px, py, pz, "mob.slime.attack", 1.0F,
+                        (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1.0F);
+                playSoundEffect(px, py, pz, "mob.wolf.growl", 8.5F,
+                        (rand.nextFloat() - rand.nextFloat()) * 0.05F + 0.55F);
+                break;
+            default:
+                if (effectID >= 2222) {
+                    // Other FC custom IDs (e.g. 2280 lightning strike) share the
+                    // playAuxSFX sound mapping.
+                    playFcAuxSFX(effectID, x, y, z, data);
+                } else {
+                    // Vanilla broadcast IDs (1013 wither spawn, 1018 dragon death)
+                    // — global level event reaches every player like broadcastSound.
+                    level.globalLevelEvent(effectID, new BlockPos(x, y, z), data);
+                }
+                break;
+        }
     }
 
     // ================================================================
@@ -1379,6 +1578,110 @@ public class WorldBridge extends btw.modern.World {
         return extractFcEntity(mcEntity);
     }
 
+    // 1.5.2 World.CountEntitiesThatApplyToSpawnCap (BTW-patched vanilla/server
+    // World.java:4634) — FCTileEntityBeacon.CheckForEndermanSpawn (:584/:649)
+    // population cap. MC owns the entity list, so iterate the live level and
+    // unwrap FC entities from their proxies.
+    @Override
+    public int CountEntitiesThatApplyToSpawnCap(Class classToCount) {
+        int iEntityCount = 0;
+
+        for (net.minecraft.world.entity.Entity forgeEntity : level.getAllEntities()) {
+            btw.modern.Entity tempEntity = extractFcEntity(forgeEntity);
+
+            if (tempEntity != null && tempEntity.DoesEntityApplyToSpawnCap()
+                    && classToCount.isAssignableFrom(tempEntity.getClass())) {
+                ++iEntityCount;
+            }
+        }
+
+        return iEntityCount;
+    }
+
+    // 1.5.2 World fields backing GetNumEntitiesThatApplyToSquidPossessionCap's
+    // once-per-tick cache (vanilla/server World.java:4655).
+    private long m_lTimeOfLastSquidPossessionCapCount = -1L;
+    private int m_iLastSquidPossessionCapCount = 0;
+
+    // 1.5.2 World.GetNumEntitiesThatApplyToSquidPossessionCap (vanilla/server
+    // World.java:4655) — FCEntitySquid.GetCanCreatureBePossessedFromDistance (:630)
+    // possessed-squid performance cap.
+    @Override
+    public int GetNumEntitiesThatApplyToSquidPossessionCap() {
+        long lCurrentTime = getWorldTime();
+
+        if (lCurrentTime != m_lTimeOfLastSquidPossessionCapCount) {
+            m_iLastSquidPossessionCapCount = 0;
+            m_lTimeOfLastSquidPossessionCapCount = lCurrentTime;
+
+            for (net.minecraft.world.entity.Entity forgeEntity : level.getAllEntities()) {
+                btw.modern.Entity tempEntity = extractFcEntity(forgeEntity);
+
+                if (tempEntity != null && tempEntity.DoesEntityApplyToSquidPossessionCap()) {
+                    m_iLastSquidPossessionCapCount++;
+                }
+            }
+        }
+
+        return m_iLastSquidPossessionCapCount;
+    }
+
+    // Cached reflective handles for net.minecraft.src.btw.util.FCClosestEntityInfo /
+    // FCClosestEntitySelectionCriteria — FC-only classes that are not on the Forge
+    // compile classpath (same reflective FC access pattern as BTWLifecycle).
+    private static java.lang.reflect.Constructor<?> closestEntityInfoCtor;
+    private static java.lang.reflect.Method closestEntityProcessMethod;
+    private static java.lang.reflect.Field closestEntityField;
+
+    // 1.5.2 World.GetClosestEntityMatchingCriteriaWithinRange (BTW-patched
+    // vanilla/server World.java:4595) — FCEntitySquid.java:849 staggered secondary
+    // possession-target scan. MC owns the chunk entity lists, so iterate live
+    // entities in range and apply the FC criteria object's ProcessEntity
+    // (selection logic stays in FC code, exactly as Chunk.
+    // GetClosestEntityMatchingCriteriaWithinRangeSq does per entity).
+    @Override
+    public btw.modern.Entity GetClosestEntityMatchingCriteriaWithinRange(
+            double dSourcePosX, double dSourcePosY, double dSourcePosZ,
+            double dRange, Object criteria) {
+        if (criteria == null) return null;
+        try {
+            if (closestEntityInfoCtor == null) {
+                Class<?> infoClass = Class.forName("net.minecraft.src.btw.util.FCClosestEntityInfo");
+                Class<?> criteriaClass = Class.forName("net.minecraft.src.btw.util.FCClosestEntitySelectionCriteria");
+                closestEntityInfoCtor = infoClass.getConstructor(
+                        double.class, double.class, double.class, double.class,
+                        btw.modern.Entity.class, criteriaClass, int.class, int.class);
+                closestEntityProcessMethod = criteriaClass.getMethod(
+                        "ProcessEntity", infoClass, btw.modern.Entity.class);
+                closestEntityField = infoClass.getField("m_closestEntity");
+            }
+
+            // m_dClosestDistanceSq starts at range² so ProcessEntity rejects anything
+            // out of range; the vertical section indices (0,15) are only chunk-list
+            // bookkeeping in vanilla and unused by the AABB iteration below.
+            Object closestEntityInfo = closestEntityInfoCtor.newInstance(
+                    dSourcePosX, dSourcePosY, dSourcePosZ, dRange * dRange,
+                    null, criteria, 0, 15);
+
+            net.minecraft.world.phys.AABB searchBox = new net.minecraft.world.phys.AABB(
+                    dSourcePosX - dRange, dSourcePosY - dRange, dSourcePosZ - dRange,
+                    dSourcePosX + dRange, dSourcePosY + dRange, dSourcePosZ + dRange);
+
+            for (net.minecraft.world.entity.Entity forgeEntity :
+                    level.getEntities((net.minecraft.world.entity.Entity) null, searchBox, e -> true)) {
+                btw.modern.Entity fc = extractFcEntity(forgeEntity);
+                if (fc != null) {
+                    closestEntityProcessMethod.invoke(criteria, closestEntityInfo, fc);
+                }
+            }
+
+            return (btw.modern.Entity) closestEntityField.get(closestEntityInfo);
+        } catch (Exception e) {
+            LOGGER.debug("GetClosestEntityMatchingCriteriaWithinRange failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
     // ================================================================
     // Entity state
     // ================================================================
@@ -1417,6 +1720,31 @@ public class WorldBridge extends btw.modern.World {
         return fcExplosion;
     }
 
+    // 1.5.2 World.NewExplosionNoFX (BTW-patched vanilla/server World.java:4902) —
+    // FCBlockLogSmouldering.Explode (FCBlockLogSmouldering.java:389); copy of
+    // newExplosion with FX suppressed. Built directly instead of level.explode so
+    // no ClientboundExplodePacket (sound/particles) is sent — entity damage, fire
+    // (isFlaming) and block destruction (isSmoking) still apply, matching
+    // doExplosionA()/doExplosionB(false).
+    @Override
+    public Explosion NewExplosionNoFX(btw.modern.Entity entity, double x, double y, double z,
+                                      float strength, boolean isFlaming, boolean isSmoking) {
+        net.minecraft.world.entity.Entity source =
+                entity != null ? fcToForgeEntity.get(entity) : null;
+        net.minecraft.world.level.Explosion explosion = new net.minecraft.world.level.Explosion(
+                level, source, x, y, z, strength, isFlaming,
+                isSmoking ? net.minecraft.world.level.Explosion.BlockInteraction.DESTROY_WITH_DECAY
+                          : net.minecraft.world.level.Explosion.BlockInteraction.KEEP);
+        explosion.explode();
+        explosion.finalizeExplosion(false);
+
+        Explosion fcExplosion = new Explosion(this, entity, x, y, z, strength);
+        fcExplosion.isFlaming = isFlaming;
+        fcExplosion.isSmoking = isSmoking;
+        fcExplosion.m_bSuppressFX = true;
+        return fcExplosion;
+    }
+
     // ================================================================
     // Time
     // ================================================================
@@ -1444,6 +1772,15 @@ public class WorldBridge extends btw.modern.World {
     @Override
     public boolean isDaytime() {
         return level.isDay();
+    }
+
+    // 1.5.2 World.getMoonPhase (vanilla/server World.java:1576) — FCEntityWolf.
+    // IsWildAndHostile full-moon hostility (phase 0), FCEntityAIWolfHowl howl trigger,
+    // frozen EntitySlime.getCanSpawnHere; MC 1.20.1 uses the same (time/24000 % 8)
+    // numbering with 0 = full moon.
+    @Override
+    public int getMoonPhase() {
+        return level.getMoonPhase();
     }
 
     // ================================================================
@@ -1812,5 +2149,21 @@ public class WorldBridge extends btw.modern.World {
     @Override
     public boolean isAABBInMaterial(btw.modern.AxisAlignedBB aabb, btw.modern.Material material) {
         return isMaterialInBB(aabb, material);
+    }
+
+    // 1.5.2 WorldServer.tick — villageCollectionObj.tick() drives village door
+    // discovery, center/radius updates, aggressor decay, and reputation for the
+    // frozen villager AI (EntityAIMoveIndoors/MoveThroughVillage/RestrictOpenDoor/
+    // VillagerMate/DefendVillage). Runs once per server tick via ServerLevelMixin's
+    // ModSpecificTick hook; func_82566_a re-binds this world first because the
+    // World shim field-initializes villageCollectionObj without one.
+    @Override
+    public void ModSpecificTick() {
+        // 1.5.2 WorldServer.tick updates skylightSubtracted with time of day each tick
+        // (World.calculateSkylightSubtracted). getLightBrightness / GetBlockNaturalLightValue
+        // and the gloom probe read this field; getSkyDarken is the modern equivalent.
+        this.skylightSubtracted = level.getSkyDarken();
+        villageCollectionObj.func_82566_a(this);
+        villageCollectionObj.tick();
     }
 }

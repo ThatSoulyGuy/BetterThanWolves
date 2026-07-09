@@ -204,7 +204,14 @@ public class ForgeNBTCompound extends btw.modern.NBTTagCompound {
 
     @Override
     public btw.modern.NBTTagCompound getCompoundTag(String key) {
-        if (!tag.contains(key, 10)) return null; // 10 = compound tag type
+        // 1.5.2 NBTTagCompound.getCompoundTag returns a fresh DETACHED
+        // compound when the key is absent — FC callers write into it and
+        // re-attach via setCompoundTag (FCItemArmorMod.func_82813_b:108-115,
+        // removeColor:81-83, wool-armor dyeing). Returning null here NPE'd
+        // every such FC path fed a converted stack tag.
+        if (!tag.contains(key, 10)) { // 10 = compound tag type
+            return new ForgeNBTCompound(new CompoundTag());
+        }
         CompoundTag sub = tag.getCompound(key);
         return new ForgeNBTCompound(sub);
     }

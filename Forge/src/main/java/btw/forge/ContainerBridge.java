@@ -248,11 +248,17 @@ public class ContainerBridge {
      * A minimal FC Container for displaying a simple chest-like inventory.
      * Maps the IInventory's slots on top, player inventory below.
      */
-    private static class SimpleChestContainer extends btw.modern.Container {
+    // Extends ContainerChest (not bare Container) so the ported
+    // TileEntityChest.updateEntity 200-tick viewer recount finds this container
+    // via `openContainer instanceof ContainerChest && getLowerChestInventory() ==
+    // this` — otherwise the recount zeroes numUsingPlayers and the chest lid
+    // snaps shut ~10s into viewing.
+    private static class SimpleChestContainer extends btw.modern.ContainerChest {
         private final btw.modern.IInventory chestInventory;
         private final int numRows;
 
         SimpleChestContainer(btw.modern.IInventory inventory, PlayerBridge player) {
+            super(player.inventory, inventory);
             this.chestInventory = inventory;
             int invSize = inventory.getSizeInventory();
             this.numRows = Math.max(1, (invSize + 8) / 9); // ceil(invSize / 9)

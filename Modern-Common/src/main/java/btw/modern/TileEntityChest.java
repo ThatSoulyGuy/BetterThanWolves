@@ -11,6 +11,8 @@ public class TileEntityChest extends TileEntity implements IInventory {
     public int numUsingPlayers;
     public float lidAngle;
     public float prevLidAngle;
+    // 1.5.2 TileEntityChest.ticksSinceSync — staggers the numUsingPlayers resync in updateEntity.
+    private int ticksSinceSync;
 
     @Override
     public int getSizeInventory() { return 27; }
@@ -73,10 +75,154 @@ public class TileEntityChest extends TileEntity implements IInventory {
         return player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= 64.0;
     }
 
-    public void openChest() { numUsingPlayers++; }
-    public void closeChest() { numUsingPlayers--; }
+    // 1.5.2 TileEntityChest.updateEntity — lid angle interpolation + open/close sounds; the fc
+    // TileEntityChestRenderer reads lidAngle/prevLidAngle. Ticked via ProxyBlockEntity → fcTileEntity.updateEntity().
+    @Override
+    public void updateEntity() {
+        super.updateEntity();
+        this.checkForAdjacentChests();
+        ++this.ticksSinceSync;
+        float var1;
+
+        if (!this.worldObj.isRemote && this.numUsingPlayers != 0
+                && (this.ticksSinceSync + this.xCoord + this.yCoord + this.zCoord) % 200 == 0) {
+            this.numUsingPlayers = 0;
+            var1 = 5.0F;
+            java.util.List var2 = this.worldObj.getEntitiesWithinAABB(EntityPlayer.class,
+                    AxisAlignedBB.getAABBPool().getAABB((double) ((float) this.xCoord - var1),
+                            (double) ((float) this.yCoord - var1), (double) ((float) this.zCoord - var1),
+                            (double) ((float) (this.xCoord + 1) + var1), (double) ((float) (this.yCoord + 1) + var1),
+                            (double) ((float) (this.zCoord + 1) + var1)));
+            java.util.Iterator var3 = var2.iterator();
+
+            while (var3.hasNext()) {
+                EntityPlayer var4 = (EntityPlayer) var3.next();
+
+                if (var4.openContainer instanceof ContainerChest) {
+                    IInventory var5 = ((ContainerChest) var4.openContainer).getLowerChestInventory();
+
+                    if (var5 == this || var5 instanceof InventoryLargeChest
+                            && ((InventoryLargeChest) var5).isPartOfLargeChest(this)) {
+                        ++this.numUsingPlayers;
+                    }
+                }
+            }
+        }
+
+        this.prevLidAngle = this.lidAngle;
+        var1 = 0.1F;
+        double var11;
+
+        if (this.numUsingPlayers > 0 && this.lidAngle == 0.0F
+                && this.adjacentChestZNeg == null && this.adjacentChestXNeg == null) {
+            double var8 = (double) this.xCoord + 0.5D;
+            var11 = (double) this.zCoord + 0.5D;
+
+            if (this.adjacentChestZPosition != null) {
+                var11 += 0.5D;
+            }
+
+            if (this.adjacentChestXPos != null) {
+                var8 += 0.5D;
+            }
+
+            this.worldObj.playSoundEffect(var8, (double) this.yCoord + 0.5D, var11,
+                    "random.chestopen", 0.5F, this.worldObj.rand.nextFloat() * 0.1F + 0.9F);
+        }
+
+        if (this.numUsingPlayers == 0 && this.lidAngle > 0.0F || this.numUsingPlayers > 0 && this.lidAngle < 1.0F) {
+            float var9 = this.lidAngle;
+
+            if (this.numUsingPlayers > 0) {
+                this.lidAngle += var1;
+            } else {
+                this.lidAngle -= var1;
+            }
+
+            if (this.lidAngle > 1.0F) {
+                this.lidAngle = 1.0F;
+            }
+
+            float var10 = 0.5F;
+
+            if (this.lidAngle < var10 && var9 >= var10
+                    && this.adjacentChestZNeg == null && this.adjacentChestXNeg == null) {
+                var11 = (double) this.xCoord + 0.5D;
+                double var6 = (double) this.zCoord + 0.5D;
+
+                if (this.adjacentChestZPosition != null) {
+                    var6 += 0.5D;
+                }
+
+                if (this.adjacentChestXPos != null) {
+                    var11 += 0.5D;
+                }
+
+                this.worldObj.playSoundEffect(var11, (double) this.yCoord + 0.5D, var6,
+                        "random.chestclosed", 0.5F, this.worldObj.rand.nextFloat() * 0.1F + 0.9F);
+            }
+
+            if (this.lidAngle < 0.0F) {
+                this.lidAngle = 0.0F;
+            }
+        }
+    }
+
+    // 1.5.2 TileEntityChest.receiveClientEvent — event 1 syncs numUsingPlayers to clients
+    // (sent by openChest/closeChest via World.addBlockEvent).
+    @Override
+    public boolean receiveClientEvent(int eventId, int eventParam) {
+        if (eventId == 1) {
+            this.numUsingPlayers = eventParam;
+            return true;
+        } else {
+            return super.receiveClientEvent(eventId, eventParam);
+        }
+    }
+
+    // 1.5.2 TileEntityChest.openChest — called by FCTileEntityChest.openChest via super.
+    public void openChest() {
+        if (this.numUsingPlayers < 0) {
+            this.numUsingPlayers = 0;
+        }
+
+        ++this.numUsingPlayers;
+        this.worldObj.addBlockEvent(this.xCoord, this.yCoord, this.zCoord, this.getBlockType().blockID, 1, this.numUsingPlayers);
+        this.worldObj.notifyBlocksOfNeighborChange(this.xCoord, this.yCoord, this.zCoord, this.getBlockType().blockID);
+        this.worldObj.notifyBlocksOfNeighborChange(this.xCoord, this.yCoord - 1, this.zCoord, this.getBlockType().blockID);
+    }
+
+    // 1.5.2 TileEntityChest.closeChest — called by FCTileEntityChest.closeChest via super.
+    public void closeChest() {
+        if (this.getBlockType() != null && this.getBlockType() instanceof BlockChest) {
+            --this.numUsingPlayers;
+            this.worldObj.addBlockEvent(this.xCoord, this.yCoord, this.zCoord, this.getBlockType().blockID, 1, this.numUsingPlayers);
+            this.worldObj.notifyBlocksOfNeighborChange(this.xCoord, this.yCoord, this.zCoord, this.getBlockType().blockID);
+            this.worldObj.notifyBlocksOfNeighborChange(this.xCoord, this.yCoord - 1, this.zCoord, this.getBlockType().blockID);
+        }
+    }
+
+    // Adjacency detection is supplied by FCTileEntityChest.checkForAdjacentChests (FCTileEntityChest.java:42),
+    // which overrides this for every chest the proxy block creates.
     public void checkForAdjacentChests() {}
+
     public int func_98041_l() { return 0; }
+
+    // 1.5.2 TileEntityChest.updateContainingBlockInfo — clears cached adjacency; the base
+    // TileEntity part (blockType/blockMetadata cache reset) is inlined since the shim base lacks the method.
+    public void updateContainingBlockInfo() {
+        this.blockType = null;
+        this.blockMetadata = -1;
+        this.adjacentChestChecked = false;
+    }
+
+    // 1.5.2 TileEntityChest.invalidate — refreshes cached block info and adjacency on removal.
+    @Override
+    public void invalidate() {
+        super.invalidate();
+        this.updateContainingBlockInfo();
+        this.checkForAdjacentChests();
+    }
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {

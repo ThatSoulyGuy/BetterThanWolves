@@ -320,6 +320,87 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
         return false;
     }
 
+    // 1.5.2 Entity.canBeCollidedWith — consulted by EntityRenderer.getMouseOver
+    // and the world attack/use ray-traces. Without this bridge leg, MC's
+    // Entity.isPickable() default (false) makes every plain-proxy FC entity
+    // (FCEntityMechPower windmills/water wheels, FCEntityCanvas, moving
+    // platforms) untargetable, so their attackEntityFrom overrides never run.
+    @Override
+    public boolean isPickable() {
+        return fcEntity != null && fcEntity.canBeCollidedWith();
+    }
+
+    // 1.5.2 Entity.canBePushed — parity bridge leg for MC's push logic.
+    @Override
+    public boolean isPushable() {
+        return fcEntity != null && fcEntity.canBePushed();
+    }
+
+    // 1.5.2 EntityPlayer.interactWith -> entity.interact(player). Live FC
+    // caller: FCEntityWindMillVertical.interact (sail dyeing, Common
+    // FCEntityWindMillVertical.java:133) and FCEntityWindMill likewise.
+    // Mirrors ProxyMob.mobInteract.
+    @Override
+    public net.minecraft.world.InteractionResult interact(
+            net.minecraft.world.entity.player.Player player,
+            net.minecraft.world.InteractionHand hand) {
+        if (fcEntity != null && hand == net.minecraft.world.InteractionHand.MAIN_HAND
+                && player instanceof net.minecraft.server.level.ServerPlayer sp) {
+            btw.forge.PlayerBridge pb = btw.forge.PlayerBridge.getOrCreate(sp);
+            try {
+                if (fcEntity.interact(pb)) {
+                    return net.minecraft.world.InteractionResult.SUCCESS;
+                }
+            } catch (Throwable t) {
+                LOGGER.warn("FC entity interact() threw: {}: {}",
+                        t.getClass().getSimpleName(), t.getMessage());
+            }
+        }
+        return super.interact(player, hand);
+    }
+
+    /**
+     * Cached reflective handle for the frozen 1.5.2
+     * Entity.onCollideWithPlayer(EntityPlayer). The frozen btw.modern.Entity
+     * declares it (verified via javap on the fc class set), but the
+     * compile-time Modern-Common shim does not, so the call cannot be made
+     * directly — see the deferred Modern-Common Entity.java declaration.
+     */
+    private java.lang.reflect.Method onCollideWithPlayerMethod;
+
+    // 1.5.2 EntityPlayer.onUpdate -> collideWithNearbyEntities ->
+    // Entity.onCollideWithPlayer. Live FC paths: frozen
+    // EntityXPOrb.onCollideWithPlayer (XP collection — Dragon Orbs from
+    // EntityLiving.onDeathUpdate:728, FCTileEntityArcaneVessel:342/365,
+    // FCTileEntityHopper:839) and frozen EntityArrow.onCollideWithPlayer
+    // (arrow pickup).
+    @Override
+    public void playerTouch(net.minecraft.world.entity.player.Player player) {
+        if (fcEntity != null && !level().isClientSide
+                && player instanceof net.minecraft.server.level.ServerPlayer sp) {
+            try {
+                java.lang.reflect.Method m = onCollideWithPlayerMethod;
+                if (m == null) {
+                    m = fcEntity.getClass().getMethod(
+                            "onCollideWithPlayer", btw.modern.EntityPlayer.class);
+                    onCollideWithPlayerMethod = m;
+                }
+                m.invoke(fcEntity, btw.forge.PlayerBridge.getOrCreate(sp));
+                // Orb/arrow pickup calls setDead() — discard the proxy now
+                // rather than waiting for the next tick.
+                syncFromFc();
+            } catch (Throwable t) {
+                Throwable root = t;
+                while (root.getCause() != null && root.getCause() != root) {
+                    root = root.getCause();
+                }
+                LOGGER.warn("FC entity onCollideWithPlayer() threw: {}: {}",
+                        root.getClass().getSimpleName(), root.getMessage());
+            }
+        }
+        super.playerTouch(player);
+    }
+
     // ------------------------------------------------------------------
     // Required abstract implementations
     // ------------------------------------------------------------------

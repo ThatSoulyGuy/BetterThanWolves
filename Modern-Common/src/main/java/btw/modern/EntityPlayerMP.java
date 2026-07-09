@@ -46,10 +46,12 @@ public class EntityPlayerMP extends EntityPlayer implements ICrafting {
     public int ping;
     public boolean playerConqueredTheEnd = false;
 
-    // --- FC fields (shadow parent for vanilla compat) ---
-    public long m_lTimeOfLastSpawnAssignment;
-    public long m_lRespawnAssignmentCooldownTimer;
-    public ChunkCoordinates m_HardcoreSpawnChunk;
+    // NOTE: m_HardcoreSpawnChunk / m_lTimeOfLastSpawnAssignment /
+    // m_lRespawnAssignmentCooldownTimer are inherited from EntityPlayer, matching
+    // 1.5.2 which declares them ONCE there. Re-declaring them here created a second
+    // storage location per player (split-brain between Write/ReadModDataToNBT and
+    // the spawn hooks in PlayerBridge/ServerPlayerMixin), so hardcore-spawn NBT
+    // persistence saved a never-written copy.
 
     // --- FC exhaustion-with-time ---
     private int m_iExhaustionWithTimeCounter = 0;
@@ -231,5 +233,156 @@ public class EntityPlayerMP extends EntityPlayer implements ICrafting {
         if (this.ticksOfInvuln > 0) {
             --this.ticksOfInvuln;
         }
+    }
+
+    // =====================================================================
+    // FC per-tick status updates (vanilla EntityPlayerMP.ModSpecificOnUpdate
+    // path — driven by ServerPlayerMixin.btw$tick in the Forge port)
+    // =====================================================================
+
+    // FCDamageSourceCustom.m_DamageSourceGloom (Common FCDamageSourceCustom.java:30),
+    // resolved reflectively because Modern-Common cannot compile against the FC sources.
+    // Fallback is an equivalent local instance — "fcGloom" maps to the same modern
+    // source in DamageSourceMapping either way.
+    private static DamageSource m_damageSourceGloom;
+
+    private static DamageSource GetGloomDamageSource() {
+        if (m_damageSourceGloom == null) {
+            try {
+                Class<?> fcClass = Class.forName("net.minecraft.src.btw.properties.FCDamageSourceCustom");
+                m_damageSourceGloom = (DamageSource) fcClass.getField("m_DamageSourceGloom").get(null);
+            } catch (Exception e) {
+                m_damageSourceGloom = new DamageSource("fcGloom").setDamageBypassesArmor();
+            }
+        }
+
+        return m_damageSourceGloom;
+    }
+
+    /** FCBetterThanWolves.m_iBurpSoundAuxFXID (Server FCBetterThanWolves.java:708). */
+    private static final int m_iBurpSoundAuxFXID = 2226;
+
+    /**
+     * Passive hunger drain: every 600 ticks add 0.5F exhaustion just for existing.
+     * Public (vanilla private) so the mixin-driven tick can reach it.
+     */
+    // 1.5.2 EntityPlayerMP.UpdateExhaustionWithTime (vanilla/server EntityPlayerMP.java:1173) —
+    // called every tick from ServerPlayerMixin.btw$tick (replaces vanilla ModSpecificOnUpdate).
+    public void UpdateExhaustionWithTime() {
+        m_iExhaustionWithTimeCounter++;
+
+        if (m_iExhaustionWithTimeCounter >= m_iExhaustionWithTimePeriod) {
+            if (!capabilities.disableDamage) // disable hunger drain in creative
+            {
+                foodStats.addExhaustion(m_fExhaustionWithTimeAmount);
+            }
+
+            m_iExhaustionWithTimeCounter = 0;
+        }
+    }
+
+    /**
+     * Every 80 ticks: nausea when fully starved, blindness when nearly dead.
+     * Public (vanilla private) so the mixin-driven tick can reach it.
+     */
+    // 1.5.2 EntityPlayerMP.UpdateHealthAndHungerEffects (vanilla/server EntityPlayerMP.java:1188) —
+    // called every tick from ServerPlayerMixin.btw$tick (replaces vanilla ModSpecificOnUpdate).
+    public void UpdateHealthAndHungerEffects() {
+        if (!isDead && (worldObj.getTotalWorldTime() + (long) entityId) % 80L == 0L) {
+            if (foodStats.getFoodLevel() <= 0 && foodStats.getSaturationLevel() <= 0F) {
+                addPotionEffect(new PotionEffect(Potion.confusion.getId(), 180, 0, true));
+            }
+
+            if (health <= 2) {
+                addPotionEffect(new PotionEffect(Potion.blindness.getId(), 180, 0, true));
+            }
+        }
+    }
+
+    // 1.5.2 EntityPlayerMP.UpdateGloomState (vanilla/server EntityPlayerMP.java:1205) —
+    // live caller: EntityPlayer.UpdateModStatusVariables from ServerPlayerMixin.btw$tick.
+    // attackEntityFrom/addPotionEffect/isPotionActive dispatch to the PlayerBridge legs.
+    @Override
+    public void UpdateGloomState() {
+        if (!isDead) {
+            if (IsInGloom()) {
+                m_iInGloomCounter++;
+
+                if (GetGloomLevel() == 0 || (m_iInGloomCounter > m_iGloomCounterBetweenStateChanges && GetGloomLevel() < 3)) {
+                    SetGloomLevel(GetGloomLevel() + 1);
+
+                    m_iInGloomCounter = 0;
+                }
+
+                if (GetGloomLevel() >= 3) {
+                    if ((worldObj.getTotalWorldTime() + (long) entityId) % 80L == 0L) {
+                        addPotionEffect(new PotionEffect(Potion.confusion.getId(), 180, 0, true));
+                    }
+
+                    // gloom bites
+
+                    float fCounterProgress = (float) m_iInGloomCounter / (float) m_iGloomCounterBetweenStateChanges;
+
+                    if (fCounterProgress > 1.0F) {
+                        fCounterProgress = 1.0F;
+                    }
+
+                    float fGloomBiteChance = m_fMinimumGloomBiteChance + (m_fMaximumGloomBiteChance - m_fMinimumGloomBiteChance) * fCounterProgress;
+
+                    if (rand.nextFloat() < fGloomBiteChance) {
+                        if (attackEntityFrom(GetGloomDamageSource(), 1)) {
+                            if (health <= 0) {
+                                worldObj.playAuxSFX(m_iBurpSoundAuxFXID,
+                                    MathHelper.floor_double(posX), MathHelper.floor_double(posY),
+                                    MathHelper.floor_double(posZ), 0);
+                            }
+                        }
+                    }
+                }
+            } else {
+                SetGloomLevel(0);
+
+                m_iInGloomCounter = 0;
+            }
+        }
+    }
+
+    // 1.5.2 EntityPlayerMP.IsInGloom (vanilla/server EntityPlayerMP.java:1346) — effective
+    // light check with skylightSubtracted temporarily overridden from the moon-phase sun
+    // brightness. worldObj.getLightBrightness must honor skylightSubtracted (WorldBridge leg).
+    private boolean IsInGloom() {
+        if (!capabilities.disableDamage) // disable darkness effects in creative
+        {
+            if (!isPotionActive(Potion.nightVision) && worldObj.provider.dimensionId == 0) {
+                int i = MathHelper.floor_double(posX);
+                int j = MathHelper.floor_double(posY - yOffset);
+                int k = MathHelper.floor_double(posZ);
+
+                int iOldSkylightSubtracted = worldObj.skylightSubtracted;
+
+                float fSunBrightness = worldObj.ComputeOverworldSunBrightnessWithMoonPhases();
+
+                if (fSunBrightness < 0.02D) {
+                    // world is in gloom, no skylight at all
+                    worldObj.skylightSubtracted = 15;
+                } else {
+                    worldObj.skylightSubtracted = (int) ((1F - fSunBrightness) * 11.9F);
+                }
+
+                float fBlockInLightValue = worldObj.getLightBrightness(i, j, k);
+
+                float fBlockAboveLightValue = worldObj.getLightBrightness(i, j + 1, k);
+
+                if (fBlockAboveLightValue > fBlockInLightValue) {
+                    fBlockInLightValue = fBlockAboveLightValue;
+                }
+
+                worldObj.skylightSubtracted = iOldSkylightSubtracted;
+
+                return fBlockInLightValue < 0.001F;
+            }
+        }
+
+        return false;
     }
 }

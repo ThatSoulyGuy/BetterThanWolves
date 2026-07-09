@@ -502,6 +502,10 @@ public class FCContainerMenu extends AbstractContainerMenu {
             } catch (Exception e) {
                 LOGGER.debug("FC onCraftGuiClosed failed: {}", e.getMessage());
             }
+            // 1.5.2 EntityPlayer.closeScreen resets openContainer to inventoryContainer on
+            // every close; now load-bearing since TileEntityChest.updateEntity checks
+            // `openContainer instanceof ContainerChest` to keep the lid open.
+            fcPlayer.openContainer = fcPlayer.inventoryContainer;
         }
     }
 

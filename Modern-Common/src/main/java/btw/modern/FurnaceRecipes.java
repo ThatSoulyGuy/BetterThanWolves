@@ -8,6 +8,9 @@ public class FurnaceRecipes {
     private Map smeltingList = new HashMap();
     private Map metaSmeltingList = new HashMap();
     private Map experienceList = new HashMap();
+    // 1.5.2 (FCMOD) FurnaceRecipes.m_CookTimeBinaryShiftMap — populated by the
+    // 4-arg addSmelting overload, read by TileEntityFurnace.GetCookTimeForCurrentItem.
+    private Map m_CookTimeBinaryShiftMap = new HashMap();
     private boolean vanillaRecipesRegistered = false;
 
     public static FurnaceRecipes smelting() {
@@ -46,8 +49,17 @@ public class FurnaceRecipes {
         experienceList.put(inputId, xp);
     }
 
-    public void addSmelting(int inputId, ItemStack output, float xp, int cookTime) {
+    public void addSmelting(int inputId, ItemStack output, float xp, int cookTimeBinaryShift) {
         addSmelting(inputId, output, xp);
+        m_CookTimeBinaryShiftMap.put(Integer.valueOf(inputId), Integer.valueOf(cookTimeBinaryShift));
+    }
+
+    // 1.5.2 (FCMOD) FurnaceRecipes.GetCookTimeBinaryShift (vanilla/server FurnaceRecipes.java:106)
+    public int GetCookTimeBinaryShift(int itemId) {
+        if (m_CookTimeBinaryShiftMap.containsKey(Integer.valueOf(itemId))) {
+            return ((Integer) m_CookTimeBinaryShiftMap.get(Integer.valueOf(itemId))).intValue();
+        }
+        return 0;
     }
 
     public ItemStack getSmeltingResult(int inputId) {

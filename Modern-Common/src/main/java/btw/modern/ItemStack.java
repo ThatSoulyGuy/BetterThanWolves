@@ -70,10 +70,12 @@ public class ItemStack {
         return this.itemID;
     }
 
+    // 1.5.2 ItemStack.splitStack — Container.slotClick/FCContainerMenu split paths;
+    // vanilla deep-copies the NBT (stackTagCompound.copy()) so the halves never alias.
     public ItemStack splitStack(int amount) {
         ItemStack result = new ItemStack(this.itemID, amount, this.itemDamage);
         if (this.stackTagCompound != null) {
-            result.stackTagCompound = this.stackTagCompound;
+            result.stackTagCompound = (NBTTagCompound) this.stackTagCompound.copy();
         }
         this.stackSize -= amount;
         return result;
@@ -402,9 +404,12 @@ public class ItemStack {
         return 1.0F;
     }
 
+    // 1.5.2 (FCMOD) ItemStack.canHarvestBlock — EntityPlayer/InventoryPlayer.canHarvestBlock
+    // harvest check; must hit the positional overload FC tools override (FCItemPickaxe etc.),
+    // not the single-arg base that always returns false.
     public boolean canHarvestBlock(World world, Block block, int i, int j, int k) {
         if (this.getItem() != null) {
-            return this.getItem().canHarvestBlock(block);
+            return this.getItem().canHarvestBlock(this, world, block, i, j, k);
         }
         return false;
     }
@@ -447,6 +452,12 @@ public class ItemStack {
     public int getItemSpriteNumber() {
         Item item = getItem();
         return item != null ? item.getItemSpriteNumber() : 1;
+    }
+
+    // 1.5.2 ItemStack.getIconIndex — RenderItem.doRenderItem flat-item path.
+    public Icon getIconIndex() {
+        Item item = getItem();
+        return item != null ? item.getIconIndex(this) : null;
     }
 
     // --- BTW-added methods ---

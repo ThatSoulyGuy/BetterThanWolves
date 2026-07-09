@@ -143,8 +143,10 @@ public class Potion {
         digSpeed        = new Potion(3,  false, 14270531).setPotionName("potion.digSpeed").setIconIndex(2, 0);
         digSlowdown     = new Potion(4,  true,  4866583).setPotionName("potion.digSlowdown").setIconIndex(3, 0);
         damageBoost     = new Potion(5,  false, 9643043).setPotionName("potion.damageBoost").setIconIndex(4, 0);
-        heal            = new Potion(6,  false, 16262179).setPotionName("potion.heal").setIconIndex(5, 0);
-        harm            = new Potion(7,  true,  4393481).setPotionName("potion.harm").setIconIndex(6, 0);
+        // heal/harm are PotionHealth (isInstant()=true): PotionHelper.getPotionEffects
+        // branches on isInstant to set instant strength, else they apply nothing.
+        heal            = new PotionHealth(6,  false, 16262179).setPotionName("potion.heal").setIconIndex(5, 0);
+        harm            = new PotionHealth(7,  true,  4393481).setPotionName("potion.harm").setIconIndex(6, 0);
         jump            = new Potion(8,  false, 2293580).setPotionName("potion.jump").setIconIndex(2, 1);
         confusion       = new Potion(9,  true,  5578058).setPotionName("potion.confusion").setIconIndex(3, 1);
         regeneration    = new Potion(10, false, 13458603).setPotionName("potion.regeneration").setIconIndex(7, 0);

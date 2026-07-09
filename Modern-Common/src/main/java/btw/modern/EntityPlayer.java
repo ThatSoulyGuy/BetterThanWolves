@@ -25,6 +25,12 @@ public abstract class EntityPlayer extends EntityLiving {
     public EntityFishHook fishEntity;
     public boolean disableDamage;
 
+    /** Used by EntityPlayer to prevent too many xp orbs from getting absorbed at once. */
+    // 1.5.2 EntityPlayer.xpCooldown (vanilla/server EntityPlayer.java:50) — read/written by the
+    // frozen EntityXPOrb.onCollideWithPlayer (getfield btw/modern/EntityPlayer.xpCooldown) when a
+    // player touches an XP orb; decremented per tick by ServerPlayerMixin.btw$tick.
+    public int xpCooldown = 0;
+
     // --- FC fields ---
     public int m_iHungerPenaltyLevel;
     public int m_iFatPenaltyLevel;
@@ -159,6 +165,16 @@ public abstract class EntityPlayer extends EntityLiving {
     }
 
     public void addExperience(int amount) {}
+
+    /**
+     * 1.5.2 EntityLiving.onItemPickup — broadcasts the collect-item packet so nearby clients
+     * play the pickup fly-to-player animation. Declared HERE because the frozen
+     * EntityXPOrb.onCollideWithPlayer resolves it against btw.modern.EntityPlayer, and the
+     * frozen EntityLiving version casts worldObj to the frozen WorldServer (which would
+     * ClassCastException on a WorldBridge). PlayerBridge overrides this to delegate to
+     * ServerPlayer.take(); packet broadcast is engine-side, so the base is a safe no-op.
+     */
+    public void onItemPickup(Entity entity, int count) {}
 
     public float getCurrentPlayerStrVsBlock(Block block, boolean flag) {
         // Delegate to position-aware version with dummy coords
@@ -655,7 +671,9 @@ public abstract class EntityPlayer extends EntityLiving {
 
     /**
      * Updates gloom state based on light level.
-     * TODO: Needs world light level access; real implementation is in EntityPlayerMP override
+     * Empty in the base class like 1.5.2 EntityPlayer; the real implementation is the
+     * EntityPlayerMP override (vanilla/server EntityPlayerMP.java:1205), ported to the
+     * EntityPlayerMP shim.
      */
     public void UpdateGloomState() {}
 
@@ -807,20 +825,130 @@ public abstract class EntityPlayer extends EntityLiving {
     // FC Misc
     // =========================================================================
 
-    /**
-     * Returns true if the player is carrying blasting oil in their inventory.
-     * TODO: Needs inventory scanning via inventory.hasItem()
-     */
-    public boolean IsCarryingBlastingOil() {
-        return false;
+    // Legacy item IDs resolved reflectively from FC's FCBetterThanWolves registry —
+    // Modern-Common cannot compile against the FC sources (same Class.forName pattern
+    // as PlayerBridge.displayGUIWorkbench). -1 = unresolved; re-tried until FC init
+    // has registered the items (long before any player can take damage).
+    private static int fcItemBlastingOilID = -1;
+    private static int fcItemHellfireDustID = -1;
+
+    private static int ResolveFCItemID(String itemFieldName) {
+        try {
+            Class<?> fcClass = Class.forName("net.minecraft.src.btw.core.FCBetterThanWolves");
+            Item item = (Item) fcClass.getField(itemFieldName).get(null);
+
+            if (item != null) {
+                return item.itemID;
+            }
+        } catch (Exception e) {
+            // FC not present/initialized — leave unresolved
+        }
+
+        return -1;
+    }
+
+    private static int GetBlastingOilItemID() {
+        if (fcItemBlastingOilID < 0) {
+            fcItemBlastingOilID = ResolveFCItemID("fcItemBlastingOil");
+        }
+
+        return fcItemBlastingOilID;
+    }
+
+    private static int GetHellfireDustItemID() {
+        if (fcItemHellfireDustID < 0) {
+            fcItemHellfireDustID = ResolveFCItemID("fcItemHellfireDust");
+        }
+
+        return fcItemHellfireDustID;
+    }
+
+    /** m_iIgnoreMetadata to disregard metadata — FCUtilsInventory.m_iIgnoreMetadata (Common FCUtilsInventory.java:25). */
+    private static final int m_iIgnoreMetadata = 32767;
+
+    // 1.5.2 FCUtilsInventory.CountItemsInInventory (Common FCUtilsInventory.java:244, bMetaDataExclusive=false) —
+    // local port for DetonateCarriedBlastingOil. Compares ItemStack.itemID directly instead of
+    // getItem().itemID so stacks holding modern-only items (no legacy Item entry) don't NPE.
+    private static int CountItemsInInventory(IInventory inventory, int iItemID, int iItemDamage) {
+        int itemCount = 0;
+
+        for (int i = 0; i < inventory.getSizeInventory(); i++) {
+            ItemStack tempStack = inventory.getStackInSlot(i);
+
+            if (tempStack != null) {
+                if (tempStack.itemID == iItemID) {
+                    if (iItemDamage == m_iIgnoreMetadata || tempStack.getItemDamage() == iItemDamage) {
+                        itemCount += tempStack.stackSize;
+                    }
+                }
+            }
+        }
+
+        return itemCount;
+    }
+
+    // 1.5.2 FCUtilsInventory.ClearInventoryContents (Common FCUtilsInventory.java:27) —
+    // clears via setInventorySlotContents so the InventoryBridge write-through persists
+    // the wipe to the real MC inventory.
+    private static void ClearInventoryContents(IInventory inventory) {
+        for (int iSlot = 0; iSlot < inventory.getSizeInventory(); iSlot++) {
+            ItemStack itemstack = inventory.getStackInSlot(iSlot);
+
+            if (itemstack != null) {
+                inventory.setInventorySlotContents(iSlot, null);
+            }
+        }
     }
 
     /**
-     * Detonates carried blasting oil, causing an explosion.
-     * TODO: Needs inventory scanning (FCUtilsInventory.CountItemsInInventory) and world access
+     * Returns true if the player is carrying blasting oil in their inventory.
      */
+    // 1.5.2 EntityPlayer.IsCarryingBlastingOil (vanilla/server EntityPlayer.java:2617) —
+    // called from PlayerMixin.btw$checkBlastingOilOnDamage on every server-side player hit.
+    public boolean IsCarryingBlastingOil() {
+        return inventory.hasItem(GetBlastingOilItemID());
+    }
+
+    /**
+     * Detonates carried blasting oil, killing the player and causing an explosion.
+     */
+    // 1.5.2 EntityPlayer.DetonateCarriedBlastingOil (vanilla/server EntityPlayer.java:2622) —
+    // called from PlayerMixin.btw$checkBlastingOilOnDamage right after IsCarryingBlastingOil().
+    // onDeath is bridged by PlayerBridge to the real ServerPlayer death path.
     public void DetonateCarriedBlastingOil() {
-        // stub: real implementation requires FCUtilsInventory, FCBetterThanWolves item references, and world access
+        if (!worldObj.isRemote) {
+            int iHellfireCount = CountItemsInInventory(inventory, GetHellfireDustItemID(), -1);
+
+            float fExplosionSize = (iHellfireCount * 10.0F) / 64.0F;
+
+            fExplosionSize += (CountItemsInInventory(inventory, Item.gunpowder.itemID, -1) * 10.0F) / 64.0F;
+
+            fExplosionSize += (CountItemsInInventory(inventory, GetBlastingOilItemID(), -1) * 10.0F) / 64.0F;
+
+            int iTNTCount = CountItemsInInventory(inventory, Block.tnt.blockID, -1);
+
+            if (iTNTCount > 0) {
+                if (fExplosionSize < 4.0F) {
+                    fExplosionSize = 4.0F;
+                }
+
+                fExplosionSize += CountItemsInInventory(inventory, Block.tnt.blockID, -1);
+            }
+
+            if (fExplosionSize < 1.5F) {
+                fExplosionSize = 1.5F;
+            } else if (fExplosionSize > 10.0F) {
+                fExplosionSize = 10.0F;
+            }
+
+            ClearInventoryContents(inventory);
+
+            health = 0;
+
+            onDeath(DamageSource.generic);
+
+            worldObj.createExplosion(null, posX, posY, posZ, fExplosionSize, true);
+        }
     }
 
     /**

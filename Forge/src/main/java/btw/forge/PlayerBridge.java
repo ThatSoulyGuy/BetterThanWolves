@@ -72,6 +72,10 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
      * Sync state FROM real MC player TO FC player (call before FC tick).
      */
     public void syncFromReal() {
+        // EntityPlayerMP.UpdateHealthAndHungerEffects / UpdateGloomState stagger per-player
+        // work with (worldTime + entityId) % 80; without this the field is 0 for every player
+        // and they all fire on the same tick.
+        this.entityId = realPlayer.getId();
         this.posX = realPlayer.getX();
         this.posY = realPlayer.getY();
         this.posZ = realPlayer.getZ();
@@ -232,6 +236,38 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     public void addExperienceLevel(int levels) {
         realPlayer.giveExperienceLevels(levels);
         this.experienceLevel = realPlayer.experienceLevel;
+    }
+
+    /**
+     * 1.5.2 EntityLiving.onItemPickup bridge — the frozen EntityXPOrb.onCollideWithPlayer
+     * calls this to fire the collect animation when an XP orb is absorbed. Resolves the
+     * FC entity back to its live proxy via entityId (ProxyEntity.tick syncs it) and
+     * delegates to ServerPlayer.take(), which broadcasts the modern take-item packet.
+     */
+    @Override
+    public void onItemPickup(btw.modern.Entity entity, int count) {
+        if (entity != null && realPlayer instanceof ServerPlayer sp) {
+            net.minecraft.world.entity.Entity mcEntity = sp.serverLevel().getEntity(entity.entityId);
+            if (mcEntity != null) {
+                sp.take(mcEntity, count);
+            }
+        }
+    }
+
+    /**
+     * 1.5.2 EntityLiving.onDeath bridge — FC kills players directly in a few places
+     * (e.g. EntityPlayer.DetonateCarriedBlastingOil sets health = 0 then calls
+     * onDeath(DamageSource.generic)). Delegates to the real ServerPlayer death path so
+     * the death message, stats and respawn screen fire instead of the frozen
+     * EntityLiving death logic running against the bridge object.
+     */
+    @Override
+    public void onDeath(btw.modern.DamageSource source) {
+        if (realPlayer instanceof ServerPlayer sp) {
+            sp.setHealth(0.0F);
+            sp.die(DamageSourceMapping.getModern(source, sp.serverLevel()));
+            this.health = 0;
+        }
     }
 
     /**

@@ -202,8 +202,6 @@ public abstract class Block {
     private boolean hoesEffective;
     private boolean chiselsEffective;
     private boolean chiselsCanHarvest;
-    private int fireEncouragement;
-    private int flammability;
     private float buoyancy = -1.0F;
     private int furnaceBurnTime;
     private int herbivoreItemFoodValue;
@@ -878,7 +876,11 @@ public abstract class Block {
     public boolean GetIsProblemToRemove(IBlockAccess blockAccess, int i, int j, int k) { return false; }
     public boolean GetDoesStumpRemoverWorkOnBlock(IBlockAccess blockAccess, int i, int j, int k) { return false; }
     public boolean GetPreventsFluidFlow() { return false; }
-    public boolean GetPreventsFluidFlow(World world, int i, int j, int k, Block fluidBlock) { return false; }
+    // 1.5.2 Block.GetPreventsFluidFlow — FCUtilsMisc.CanWaterDisplaceBlock (bucket pour / ice & snow melt);
+    // without it every solid block was silently overwritten by placed water
+    public boolean GetPreventsFluidFlow(World world, int i, int j, int k, Block fluidBlock) {
+        return blockMaterial == Material.portal ? true : blockMaterial.blocksMovement();
+    }
     public boolean IsBreakableBarricade() { return false; }
     public boolean IsBreakableBarricade(IBlockAccess blockAccess, int i, int j, int k) { return false; }
     public boolean IsBreakableBarricadeOpen() { return false; }
@@ -887,7 +889,17 @@ public abstract class Block {
 
     // --- BTW-added: Movement ---
 
-    public float GetMovementModifier(World world, int i, int j, int k) { return 1.0F; }
+    // 1.5.2 Block.GetMovementModifier — frozen fc EntityLiving.moveEntityWithHeading:
+    // BTW's 20% hard-surface speed bonus on non-soil blocks
+    public float GetMovementModifier(World world, int i, int j, int k) {
+        float fModifier = 1.0F;
+
+        if (blockMaterial != Material.ground && blockMaterial != Material.grass) {
+            fModifier *= 1.2F;
+        }
+
+        return fModifier;
+    }
     public void OnPlayerWalksOnBlock(World world, int i, int j, int k, EntityPlayer player) {}
     public boolean IsBlockClimbable(World world, int i, int j, int k) { return false; }
 
@@ -1039,7 +1051,12 @@ public abstract class Block {
         renderBlocks.renderBlockAsItem(this, iItemDamage, fBrightness);
     }
 
+    // 1.5.2 (FCMOD) Block.RenderFallingBlock (vanilla/client Block.java:3749) — applies to
+    // falling blocks and those pushed by pistons; RenderFallingSand.doRenderFallingSand
+    // routes every FC falling entity through here. FC blocks override for custom shapes.
     public void RenderFallingBlock(RenderBlocks renderBlocks, int i, int j, int k, int iMetadata) {
+        renderBlocks.setRenderBounds(GetFixedBlockBoundsFromPool());
+        renderBlocks.RenderStandardFallingBlock(this, i, j, k, iMetadata);
     }
 
     public void RenderBlockMovedByPiston(RenderBlocks renderBlocks, int i, int j, int k) {
@@ -1102,7 +1119,9 @@ public abstract class Block {
 
     // --- BTW-added: Hopper ---
 
-    public boolean DoesBlockHopperEject(World world, int i, int j, int k) { return true; }
+    // 1.5.2 Block.DoesBlockHopperEject — FCTileEntityHopper (via TileEntityBridge): hoppers only
+    // eject items into the world through solid-material blocks' absence, i.e. non-solid blocks block ejection
+    public boolean DoesBlockHopperEject(World world, int i, int j, int k) { return blockMaterial.isSolid(); }
     public boolean DoesBlockHopperInsert(World world, int i, int j, int k) { return false; }
 
     // --- BTW-added: Warmth ---
@@ -1143,11 +1162,30 @@ public abstract class Block {
 
     // --- BTW-added: Water to sides ---
 
-    public boolean HasWaterToSidesOrTop(World world, int i, int j, int k) { return false; }
+    // 1.5.2 Block.HasWaterToSidesOrTop — FCBlockJackOLantern.CheckForExtinguish (lit jack o'lanterns
+    // douse from adjacent/top water)
+    public boolean HasWaterToSidesOrTop(World world, int i, int j, int k) {
+        for (int iFacing = 1; iFacing <= 5; iFacing++) {
+            FCUtilsBlockPos tempPos = new FCUtilsBlockPos(i, j, k, iFacing);
+
+            int iTempBlockID = world.getBlockId(tempPos.i, tempPos.j, tempPos.k);
+            Block tempBlock = Block.blocksList[iTempBlockID];
+
+            if (tempBlock != null && tempBlock.blockMaterial == Material.water) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     // --- BTW-added: Fluid flow ---
 
-    public void OnFluidFlowIntoBlock(World world, int i, int j, int k, BlockFluid fluidBlock) {}
+    // 1.5.2 Block.OnFluidFlowIntoBlock — FCUtilsMisc.FlowWaterIntoBlockIfPossible (bucket pour /
+    // ice melt): displaced blocks drop their item
+    public void OnFluidFlowIntoBlock(World world, int i, int j, int k, BlockFluid fluidBlock) {
+        dropBlockAsItem(world, i, j, k, world.getBlockMetadata(i, j, k), 0);
+    }
 
     // --- BTW-added: Buddy ---
 
@@ -1159,14 +1197,14 @@ public abstract class Block {
 
     // --- BTW-added: Harvesting/improper tool ---
 
+    // 1.5.2 Block.OnBlockDestroyedWithImproperTool — ItemInWorldManager.tryHarvestBlock (via
+    // ServerPlayerGameModeMixin): 'bad break' aux FX + component item drops
     public void OnBlockDestroyedWithImproperTool(World world, EntityPlayer player, int i, int j, int k, int iMetadata) {
-        // FC implementation: play SFX and drop component items
-        org.apache.logging.log4j.LogManager.getLogger("BTW-Harvest").info(
-                "[BTW-DEBUG] OnBlockDestroyedWithImproperTool calling DropComponentItemsOnBadBreak on {}",
-                this.getClass().getSimpleName());
-        boolean result = DropComponentItemsOnBadBreak(world, i, j, k, iMetadata, 1F);
-        org.apache.logging.log4j.LogManager.getLogger("BTW-Harvest").info(
-                "[BTW-DEBUG] DropComponentItemsOnBadBreak returned {}", result);
+        world.playAuxSFX(
+                GetFcStaticInt("net.minecraft.src.btw.core.FCBetterThanWolves", "m_iBlockDestroyedWithImproperToolAuxFXID", 2272),
+                i, j, k, blockID + (iMetadata << 12));
+
+        DropComponentItemsOnBadBreak(world, i, j, k, iMetadata, 1F);
     }
     public void DropItemsIndividualy(World world, int i, int j, int k, int iIDDropped, int iPileCount, int iDamageDropped, float fChanceOfPileDrop) {
         org.apache.logging.log4j.LogManager.getLogger("BTW-Harvest").info(
@@ -1232,12 +1270,48 @@ public abstract class Block {
 
     public boolean OnMortarApplied(World world, int i, int j, int k) { return false; }
     public boolean HasMortar(IBlockAccess blockAccess, int i, int j, int k) { return false; }
-    public boolean HasNeighborWithMortarInContact(World world, int i, int j, int k) { return false; }
+    // 1.5.2 Block.HasNeighborWithMortarInContact — FCBlockMortarReceiver fall check on loose
+    // cobble/brick; delegates to FC's FCUtilsWorld helper via reflection
+    public boolean HasNeighborWithMortarInContact(World world, int i, int j, int k) {
+        try {
+            // FCUtilsWorld is FC code — call via reflection
+            Class<?> utilsClass = Class.forName("net.minecraft.src.btw.util.FCUtilsWorld");
+            java.lang.reflect.Method contact = utilsClass.getMethod(
+                    "HasNeighborWithMortarInFullFaceContactToFacing",
+                    World.class, int.class, int.class, int.class, int.class);
+
+            for (int iTempFacing = 0; iTempFacing < 6; iTempFacing++) {
+                if ((Boolean) contact.invoke(null, world, i, j, k, iTempFacing)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        return false;
+    }
 
     // --- BTW-added: Snow sticky ---
 
     public boolean IsStickyToSnow(IBlockAccess blockAccess, int i, int j, int k) { return false; }
-    public boolean HasStickySnowNeighborInContact(World world, int i, int j, int k) { return false; }
+    // 1.5.2 Block.HasStickySnowNeighborInContact — FCBlockSnowLoose destabilization check;
+    // delegates to FC's FCUtilsWorld helper via reflection
+    public boolean HasStickySnowNeighborInContact(World world, int i, int j, int k) {
+        try {
+            // FCUtilsWorld is FC code — call via reflection
+            Class<?> utilsClass = Class.forName("net.minecraft.src.btw.util.FCUtilsWorld");
+            java.lang.reflect.Method contact = utilsClass.getMethod(
+                    "HasStickySnowNeighborInFullFaceContactToFacing",
+                    World.class, int.class, int.class, int.class, int.class);
+
+            for (int iTempFacing = 0; iTempFacing < 6; iTempFacing++) {
+                if ((Boolean) contact.invoke(null, world, i, j, k, iTempFacing)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        return false;
+    }
 
     // --- BTW-added: Furnace burn time ---
 
@@ -1250,7 +1324,13 @@ public abstract class Block {
     public boolean DoesInfiniteBurnToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing) { return false; }
     public boolean DoesExtinguishFireAbove(World world, int i, int j, int k) { return false; }
     public void OnDestroyedByFire(World world, int i, int j, int k, int iFireAge, boolean bForcedFireSpread) {}
-    public Block SetFireProperties(int iChanceToEncourageFire, int iAbilityToCatchFire) { this.fireEncouragement = iChanceToEncourageFire; this.flammability = iAbilityToCatchFire; return this; }
+    // 1.5.2 Block.SetFireProperties — writes the BlockFire static arrays that FCBlockFire.updateTick
+    // (routed via BlockBehaviorMixin.btw$tick) reads for fire spread/consumption
+    public Block SetFireProperties(int iChanceToEncourageFire, int iAbilityToCatchFire) {
+        BlockFire.chanceToEncourageFire[blockID] = iChanceToEncourageFire;
+        BlockFire.abilityToCatchFire[blockID] = iAbilityToCatchFire;
+        return this;
+    }
     public Block SetFireProperties(FCEnumFlammability flammabilityEnum) { return SetFireProperties(flammabilityEnum.m_iChanceToEncourageFire, flammabilityEnum.m_iAbilityToCatchFire); }
     public boolean GetCanBeSetOnFireDirectly(IBlockAccess blockAccess, int i, int j, int k) { return false; }
     public boolean GetCanBeSetOnFireDirectlyByItem(IBlockAccess blockAccess, int i, int j, int k) {
@@ -1259,9 +1339,15 @@ public abstract class Block {
     public boolean SetOnFireDirectly(World world, int i, int j, int k) { return false; }
     public int GetChanceOfFireSpreadingDirectlyTo(IBlockAccess blockAccess, int i, int j, int k) { return 0; }
     public boolean GetCanBlockLightItemOnFire(IBlockAccess blockAccess, int i, int j, int k) { return false; }
-    public boolean GetDoesFireDamageToEntities(World world, int i, int j, int k, Entity entity) { return false; }
+    // 1.5.2 Block.GetDoesFireDamageToEntities 5-arg (vanilla Block.java:2017) delegates to the
+    // 4-arg form — FC fire/lava blocks override only the 4-arg one, so this MUST delegate or
+    // World.isBoundingBoxBurning never sees FC fire damage.
+    public boolean GetDoesFireDamageToEntities(World world, int i, int j, int k, Entity entity) { return GetDoesFireDamageToEntities(world, i, j, k); }
     public boolean GetDoesFireDamageToEntities(World world, int i, int j, int k) { return false; }
-    public boolean GetCanBlockBeIncinerated(World world, int i, int j, int k) { return false; }
+    // 1.5.2 Block.GetCanBlockBeIncinerated — FCBlockBBQ.CanIncinerateBlock/ShouldIgniteAbove (hibachi)
+    public boolean GetCanBlockBeIncinerated(World world, int i, int j, int k) {
+        return Block.fire.canBlockCatchFire(world, i, j, k) || !blockMaterial.blocksMovement();
+    }
     public boolean GetCanBlockBeReplacedByFire(World world, int i, int j, int k) {
         return IsAirBlock();
     }
@@ -1312,13 +1398,100 @@ public abstract class Block {
 
     // --- BTW-added: Saw ---
 
-    public boolean DoesBlockBreakSaw(World world, int i, int j, int k) { return false; }
+    // 1.5.2 Block.DoesBlockBreakSaw — FCBlockSaw.SawBlockToFront: solid non-wood-like materials
+    // break the saw (FC materials fetched reflectively from FCBetterThanWolves)
+    public boolean DoesBlockBreakSaw(World world, int i, int j, int k) {
+        if (blockMaterial.isSolid()) {
+            if (blockMaterial != Material.wood &&
+                blockMaterial != Material.cactus &&
+                blockMaterial != Material.pumpkin &&
+                blockMaterial != Material.leaves &&
+                blockMaterial != Material.plants &&
+                blockMaterial != Material.vine &&
+                blockMaterial != Material.snow &&
+                blockMaterial != Material.craftedSnow &&
+                blockMaterial != GetFcMaterial("fcMaterialLog") &&
+                blockMaterial != GetFcMaterial("fcMaterialPlanks") &&
+                blockMaterial != GetFcMaterial("fcMaterialAsh")) {
+                return true;
+            }
+        }
+        return false;
+    }
     public boolean OnBlockSawed(World world, int i, int j, int k, int iSawPosI, int iSawPosJ, int iSawPosK) { return OnBlockSawed(world, i, j, k); }
-    public boolean OnBlockSawed(World world, int i, int j, int k) { return false; }
+    // 1.5.2 Block.OnBlockSawed — FCBlockSaw.SawBlockToFront: ejects GetItemIDDroppedOnSaw drops,
+    // else drops the block itself if solid, then clears the block. Returns true if sawed.
+    public boolean OnBlockSawed(World world, int i, int j, int k) {
+        int iItemIDDropped = GetItemIDDroppedOnSaw(world, i, j, k);
+
+        if (iItemIDDropped >= 0) {
+            int iItemCountDropped = GetItemCountDroppedOnSaw(world, i, j, k);
+            int iItemDamageDropped = GetItemDamageDroppedOnSaw(world, i, j, k);
+
+            for (int iTempCount = 0; iTempCount < iItemCountDropped; iTempCount++) {
+                try {
+                    // FCUtilsItem is FC code — call via reflection
+                    Class<?> utilsClass = Class.forName("net.minecraft.src.btw.util.FCUtilsItem");
+                    java.lang.reflect.Method eject = utilsClass.getMethod(
+                            "EjectSingleItemWithRandomOffset",
+                            World.class, int.class, int.class, int.class, int.class, int.class);
+                    eject.invoke(null, world, i, j, k, iItemIDDropped, iItemDamageDropped);
+                } catch (Exception e) {
+                    // Fallback: drop as item entity
+                    dropBlockAsItem_do(world, i, j, k, new ItemStack(iItemIDDropped, 1, iItemDamageDropped));
+                }
+            }
+        } else {
+            if (!DoesBlockDropAsItemOnSaw(world, i, j, k)) {
+                return false;
+            }
+
+            dropBlockAsItem(world, i, j, k, world.getBlockMetadata(i, j, k), 0);
+        }
+
+        world.setBlockToAir(i, j, k);
+
+        return true;
+    }
     public int GetItemIDDroppedOnSaw(World world, int i, int j, int k) { return -1; }
     public int GetItemCountDroppedOnSaw(World world, int i, int j, int k) { return 0; }
     public int GetItemDamageDroppedOnSaw(World world, int i, int j, int k) { return 0; }
-    public boolean DoesBlockDropAsItemOnSaw(World world, int i, int j, int k) { return true; }
+    // 1.5.2 Block.DoesBlockDropAsItemOnSaw — consumed by OnBlockSawed above: non-solid blocks are
+    // destroyed by the saw without dropping
+    public boolean DoesBlockDropAsItemOnSaw(World world, int i, int j, int k) { return blockMaterial.isSolid(); }
+
+    // Reflective lookup of FC-defined Material statics (FCBetterThanWolves.fcMaterial*) —
+    // FC code is not visible to Modern-Common at compile time
+    private static Material GetFcMaterial(String fieldName) {
+        try {
+            Class<?> fcClass = Class.forName("net.minecraft.src.btw.core.FCBetterThanWolves");
+            return (Material) fcClass.getField(fieldName).get(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // Reflective lookup of an FC static int constant (e.g. FCBlockGrass.m_iGrassSpreadToLightLevel)
+    private static int GetFcStaticInt(String className, String fieldName, int fallback) {
+        try {
+            return Class.forName(className).getField(fieldName).getInt(null);
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    // Reflective bridge to FCBlockGroundCover.IsGroundCoverRestingOnBlock — FC code,
+    // used by the grass/mycelium spread gates above
+    private static boolean FcIsGroundCoverRestingOnBlock(World world, int i, int j, int k) {
+        try {
+            Class<?> fcClass = Class.forName("net.minecraft.src.btw.block.FCBlockGroundCover");
+            java.lang.reflect.Method method = fcClass.getMethod(
+                    "IsGroundCoverRestingOnBlock", World.class, int.class, int.class, int.class);
+            return (Boolean) method.invoke(null, world, i, j, k);
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     // --- BTW-added: Mechanical power ---
 
@@ -1353,14 +1526,38 @@ public abstract class Block {
 
     // --- BTW-added: Grass spreading ---
 
-    public boolean AttempToSpreadGrassToBlock(World world, int i, int j, int k) { return false; }
+    // 1.5.2 Block.AttempToSpreadGrassToBlock — FCBlockGrass.CheckForGrassSpreadFromLocation
+    // (routed via BlockBehaviorMixin.btw$randomTick); FCBlockDirt/DirtLoose rely on this base gate
+    public boolean AttempToSpreadGrassToBlock(World world, int i, int j, int k) {
+        if (GetCanGrassSpreadToBlock(world, i, j, k) &&
+            world.GetBlockNaturalLightValueMaximum(i, j + 1, k) >=
+                GetFcStaticInt("net.minecraft.src.btw.block.FCBlockGrass", "m_iGrassSpreadToLightLevel", 11) &&
+            Block.lightOpacity[world.getBlockId(i, j + 1, k)] <= 2 &&
+            !FcIsGroundCoverRestingOnBlock(world, i, j, k)) {
+            return SpreadGrassToBlock(world, i, j, k);
+        }
+
+        return false;
+    }
     public boolean GetCanGrassSpreadToBlock(World world, int i, int j, int k) { return false; }
     public boolean SpreadGrassToBlock(World world, int i, int j, int k) { return false; }
     public boolean GetCanGrassGrowUnderBlock(World world, int i, int j, int k, boolean bGrassOnHalfSlab) { return true; }
 
     // --- BTW-added: Mycelium spreading ---
 
-    public boolean AttempToSpreadMyceliumToBlock(World world, int i, int j, int k) { return false; }
+    // 1.5.2 Block.AttempToSpreadMyceliumToBlock — FCBlockMycelium spread check
+    // (vanilla id 110 replaced in blocksList, routed via BlockBehaviorMixin.btw$randomTick)
+    public boolean AttempToSpreadMyceliumToBlock(World world, int i, int j, int k) {
+        if (GetCanMyceliumSpreadToBlock(world, i, j, k) &&
+            world.getBlockLightValue(i, j + 1, k) >=
+                GetFcStaticInt("net.minecraft.src.btw.block.FCBlockMycelium", "m_iMyceliumSpreadToMinimumLightLevel", 4) &&
+            Block.lightOpacity[world.getBlockId(i, j + 1, k)] <= 2 &&
+            !FcIsGroundCoverRestingOnBlock(world, i, j, k)) {
+            return SpreadMyceliumToBlock(world, i, j, k);
+        }
+
+        return false;
+    }
     public boolean GetCanMyceliumSpreadToBlock(World world, int i, int j, int k) { return false; }
     public boolean SpreadMyceliumToBlock(World world, int i, int j, int k) { return false; }
     public boolean GetCanBlightSpreadToBlock(World world, int i, int j, int k, int iBlightLevel) { return false; }
@@ -1378,7 +1575,13 @@ public abstract class Block {
         }
         return false;
     }
-    public boolean CanBlockBePushedByPiston(World world, int i, int j, int k, int iToFacing) { return true; }
+    // 1.5.2 Block.CanBlockBePushedByPiston — FCBlockPistonBase.canExtend via
+    // BlockBehaviorMixin.btw$neighborChanged: tile-entity/immovable blocks can't be pushed
+    public boolean CanBlockBePushedByPiston(World world, int i, int j, int k, int iToFacing) {
+        int iMobility = getMobilityFlag();
+
+        return iMobility == 1 || (iMobility != 2 && !(this instanceof ITileEntityProvider));
+    }
     public boolean CanBePistonShoveled(World world, int i, int j, int k) {
         return AreShovelsEffectiveOn();
     }

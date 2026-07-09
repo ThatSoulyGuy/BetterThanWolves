@@ -56,7 +56,9 @@ public class DamageSourceMapping {
             case "fallingBlock" -> sources.fallingBlock(null);
             case "cactus" -> sources.cactus();
             case "lightningBolt" -> sources.lightningBolt();
-            case "fcGloom" -> sources.generic();
+            // fcGloom is constructed with setDamageBypassesArmor() FC-side; map to magic
+            // (in the bypasses_armor damage-type tag) so gloom bites ignore armor.
+            case "fcGloom" -> sources.magic();
             default -> sources.generic();
         };
     }

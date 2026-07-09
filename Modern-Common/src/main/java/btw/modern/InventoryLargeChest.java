@@ -12,6 +12,12 @@ public class InventoryLargeChest implements IInventory {
         this.lowerChest = lower;
     }
 
+    // 1.5.2 InventoryLargeChest.isPartOfLargeChest (vanilla/server InventoryLargeChest.java:56) —
+    // TileEntityChest.updateEntity viewer counting for double chests.
+    public boolean isPartOfLargeChest(IInventory inventory) {
+        return this.upperChest == inventory || this.lowerChest == inventory;
+    }
+
     public int getSizeInventory() {
         return upperChest.getSizeInventory() + lowerChest.getSizeInventory();
     }

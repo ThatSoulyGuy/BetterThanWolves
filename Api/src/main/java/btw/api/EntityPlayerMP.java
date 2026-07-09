@@ -15,9 +15,11 @@ public class EntityPlayerMP extends EntityPlayer implements ICrafting {
     public boolean isChangingQuantityOnly;
     public int ping;
     public boolean playerConqueredTheEnd = false;
-    public long m_lTimeOfLastSpawnAssignment;
-    public long m_lRespawnAssignmentCooldownTimer;
-    public ChunkCoordinates m_HardcoreSpawnChunk;
+    // m_HardcoreSpawnChunk / m_lTimeOfLastSpawnAssignment / m_lRespawnAssignmentCooldownTimer
+    // intentionally NOT re-declared here: EntityPlayer already declares them, and a
+    // re-declaration makes FC bytecode bind field refs to EntityPlayerMP while the
+    // bridge (PlayerBridge/ServerPlayerMixin) reads the EntityPlayer copies — two
+    // different fields holding the "same" hardcore-spawn state.
 
     public EntityPlayerMP(World world) {
         super(world);

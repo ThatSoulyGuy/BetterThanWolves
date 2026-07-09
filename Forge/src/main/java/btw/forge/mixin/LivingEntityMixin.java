@@ -42,7 +42,11 @@ public abstract class LivingEntityMixin {
      * bypasses the Block method and reads the speed factor directly from
      * the block state.
      */
-    @Inject(method = "getBlockSpeedFactor", at = @At("HEAD"), cancellable = true)
+    // @At("RETURN") + multiply: FC's GetMovementModifier COMPOSES with the modern block
+    // speed factor rather than replacing it. Replacing overwrote soul sand's modern 0.4
+    // slowdown with FC's 1.2 hard-surface bonus, making soul sand 20% FASTER than stone.
+    // Composed: stone 1.0*1.2=1.2, soul sand 0.4*1.2=0.48 — matches 1.5.2's net.
+    @Inject(method = "getBlockSpeedFactor", at = @At("RETURN"), cancellable = true)
     private void btw$getBlockSpeedFactor(CallbackInfoReturnable<Float> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
 
@@ -52,38 +56,21 @@ public abstract class LivingEntityMixin {
             fcWorld = WorldBridge.getOrCreate(sl);
         }
 
-        // Check the block the entity is standing on
-        BlockPos below = self.blockPosition().below();
-        BlockState belowState = self.level().getBlockState(below);
-
-        btw.modern.Block fcBlock = ProxyRegistry.getFcBlock(belowState.getBlock());
+        // Standing surface first (below), else the block the entity is inside.
+        BlockPos pos = self.blockPosition().below();
+        btw.modern.Block fcBlock = ProxyRegistry.getFcBlock(self.level().getBlockState(pos).getBlock());
+        if (fcBlock == null) {
+            pos = self.blockPosition();
+            fcBlock = ProxyRegistry.getFcBlock(self.level().getBlockState(pos).getBlock());
+        }
         if (fcBlock != null) {
             try {
-                float modifier = fcBlock.GetMovementModifier(fcWorld,
-                        below.getX(), below.getY(), below.getZ());
-                if (modifier > 0 && modifier != 1.0F) {
-                    cir.setReturnValue(modifier);
-                    return;
+                float modifier = fcBlock.GetMovementModifier(fcWorld, pos.getX(), pos.getY(), pos.getZ());
+                if (modifier > 0) {
+                    cir.setReturnValue(cir.getReturnValue() * modifier);
                 }
             } catch (Exception e) {
-                // FC code may fail if world is null on client — fall through to vanilla
-            }
-        }
-
-        // Also check the block the entity is currently inside
-        BlockPos at = self.blockPosition();
-        BlockState atState = self.level().getBlockState(at);
-
-        btw.modern.Block fcBlockAt = ProxyRegistry.getFcBlock(atState.getBlock());
-        if (fcBlockAt != null) {
-            try {
-                float modifier = fcBlockAt.GetMovementModifier(fcWorld,
-                        at.getX(), at.getY(), at.getZ());
-                if (modifier > 0 && modifier != 1.0F) {
-                    cir.setReturnValue(modifier);
-                }
-            } catch (Exception e) {
-                // FC code may fail if world is null on client — fall through to vanilla
+                // FC code may fail if world is null on client — leave the modern value
             }
         }
     }

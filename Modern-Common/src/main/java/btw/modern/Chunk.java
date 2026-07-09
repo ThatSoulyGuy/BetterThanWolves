@@ -88,10 +88,44 @@ public class Chunk {
         return false;
     }
 
+    // 1.5.2 Chunk.getTopFilledSegment — FCTileEntityBeacon.java:613,678 beacon spawn
+    // Y targeting; base Y of the highest non-empty section. The shim has no section
+    // storage, so derive it from the world heightmap (real via WorldBridge:getHeightValue),
+    // rounded down to a section boundary like vanilla.
     public int getTopFilledSegment() {
-        // Return a reasonable Y for the top non-empty section.
-        // Beacon uses this for random Y targeting. Default to 128 (section 8)
-        // which covers most overworld terrain.
-        return 128;
+        if (worldObj != null) {
+            // getHeightValue returns first-FREE y (topmost block + 1); derive the
+            // section base from the topmost block, else terrain topping exactly at
+            // a section boundary reports the empty section above it.
+            int h = worldObj.getHeightValue(xPosition * 16 + 8, zPosition * 16 + 8);
+            return Math.max((h - 1) & ~15, 0);
+        }
+        return 0;
+    }
+
+    // 1.5.2 Chunk.GetBlockNaturalLightValue (BTW-patched vanilla/server Chunk.java:1352) —
+    // called by World.GetBlockNaturalLightValue_do; modified version of getBlockLightValue
+    // that only considers natural (sky) light. The shim has no section storage, so it
+    // reads the saved sky light through the world (real via WorldBridge.getSavedLightValue).
+    public int GetBlockNaturalLightValue(int i, int j, int k, int iSkylightSubtracted) {
+        if (worldObj == null) {
+            return 0;
+        }
+
+        int iLightValue = (worldObj.provider != null && worldObj.provider.hasNoSky)
+                ? 0
+                : worldObj.getSavedLightValue(EnumSkyBlock.Sky, xPosition * 16 + i, j, zPosition * 16 + k);
+
+        if (iLightValue > 0) {
+            isLit = true;
+        }
+
+        iLightValue -= iSkylightSubtracted;
+
+        if (iLightValue < 0) {
+            iLightValue = 0;
+        }
+
+        return iLightValue;
     }
 }

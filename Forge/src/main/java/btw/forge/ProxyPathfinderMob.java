@@ -163,7 +163,12 @@ public class ProxyPathfinderMob extends PathfinderMob
             fcEntity.entityId = getId();
             fcEntity.ticksExisted = tickCount;
             fcEntity.inWater = isInWater();
-            fcEntity.fire = getRemainingFireTicks();
+            // Two-way fire sync — only raise on external MC ignition; FC's
+            // onEntityUpdate decrements. See ProxyMob.syncToFc for rationale.
+            int mcFire = getRemainingFireTicks();
+            if (mcFire > fcEntity.fire) {
+                fcEntity.fire = mcFire;
+            }
 
             // Pre-tick sanitization — see ProxyMob for rationale
             if (Double.isFinite(fcEntity.posX) && Double.isFinite(fcEntity.posY) && Double.isFinite(fcEntity.posZ)) {
@@ -230,6 +235,9 @@ public class ProxyPathfinderMob extends PathfinderMob
             this.fallDistance = fcEntity.fallDistance;
             setOnGround(fcEntity.onGround);
             setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            // Fire write-back: mirror FC's decremented counter onto MC so
+            // clients render flames — see ProxyMob.tick.
+            setRemainingFireTicks(Math.max(0, fcEntity.fire));
             if (fcEntity.isDead) discard();
         }
 
@@ -271,11 +279,31 @@ public class ProxyPathfinderMob extends PathfinderMob
     // Damage
     // ------------------------------------------------------------------
 
+    private boolean forwardingHurtToFc = false;
+
     @Override
     public boolean hurt(DamageSource source, float amount) {
         boolean result = super.hurt(source, amount);
         if (result && fcEntity != null) {
-            fcEntity.health = (int) Math.max(0, getHealth());
+            // 1.5.2: all damage funnels through EntityLiving.attackEntityFrom,
+            // so FC overrides (FCEntitySquid hit reactions, Common
+            // FCEntitySquid.java:535-569) must see MC-side hits too — see
+            // ProxyMob.hurt for the reentrancy/lethal-hit rationale.
+            if (!forwardingHurtToFc && !isDeadOrDying() && !fcEntity.isDead) {
+                forwardingHurtToFc = true;
+                try {
+                    fcEntity.attackEntityFrom(ProxyMob.translateDamageSource(source), (int) amount);
+                } catch (Throwable t) {
+                    LOGGER.warn("FC entity attackEntityFrom() threw: {}: {}",
+                            t.getClass().getSimpleName(), t.getMessage());
+                } finally {
+                    forwardingHurtToFc = false;
+                }
+            }
+            // Don't resurrect an FC entity that already died internally (see ProxyMob.hurt).
+            if (fcEntity.health > 0) {
+                fcEntity.health = (int) Math.max(0, getHealth());
+            }
             btw.modern.EntityLiving fcAttacker = ProxyMob.wrapAttacker(source);
             if (fcAttacker != null) {
                 fcEntity.lastAttackingEntity = fcAttacker;
@@ -288,8 +316,11 @@ public class ProxyPathfinderMob extends PathfinderMob
     @Override
     public void die(DamageSource source) {
         if (fcEntity != null) {
-            btw.modern.DamageSource fcSource = ProxyMob.translateDamageSource(source);
-            fcEntity.onDeath(fcSource);
+            // Skip if FC already died internally — avoids double onDeath/drops.
+            if (fcEntity.health > 0) {
+                btw.modern.DamageSource fcSource = ProxyMob.translateDamageSource(source);
+                fcEntity.onDeath(fcSource);
+            }
             suppressVanillaLoot = true;
         }
         super.die(source);

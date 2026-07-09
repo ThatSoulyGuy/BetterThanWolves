@@ -63,6 +63,12 @@ public class BTWEntityRegistration {
             }
             result.add(entry.getValue());
         }
+        // The generic fallback type is not keyed by an FC class (see
+        // getGenericPlainType) but still needs its FCEntityRenderer.
+        EntityType<?> generic = getGenericPlainType();
+        if (generic != null) {
+            result.add(generic);
+        }
         return result;
     }
 
@@ -170,6 +176,34 @@ public class BTWEntityRegistration {
         registered += registerPlainEntity("fc_falling_block", "FCEntityFallingBlock", MobCategory.MISC, 0.98F, 0.98F);
         registered += registerPlainEntity("fc_wither_skull", "FCEntityWitherSkull", MobCategory.MISC, 0.3125F, 0.3125F);
         registered += registerPlainEntity("fc_lightning_bolt", "FCEntityLightningBolt", MobCategory.MISC, 0.0F, 0.0F);
+
+        // ============================================================
+        // Frozen vanilla 1.5.2 entities spawned live by FC code through
+        // WorldBridge.spawnEntityInWorld: EntityXPOrb (mob-death Dragon
+        // Orbs, FCTileEntityArcaneVessel, FCTileEntityHopper), EntityArrow
+        // (FCItemBow / FCItemArrow dispenser), EntitySnowball (snowman AI),
+        // EntityTNTPrimed (FC-lit TNT), EntityEgg / EntityFishHook.
+        // Previously these fell through to EntityProxyFactory's
+        // EntityType.MARKER fallback (clientTrackingRange 0, 0x0 size), so
+        // they were invisible and untouchable client-side. Sizes match the
+        // 1.5.2 constructors' setSize calls.
+        // ============================================================
+        registered += registerPlainEntity("fc_xp_orb", "EntityXPOrb", MobCategory.MISC, 0.5F, 0.5F);
+        registered += registerPlainEntity("fc_arrow", "EntityArrow", MobCategory.MISC, 0.5F, 0.5F);
+        registered += registerPlainEntity("fc_snowball", "EntitySnowball", MobCategory.MISC, 0.25F, 0.25F);
+        registered += registerPlainEntity("fc_tnt_primed", "EntityTNTPrimed", MobCategory.MISC, 0.98F, 0.98F);
+        registered += registerPlainEntity("fc_egg", "EntityEgg", MobCategory.MISC, 0.25F, 0.25F);
+        registered += registerPlainEntity("fc_fish_hook", "EntityFishHook", MobCategory.MISC, 0.25F, 0.25F);
+
+        // Generic fallback for FC entity classes without a dedicated
+        // registration — replaces the MARKER fallback in EntityProxyFactory.
+        registerGenericPlainType();
+
+        // Bridge for FC's EntityTracker packet sends (cow kick / squid
+        // tentacle custom entity events). Installed here because this runs
+        // exactly once per side (ENTITY_TYPES RegisterEvent) and after
+        // BTWNetwork.register() (mod constructor) created the channel.
+        EntityTrackerBridge.install();
 
         LOGGER.info("Registered {} BTW entity types with Forge registries.", registered);
     }
@@ -302,6 +336,54 @@ public class BTWEntityRegistration {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Generic fallback type
+    // ------------------------------------------------------------------
+
+    private static EntityType<ProxyEntity> genericPlainType;
+
+    /**
+     * Generic plain-proxy fallback type for FC entity classes with no
+     * dedicated registration. Replaces EntityProxyFactory's old
+     * EntityType.MARKER fallback (MARKER has clientTrackingRange 0 and 0x0
+     * size, so such proxies were never sent to any client and had no
+     * hitbox). Deliberately NOT put into fcClassToEntityType: it must not
+     * shadow the class-hierarchy walk in {@link #getEntityType} (living
+     * entities need types with registered attributes).
+     */
+    public static EntityType<?> getGenericPlainType() {
+        if (genericPlainType == null) return null;
+        ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(genericPlainType);
+        if (key != null) {
+            EntityType<?> registryType = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getValue(key);
+            if (registryType != null) return registryType;
+        }
+        return genericPlainType;
+    }
+
+    private static void registerGenericPlainType() {
+        try {
+            EntityType<ProxyEntity> type = EntityType.Builder
+                    .<ProxyEntity>of(ProxyEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F)
+                    .clientTrackingRange(10)
+                    .updateInterval(3)
+                    .build(BTWForgeMod.MOD_ID + ":fc_entity");
+
+            ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, "fc_entity");
+            if (currentEvent != null) {
+                currentEvent.register(net.minecraftforge.registries.ForgeRegistries.Keys.ENTITY_TYPES,
+                        key, () -> type);
+            } else {
+                Registry.register(BuiltInRegistries.ENTITY_TYPE, key, type);
+            }
+            genericPlainType = type;
+        } catch (Exception e) {
+            LOGGER.error("Failed to register generic fallback entity type 'fc_entity': {}",
+                    e.getMessage());
+        }
+    }
+
     private static int registerPlainEntity(String id, String fcClassName,
                                             MobCategory category,
                                             float width, float height) {
@@ -345,7 +427,10 @@ public class BTWEntityRegistration {
         String[] packages = {
             "net.minecraft.src.btw.entity.",
             "net.minecraft.src.btw.core.",
-            "net.minecraft.src."
+            "net.minecraft.src.",
+            // Frozen vanilla 1.5.2 classes (EntityXPOrb, EntityArrow, ...)
+            // live under btw.modern at runtime (fc source set).
+            "btw.modern."
         };
         for (String pkg : packages) {
             try {

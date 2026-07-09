@@ -180,7 +180,15 @@ public class ProxyMob extends Mob
         fcEntity.entityId = getId();
         fcEntity.ticksExisted = tickCount;
         fcEntity.inWater = isInWater();
-        fcEntity.fire = getRemainingFireTicks();
+        // Two-way fire sync (1.5.2 Entity.onEntityUpdate is the decrementer):
+        // only RAISE fire on external MC ignition. Blind assignment wiped any
+        // setFire() done inside FC code (frozen EntitySkeleton/EntityZombie
+        // daylight setFire(8)) one tick later, so undead never burned in
+        // daylight. FC's value flows back to MC in tick() after onUpdate.
+        int mcFire = getRemainingFireTicks();
+        if (mcFire > fcEntity.fire) {
+            fcEntity.fire = mcFire;
+        }
         // Knockback transfer is handled exclusively in tick() via the
         // pendingKnockback flag. Do NOT touch deltaMovement here —
         // syncToFc() is called from getFcEntity() which external code
@@ -279,7 +287,12 @@ public class ProxyMob extends Mob
             fcEntity.entityId = getId();
             fcEntity.ticksExisted = tickCount;
             fcEntity.inWater = isInWater();
-            fcEntity.fire = getRemainingFireTicks();
+            // Two-way fire sync — only raise on external MC ignition; FC's
+            // onEntityUpdate decrements. See syncToFc for full rationale.
+            int mcFire = getRemainingFireTicks();
+            if (mcFire > fcEntity.fire) {
+                fcEntity.fire = mcFire;
+            }
 
             // 2. FC simulation: AI -> moveEntityWithHeading -> vanilla
             //    1.5.2 moveEntity (collision, gravity, friction, fall
@@ -430,6 +443,10 @@ public class ProxyMob extends Mob
             this.fallDistance = fcEntity.fallDistance;
             setOnGround(fcEntity.onGround);
             setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            // Fire write-back: FC's onEntityUpdate decremented (and applied
+            // burn damage); mirror onto MC so the shared on-fire flag is set
+            // and clients render flames.
+            setRemainingFireTicks(Math.max(0, fcEntity.fire));
 
             if (fcEntity.isDead) {
                 discard();
@@ -497,6 +514,8 @@ public class ProxyMob extends Mob
         pendingKnockback = true;
     }
 
+    private boolean forwardingHurtToFc = false;
+
     public boolean hurt(DamageSource source, float amount) {
         // Let MC's full hurt() pipeline run: hurt sound, red flash,
         // knockback, hit particles, hurt animation, AI revenge target,
@@ -510,7 +529,33 @@ public class ProxyMob extends Mob
         // custom death drops (CheckForScrollDrop, etc.) are triggered
         // separately via die() — see ProxyMob.die() override.
         if (result && fcEntity != null) {
-            fcEntity.health = (int) Math.max(0, getHealth());
+            // 1.5.2: all damage funnels through EntityLiving.attackEntityFrom,
+            // so FC overrides must see MC-side hits too — FCEntityPigZombie
+            // group anger (Common FCEntityPigZombie.java:32), FCEntityEnderman
+            // teleport dodge (:241), FCEntitySquid hit reactions (:535-569).
+            // Reentrancy flag guards against FC-side feedback; the health
+            // mirror below keeps MC authoritative for HP (FC's own damage
+            // accounting is overwritten by MC's value). Lethal hits are NOT
+            // forwarded: super.hurt() already ran die() -> fcEntity.onDeath,
+            // and forwarding would zero FC health and fire onDeath (and its
+            // drops) a second time.
+            if (!forwardingHurtToFc && !isDeadOrDying() && !fcEntity.isDead) {
+                forwardingHurtToFc = true;
+                try {
+                    fcEntity.attackEntityFrom(translateDamageSource(source), (int) amount);
+                } catch (Throwable t) {
+                    LOGGER.warn("FC entity attackEntityFrom() threw: {}: {}",
+                            t.getClass().getSimpleName(), t.getMessage());
+                } finally {
+                    forwardingHurtToFc = false;
+                }
+            }
+            // Don't mirror MC health back onto an already-dead FC entity: with two-way
+            // fire sync, FC can die internally (health 0) while MC health is still >0 this
+            // tick — re-raising it would resurrect the FC entity and re-run its death path.
+            if (fcEntity.health > 0) {
+                fcEntity.health = (int) Math.max(0, getHealth());
+            }
             btw.modern.EntityLiving fcAttacker = wrapAttacker(source);
             if (fcAttacker != null) {
                 fcEntity.lastAttackingEntity = fcAttacker;
@@ -524,9 +569,14 @@ public class ProxyMob extends Mob
     public void die(DamageSource source) {
         if (fcEntity != null) {
             try {
-                btw.modern.DamageSource fcSource = translateDamageSource(source);
-                fcEntity.onDeath(fcSource);
-                syncFromFc();
+                // Only run FC's death path if FC hasn't already died internally (e.g. from
+                // fire damage in its own onUpdate) — otherwise onDeath and its drops fire
+                // twice. Suppress vanilla loot either way since FC owns drops.
+                if (fcEntity.health > 0) {
+                    btw.modern.DamageSource fcSource = translateDamageSource(source);
+                    fcEntity.onDeath(fcSource);
+                    syncFromFc();
+                }
                 // FC's onDeath already ran dropFewItems + CheckForScrollDrop +
                 // dropEquipment. Suppress vanilla's loot table so drops don't
                 // double-fire, then let MC handle death animation / XP / removal.
@@ -632,6 +682,29 @@ public class ProxyMob extends Mob
     }
 
     static btw.modern.DamageSource translateDamageSource(DamageSource source) {
+        // 1.5.2 DamageSource.causePlayerDamage / causeMobDamage — attach the
+        // attacker before falling back to the msgId map. FC's patched
+        // EntityLiving.onDeath (vanilla/server EntityLiving.java:3325-3395)
+        // reads source.getEntity() for onKillEntity, the player-weapon
+        // looting modifier and CheckForHeadDrop, and
+        // FCEntityMechPower.attackEntityFrom:136-143 checks it for the
+        // creative one-hit break. Without this, every entity-inflicted hit
+        // arrived as the entity-less DamageSource.generic.
+        net.minecraft.world.entity.Entity attacker = source.getEntity();
+        // Indirect damage (arrow/snowball/fireball/thrown potion): the direct entity is the
+        // projectile, the causing entity the shooter. 1.5.2 uses an EntityDamageSourceIndirect
+        // (isProjectile) here, not a direct melee source, so armor/enchant handling matches.
+        if (source.getDirectEntity() != null && source.getDirectEntity() != attacker) {
+            btw.modern.EntityLiving fcThrower = wrapAttacker(source);
+            return btw.modern.DamageSource.causeThrownDamage(fcThrower, fcThrower);
+        }
+        if (attacker instanceof net.minecraft.server.level.ServerPlayer sp) {
+            return btw.modern.DamageSource.causePlayerDamage(PlayerBridge.getOrCreate(sp));
+        }
+        btw.modern.EntityLiving fcAttacker = wrapAttacker(source);
+        if (fcAttacker != null) {
+            return btw.modern.DamageSource.causeMobDamage(fcAttacker);
+        }
         String msgId = source.getMsgId();
         // Map common modern damage type message IDs to FC DamageSource types
         switch (msgId) {

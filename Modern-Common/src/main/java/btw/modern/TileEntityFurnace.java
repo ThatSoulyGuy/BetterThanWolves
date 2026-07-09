@@ -164,7 +164,19 @@ public class TileEntityFurnace extends TileEntity implements IInventory {
         return false;
     }
 
-    public int GetCookTimeForCurrentItem() { return m_iDefaultCookTime; }
+    // 1.5.2 FCMOD TileEntityFurnace.GetCookTimeForCurrentItem (vanilla/client TileEntityFurnace.java:555-566) —
+    // per-item cook-time binary shift (iron/gold ore chunks shift 3, clay/nether sludge shift 2, FCRecipes:3027-3033).
+    // Live via FCTileEntityFurnaceBrick.updateEntity:69 → its override multiplies this by m_iCookTimeMultiplier.
+    public int GetCookTimeForCurrentItem() {
+        int iCookTimeShift = 0;
+
+        if (furnaceItemStacks[0] != null) {
+            iCookTimeShift = FurnaceRecipes.smelting().GetCookTimeBinaryShift(
+                furnaceItemStacks[0].getItem().itemID);
+        }
+
+        return m_iDefaultCookTime << iCookTimeShift;
+    }
 
     // --- NBT ---
 

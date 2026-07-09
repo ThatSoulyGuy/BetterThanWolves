@@ -48,5 +48,16 @@ public class WorldServer extends World {
     }
     public boolean canMineBlock(EntityPlayer player, int x, int y, int z) { return true; }
 
-    public EntityTracker getEntityTracker() { return null; }
+    // 1.5.2 WorldServer.getEntityTracker — live caller:
+    // FCUtilsWorld.SendPacketToAllPlayersTrackingEntity (cow kick / squid
+    // tentacle attack packets). The tracker delegates sends to the bridge
+    // sink installed by btw.forge.EntityTrackerBridge.
+    private EntityTracker theEntityTracker;
+
+    public EntityTracker getEntityTracker() {
+        if (theEntityTracker == null) {
+            theEntityTracker = new EntityTracker();
+        }
+        return theEntityTracker;
+    }
 }

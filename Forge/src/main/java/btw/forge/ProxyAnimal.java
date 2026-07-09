@@ -143,7 +143,12 @@ public class ProxyAnimal extends Animal
         fcEntity.entityId = getId();
         fcEntity.ticksExisted = tickCount;
         fcEntity.inWater = isInWater();
-        fcEntity.fire = getRemainingFireTicks();
+        // Two-way fire sync — only raise on external MC ignition; FC's
+        // onEntityUpdate decrements. See ProxyMob.syncToFc for rationale.
+        int mcFire = getRemainingFireTicks();
+        if (mcFire > fcEntity.fire) {
+            fcEntity.fire = mcFire;
+        }
         // Knockback transfer is handled exclusively in tick() via the
         // pendingKnockback flag — see ProxyMob.syncToFc for rationale.
     }
@@ -235,7 +240,12 @@ public class ProxyAnimal extends Animal
             fcEntity.entityId = getId();
             fcEntity.ticksExisted = tickCount;
             fcEntity.inWater = isInWater();
-            fcEntity.fire = getRemainingFireTicks();
+            // Two-way fire sync — only raise on external MC ignition; FC's
+            // onEntityUpdate decrements. See ProxyMob.syncToFc for rationale.
+            int mcFire = getRemainingFireTicks();
+            if (mcFire > fcEntity.fire) {
+                fcEntity.fire = mcFire;
+            }
 
             // Snapshot the entity's position/rotation BEFORE FC physics
             // runs. If onUpdate corrupts any field with NaN/Infinity we
@@ -329,6 +339,9 @@ public class ProxyAnimal extends Animal
             this.fallDistance = fcEntity.fallDistance;
             setOnGround(fcEntity.onGround);
             setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            // Fire write-back: mirror FC's decremented counter onto MC so
+            // clients render flames — see ProxyMob.tick.
+            setRemainingFireTicks(Math.max(0, fcEntity.fire));
             if (fcEntity.isDead) {
                 discard();
             }
@@ -392,6 +405,8 @@ public class ProxyAnimal extends Animal
         pendingKnockback = true;
     }
 
+    private boolean forwardingHurtToFc = false;
+
     @Override
     public boolean hurt(DamageSource source, float amount) {
         // Run MC's full hurt pipeline (sound, knockback, animation, etc.).
@@ -399,7 +414,25 @@ public class ProxyAnimal extends Animal
         // Mirror to FC so FC game state stays in sync, and record the
         // attacker so EntityAIPanic / EntityAIHurtByTarget actually fires.
         if (result && fcEntity != null) {
-            fcEntity.health = (int) Math.max(0, getHealth());
+            // 1.5.2: all damage funnels through EntityLiving.attackEntityFrom,
+            // so FC overrides (e.g. FCEntityWolf reactions) must see MC-side
+            // hits too — see ProxyMob.hurt for the reentrancy/lethal-hit
+            // rationale. MC stays authoritative for HP via the mirror below.
+            if (!forwardingHurtToFc && !isDeadOrDying() && !fcEntity.isDead) {
+                forwardingHurtToFc = true;
+                try {
+                    fcEntity.attackEntityFrom(ProxyMob.translateDamageSource(source), (int) amount);
+                } catch (Throwable t) {
+                    LOGGER.warn("FC entity attackEntityFrom() threw: {}: {}",
+                            t.getClass().getSimpleName(), t.getMessage());
+                } finally {
+                    forwardingHurtToFc = false;
+                }
+            }
+            // Don't resurrect an FC entity that already died internally (see ProxyMob.hurt).
+            if (fcEntity.health > 0) {
+                fcEntity.health = (int) Math.max(0, getHealth());
+            }
             btw.modern.EntityLiving fcAttacker = ProxyMob.wrapAttacker(source);
             if (fcAttacker != null) {
                 fcEntity.lastAttackingEntity = fcAttacker;
@@ -413,9 +446,12 @@ public class ProxyAnimal extends Animal
     public void die(DamageSource source) {
         if (fcEntity != null) {
             try {
-                btw.modern.DamageSource fcSource = ProxyMob.translateDamageSource(source);
-                fcEntity.onDeath(fcSource);
-                syncFromFc();
+                // Skip if FC already died internally — avoids double onDeath/drops.
+                if (fcEntity.health > 0) {
+                    btw.modern.DamageSource fcSource = ProxyMob.translateDamageSource(source);
+                    fcEntity.onDeath(fcSource);
+                    syncFromFc();
+                }
                 suppressVanillaLoot = true;
             } catch (Throwable t) {
                 // Bridge-gap Errors (e.g. frozen EntityAnimal.onDeath reading FC

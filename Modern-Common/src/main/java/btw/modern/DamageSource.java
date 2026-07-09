@@ -137,8 +137,13 @@ public class DamageSource {
         return new EntityDamageSourceIndirect("indirectMagic", source, indirectSource).setDamageBypassesArmor().setMagicDamage();
     }
 
+    // 1.5.2 DamageSource.setExplosionSource — FCExplosionMining.DamageEntities
+    // (mining charges) calls this; the exploder branch attributes the kill and
+    // both branches are difficulty-scaled.
     public static DamageSource setExplosionSource(Explosion explosion) {
-        return new DamageSource("explosion").setExplosion();
+        return explosion != null && explosion.func_94613_c() != null
+            ? new EntityDamageSource("explosion.player", explosion.func_94613_c()).setDifficultyScaled().setExplosion()
+            : new DamageSource("explosion").setDifficultyScaled().setExplosion();
     }
 
     public String getDeathMessage(EntityLiving entity) {

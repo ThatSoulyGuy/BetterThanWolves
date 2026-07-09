@@ -330,6 +330,19 @@ public abstract class Container {
                     }
                 }
             }
+        } else if (mode == 3 && player.isInCreativeMode() && inventoryPlayer.getItemStack() == null && slotId >= 0) {
+            // 1.5.2 Container.slotClick par3==3 — creative middle-click stack clone;
+            // reached via FCContainerMenu.clicked ClickType.CLONE→3. Creative check is
+            // bridged through EntityPlayer.isInCreativeMode (PlayerBridge overrides it).
+            if (slotId < this.inventorySlots.size()) {
+                Slot slot = this.inventorySlots.get(slotId);
+
+                if (slot != null && slot.getHasStack()) {
+                    ItemStack cloned = slot.getStack().copy();
+                    cloned.stackSize = cloned.getMaxStackSize();
+                    inventoryPlayer.setItemStack(cloned);
+                }
+            }
         } else if (mode == 4) {
             // Drop mode
             if (slotId >= 0 && slotId < this.inventorySlots.size()) {
@@ -402,74 +415,146 @@ public abstract class Container {
         this.onContainerClosed(player);
     }
 
-    /**
-     * Merges the given ItemStack into the slot range [startIndex, endIndex).
-     * If reverseDirection is true, iterates from endIndex-1 down to startIndex.
-     * First tries to merge into existing stacks of the same type, then into empty slots.
-     * Returns true if any items were moved.
-     */
-    protected boolean mergeItemStack(ItemStack stack, int startIndex, int endIndex, boolean reverseDirection) {
-        boolean merged = false;
+    // 1.5.2 FCMOD Container.mergeItemStack(stack, first, cap, bFavorHotbar) — the 4-arg entry
+    // every FC container's transferStackInSlot calls (FCContainerWorkbench:64, FCContainerPlayer:43,
+    // FCContainerWithInventory:98, FCContainerHopper:102, FCContainerPulley:96, ...). The 4th arg is
+    // NOT vanilla's reverseDirection: it requests hotbar-first (left-to-right) placement.
+    // FCMOD: Added
+    public boolean mergeItemStack(ItemStack stackSource, int iSlotDestFirst, int iSlotDestCap, boolean bFavorHotbar) {
+        // test of specific player inv size shouldn't be necessary, but serves as a sanity check
 
-        int i = reverseDirection ? endIndex - 1 : startIndex;
+        if (bFavorHotbar && iSlotDestCap - iSlotDestFirst == 36) {
+            // favor the hotbar from left to right, then the main inventory, whereas vanilla
+            // just reverses the order from last slot of hotbar to first of inv.
 
-        // First pass: merge into existing stacks of the same type
-        if (stack.isStackable()) {
-            while (stack.stackSize > 0 && (reverseDirection ? i >= startIndex : i < endIndex)) {
-                Slot slot = this.inventorySlots.get(i);
-                ItemStack slotStack = slot.getStack();
-
-                if (slotStack != null
-                        && slotStack.itemID == stack.itemID
-                        && slotStack.getItemDamage() == stack.getItemDamage()
-                        && ItemStack.areItemStackTagsEqual(slotStack, stack)) {
-                    int combined = slotStack.stackSize + stack.stackSize;
-                    int maxSize = Math.min(slot.getSlotStackLimit(), stack.getMaxStackSize());
-
-                    if (combined <= maxSize) {
-                        stack.stackSize = 0;
-                        slotStack.stackSize = combined;
-                        slot.onSlotChanged();
-                        merged = true;
-                    } else if (slotStack.stackSize < maxSize) {
-                        stack.stackSize -= (maxSize - slotStack.stackSize);
-                        slotStack.stackSize = maxSize;
-                        slot.onSlotChanged();
-                        merged = true;
-                    }
-                }
-
-                i += reverseDirection ? -1 : 1;
-            }
+            return MergeItemStackFavoringHotbar(stackSource, iSlotDestFirst, iSlotDestCap);
+        } else {
+            return mergeItemStack(stackSource, iSlotDestFirst, iSlotDestCap);
         }
-
-        // Second pass: place into empty slots
-        if (stack.stackSize > 0) {
-            i = reverseDirection ? endIndex - 1 : startIndex;
-
-            while (reverseDirection ? i >= startIndex : i < endIndex) {
-                Slot slot = this.inventorySlots.get(i);
-                ItemStack slotStack = slot.getStack();
-
-                if (slotStack == null && slot.isItemValid(stack)) {
-                    int maxSize = Math.min(slot.getSlotStackLimit(), stack.getMaxStackSize());
-                    if (stack.stackSize <= maxSize) {
-                        slot.putStack(stack.copy());
-                        stack.stackSize = 0;
-                        slot.onSlotChanged();
-                        merged = true;
-                        break;
-                    } else {
-                        slot.putStack(stack.splitStack(maxSize));
-                        slot.onSlotChanged();
-                        merged = true;
-                    }
-                }
-
-                i += reverseDirection ? -1 : 1;
-            }
-        }
-
-        return merged;
     }
+
+    // 1.5.2 FCMOD Container.mergeItemStack(stack, first, cap) — forward 3-arg merge.
+    protected boolean mergeItemStack(ItemStack stackSource, int iSlotDestFirst, int iSlotDestCap) {
+        boolean bMerged = false;
+
+        if (stackSource.isStackable()) {
+            // look for destination stacks already containing the same item type
+
+            for (int iTempSlot = iSlotDestFirst;
+                iTempSlot < iSlotDestCap && stackSource.stackSize > 0; iTempSlot++) {
+                bMerged |= AttemptToMergeWithSlot(stackSource, iTempSlot);
+            }
+        }
+
+        if (stackSource.stackSize > 0) {
+            // look for empty destination stacks
+
+            for (int iTempSlot = iSlotDestFirst;
+                iTempSlot < iSlotDestCap && stackSource.stackSize > 0; iTempSlot++) {
+                bMerged |= AttemptToMergeWithSlotIfEmpty(stackSource, iTempSlot);
+            }
+        }
+
+        return bMerged;
+    }
+
+    // 1.5.2 FCMOD Container.MergeItemStackFavoringHotbar — hotbar segment [cap-9, cap) first,
+    // then main inventory [first, cap-9).
+    protected boolean MergeItemStackFavoringHotbar(ItemStack stackSource, int iSlotDestFirst, int iSlotDestCap) {
+        boolean bMerged = false;
+
+        if (stackSource.isStackable()) {
+            // look for destination stacks already containing the same item type
+
+            for (int iTempSlot = iSlotDestCap - 9;
+                iTempSlot < iSlotDestCap && stackSource.stackSize > 0; iTempSlot++) {
+                bMerged |= AttemptToMergeWithSlot(stackSource, iTempSlot);
+            }
+
+            for (int iTempSlot = iSlotDestFirst;
+                iTempSlot < iSlotDestCap - 9 && stackSource.stackSize > 0; iTempSlot++) {
+                bMerged |= AttemptToMergeWithSlot(stackSource, iTempSlot);
+            }
+        }
+
+        if (stackSource.stackSize > 0) {
+            // look for empty destination stacks
+
+            for (int iTempSlot = iSlotDestCap - 9;
+                iTempSlot < iSlotDestCap && stackSource.stackSize > 0; iTempSlot++) {
+                bMerged |= AttemptToMergeWithSlotIfEmpty(stackSource, iTempSlot);
+            }
+
+            for (int iTempSlot = iSlotDestFirst;
+                iTempSlot < iSlotDestCap - 9 && stackSource.stackSize > 0; iTempSlot++) {
+                bMerged |= AttemptToMergeWithSlotIfEmpty(stackSource, iTempSlot);
+            }
+        }
+
+        return bMerged;
+    }
+
+    // 1.5.2 FCMOD Container.AttemptToMergeWithSlot — note the !getHasSubtypes() guard on damage compare.
+    public boolean AttemptToMergeWithSlot(ItemStack stackSource, int iTempSlot) {
+        Slot tempDestSlot = this.inventorySlots.get(iTempSlot);
+        ItemStack tempDestStack = tempDestSlot.getStack();
+
+        if (tempDestStack != null && tempDestStack.itemID == stackSource.itemID
+                && (!stackSource.getHasSubtypes()
+                || stackSource.getItemDamage() == tempDestStack.getItemDamage())
+                && ItemStack.areItemStackTagsEqual(stackSource, tempDestStack)) {
+            int iDestStackSize = tempDestStack.stackSize + stackSource.stackSize;
+            int iMaxStackSize = stackSource.getMaxStackSize();
+
+            if (tempDestSlot.getSlotStackLimit() < iMaxStackSize) {
+                iMaxStackSize = tempDestSlot.getSlotStackLimit();
+            }
+
+            if (tempDestStack.stackSize < iMaxStackSize) {
+                if (iDestStackSize <= iMaxStackSize) {
+                    stackSource.stackSize = 0;
+                    tempDestStack.stackSize = iDestStackSize;
+                } else {
+                    stackSource.stackSize -= iMaxStackSize - tempDestStack.stackSize;
+                    tempDestStack.stackSize = iMaxStackSize;
+                }
+
+                tempDestSlot.onSlotChanged();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // 1.5.2 FCMOD Container.AttemptToMergeWithSlotIfEmpty — no isItemValid gate in FCMOD.
+    public boolean AttemptToMergeWithSlotIfEmpty(ItemStack stackSource, int iTempSlot) {
+        Slot tempDestSlot = this.inventorySlots.get(iTempSlot);
+        ItemStack tempDestStack = tempDestSlot.getStack();
+
+        if (tempDestStack == null) {
+            int iMaxStackSize = stackSource.getMaxStackSize();
+
+            if (tempDestSlot.getSlotStackLimit() < iMaxStackSize) {
+                iMaxStackSize = tempDestSlot.getSlotStackLimit();
+            }
+
+            if (stackSource.stackSize <= iMaxStackSize) {
+                tempDestSlot.putStack(stackSource.copy());
+                stackSource.stackSize = 0;
+            } else {
+                tempDestSlot.putStack(stackSource.copy());
+                stackSource.stackSize -= iMaxStackSize;
+                tempDestSlot.getStack().stackSize = iMaxStackSize;
+            }
+
+            tempDestSlot.onSlotChanged();
+
+            return true;
+        }
+
+        return false;
+    }
+    // END FCMOD
 }

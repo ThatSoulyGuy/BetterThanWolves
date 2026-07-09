@@ -390,6 +390,12 @@ public class Item {
         return this.itemIcon;
     }
 
+    // 1.5.2 Item.getIconIndex(ItemStack) — ItemStack.getIconIndex delegates here;
+    // FC items override for damage/state-dependent icons.
+    public Icon getIconIndex(ItemStack stack) {
+        return this.getIconFromDamage(stack.getItemDamage());
+    }
+
     public void registerIcons(IconRegister register) {
         this.itemIcon = register.registerIcon(this.unlocalizedName);
     }
@@ -440,8 +446,10 @@ public class Item {
         return false;
     }
 
+    // 1.5.2 Item.GetExhaustionOnUsedToHarvestBlock (vanilla/server/.../Item.java:875) —
+    // EntityPlayer harvest exhaustion path; FCItemAxe overrides and super-calls this default.
     public float GetExhaustionOnUsedToHarvestBlock(int iBlockID, World world, int i, int j, int k, int iBlockMetadata) {
-        return 0;
+        return 0.025F; // standard default exhaustion amount
     }
 
     public void InitializeStackOnGiveCommand(Random rand, ItemStack stack) {}
@@ -623,6 +631,9 @@ public class Item {
     public Item setContainerItem(Item item) { this.containerItem = item; return this; }
     public Item getContainerItem() { return containerItem; }
     public boolean hasContainerItem() { return containerItem != null; }
+    // 1.5.2 Item.doesContainerItemLeaveCraftingGrid (vanilla/server/.../Item.java:666) —
+    // SlotCrafting.onPickupFromSlot container-item return path.
+    public boolean doesContainerItemLeaveCraftingGrid(ItemStack stack) { return true; }
 
     // --- Client-side rendering methods ---
 
@@ -809,7 +820,9 @@ public class Item {
         pumpkinPie = new Item(144);        // 400
         enchantedBook = new ItemEnchantedBook(147); // 403
         expBottle = new Item(128);                  // 384 (vanilla XP bottle id)
-        monsterPlacer = new Item(161);              // 383 (vanilla spawn egg id)
+        // 1.5.2 Item.monsterPlacer = new ItemMonsterPlacer(127) → id 383 (vanilla/server/.../Item.java:332);
+        // EntityAgeable.interact (jar-excluded fc class) compares held itemID against it.
+        monsterPlacer = new Item(127);              // 383 (vanilla spawn egg id)
         comparator = new Item(148);        // 404
         netherQuartz = new Item(150);      // 406
         minecartTnt = new Item(151);       // 407

@@ -82,8 +82,17 @@ public class EntityProxyFactory {
                     (btw.modern.EntityLiving) fcEntity, registeredType, level);
         }
 
-        // EntityItem → real MC ItemEntity (pickupable item drop)
+        // EntityItem → real MC ItemEntity (pickupable item drop) — but only
+        // when the class has no dedicated registration. FC subclasses with a
+        // custom onUpdate (FCEntityItemFloating boat-style float physics from
+        // Common FCEntityItemFloating.java:38-79, FCEntityItemBloodWoodSapling)
+        // are registered EntityTypes and must keep their FC logic running, so
+        // they get a ProxyEntity instead of being flattened; pickup flows
+        // through ProxyEntity.playerTouch -> frozen EntityItem.onCollideWithPlayer.
         if (fcEntity instanceof btw.modern.EntityItem fcItem) {
+            if (registeredType != null) {
+                return createPlainProxy(fcEntity, registeredType, level);
+            }
             return createItemEntity(fcItem, level);
         }
 
@@ -147,8 +156,15 @@ public class EntityProxyFactory {
             EntityType<?> registeredType,
             Level level) {
 
+        // Unregistered classes fall back to the generic fc_entity type — the
+        // old EntityType.MARKER fallback had clientTrackingRange 0 and 0x0
+        // size, so XP orbs / arrows / snowballs spawned by FC code were
+        // invisible and untouchable client-side. MARKER remains only as a
+        // last resort if the generic type failed to register.
+        EntityType<?> fallback = registeredType != null
+                ? registeredType : BTWEntityRegistration.getGenericPlainType();
         EntityType<ProxyEntity> type = (EntityType<ProxyEntity>)
-                (registeredType != null ? registeredType : EntityType.MARKER);
+                (fallback != null ? fallback : EntityType.MARKER);
         ProxyEntity proxy = new ProxyEntity(type, level);
         applyPositionFromFc(proxy, fcEntity);  // set position BEFORE setFcEntity to prevent syncToFc from zeroing it
         proxy.setFcEntity(fcEntity);
@@ -198,5 +214,9 @@ public class EntityProxyFactory {
         proxy.setPos(fcEntity.posX, fcEntity.posY, fcEntity.posZ);
         proxy.setYRot(fcEntity.rotationYaw);
         proxy.setXRot(fcEntity.rotationPitch);
+        // Carry the FC-computed launch velocity: setFcEntity -> ProxyEntity.syncToFc would
+        // otherwise overwrite fcEntity.motion with the fresh proxy's zero deltaMovement,
+        // making thrown/spawned FC entities (eggs, projectiles) drop straight down.
+        proxy.setDeltaMovement(fcEntity.motionX, fcEntity.motionY, fcEntity.motionZ);
     }
 }

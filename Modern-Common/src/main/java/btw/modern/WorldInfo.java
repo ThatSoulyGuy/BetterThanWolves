@@ -93,8 +93,16 @@ public class WorldInfo {
     public NBTTagCompound getPlayerNBTTagCompound() { return this.playerNBTTagCompound; }
     public void setPlayerNBTTagCompound(NBTTagCompound compound) { this.playerNBTTagCompound = compound; }
 
+    // 1.5.2 WorldInfo.m_globalEnderChestInventory (BTW-patched vanilla/server
+    // WorldInfo.java:665) — FCBlockEnderChest.onBlockActivated antenna level 3
+    // opens the global communal ender inventory via
+    // MinecraftServer.getServer().worldServers[0].worldInfo. Vanilla persists it
+    // in level.dat ("FCEnderItems" via Save/LoadModInfoToNBT); disk persistence
+    // is bridged separately in the Forge layer.
+    private InventoryEnderChest m_globalEnderChestInventory = new InventoryEnderChest();
+
     // BTW-added methods
-    public InventoryEnderChest GetGlobalEnderChestInventory() { return null; }
+    public InventoryEnderChest GetGlobalEnderChestInventory() { return m_globalEnderChestInventory; }
     public InventoryEnderChest GetGlobalLowPowerEnderChestInventory() { return null; }
 
     public boolean HasNetherBeenAccessed() { return this.netherBeenAccessed; }

@@ -38,7 +38,21 @@ public abstract class ServerPlayerMixin {
         // FC per-tick updates
         pb.m_iTimesCraftedThisTick = 0;
         pb.m_iTicksSinceEmoteSound++;
+
+        // 1.5.2 EntityPlayer.onUpdate (vanilla/server EntityPlayer.java:243-246) —
+        // XP-orb absorption cooldown; the frozen EntityXPOrb.onCollideWithPlayer
+        // sets it to 2 and skips absorption while it is non-zero.
+        if (pb.xpCooldown > 0) {
+            --pb.xpCooldown;
+        }
+
         pb.UpdateModStatusVariables();
+
+        // 1.5.2 EntityPlayerMP.ModSpecificOnUpdate (vanilla/server EntityPlayerMP.java:1081-1085) —
+        // passive hunger drain + starvation/low-health status effects; runs after
+        // UpdateModStatusVariables, matching vanilla's end-of-onUpdate ordering.
+        pb.UpdateExhaustionWithTime();
+        pb.UpdateHealthAndHungerEffects();
 
         // Debug: log penalty levels occasionally
         if (self.tickCount % 100 == 0) {

@@ -41,5 +41,56 @@ public class EntityPotion extends EntityThrowable {
     }
 
     public void entityInit() {}
-    protected void onImpact(MovingObjectPosition result) {}
+
+    // 1.5.2 EntityPotion.onImpact (vanilla/server EntityPotion.java:92) — splash the
+    // potion's effects onto EntityLivings in a 4x2x4 box, scaled by distance (full on
+    // the directly-hit entity); instant effects apply immediately, others as timed
+    // potion effects (dropped below the 20-tick floor). Live via FCEntityWitch throws.
+    protected void onImpact(MovingObjectPosition result) {
+        if (!this.worldObj.isRemote) {
+            java.util.List effects = Item.potion.getEffects(this.potionDamage);
+
+            if (effects != null && !effects.isEmpty()) {
+                AxisAlignedBB box = this.boundingBox.expand(4.0D, 2.0D, 4.0D);
+                java.util.List nearby = this.worldObj.getEntitiesWithinAABB(EntityLiving.class, box);
+
+                if (nearby != null && !nearby.isEmpty()) {
+                    java.util.Iterator it = nearby.iterator();
+
+                    while (it.hasNext()) {
+                        EntityLiving target = (EntityLiving) it.next();
+                        double distSq = this.getDistanceSqToEntity(target);
+
+                        if (distSq < 16.0D) {
+                            double effectiveness = 1.0D - Math.sqrt(distSq) / 4.0D;
+
+                            if (target == result.entityHit) {
+                                effectiveness = 1.0D;
+                            }
+
+                            java.util.Iterator effIt = effects.iterator();
+
+                            while (effIt.hasNext()) {
+                                PotionEffect effect = (PotionEffect) effIt.next();
+                                int id = effect.getPotionID();
+
+                                if (Potion.potionTypes[id].isInstant()) {
+                                    Potion.potionTypes[id].affectEntity(this.getThrower(), target, effect.getAmplifier(), effectiveness);
+                                } else {
+                                    int duration = (int) (effectiveness * (double) effect.getDuration() + 0.5D);
+
+                                    if (duration > 20) {
+                                        target.addPotionEffect(new PotionEffect(id, duration, effect.getAmplifier()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            this.worldObj.playAuxSFX(2002, (int) Math.round(this.posX), (int) Math.round(this.posY), (int) Math.round(this.posZ), this.getPotionDamage());
+            this.setDead();
+        }
+    }
 }

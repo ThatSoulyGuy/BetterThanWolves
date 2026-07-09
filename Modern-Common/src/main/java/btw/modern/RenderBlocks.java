@@ -142,6 +142,9 @@ public class RenderBlocks {
             case 4: return renderBlockFluids(block, x, y, z);
             case 6: return renderBlockCrops(block, x, y, z);
             case 8: return renderBlockLadder(block, x, y, z);
+            // 1.5.2 render type 9 — btw.modern.BlockRailBase.getRenderType(); live blocks are
+            // FCBlockDetectorRail (fcDetectorRailWood 235 / fcBlockDetectorRailSoulforgedSteel 236)
+            case 9: return renderBlockMinecartTrack((BlockRailBase) block, x, y, z);
             case 20: return renderBlockVine(block, x, y, z);
             default:
                 // For any unhandled render type, use standard block rendering
@@ -216,12 +219,96 @@ public class RenderBlocks {
 
     // --- Grass block rendering ---
 
+    // 1.5.2 RenderBlocks.renderGrassBlockWithAmbientOcclusion — FCBlockDirtSlab.RenderBlock:507 /
+    // FCBlockGrass.RenderBlock take this branch when Minecraft.isAmbientOcclusionEnabled(); the
+    // capture pipeline discards per-vertex AO (the modern engine relights baked quads), so the AO
+    // variant delegates to the ColorMultiplier port to emit identical geometry.
     public boolean renderGrassBlockWithAmbientOcclusion(Block block, int x, int y, int z, float r, float g, float b, Icon sideOverlayIcon) {
-        return false;
+        return renderGrassBlockWithColorMultiplier(block, x, y, z, r, g, b, sideOverlayIcon);
     }
 
+    // 1.5.2 RenderBlocks.renderGrassBlockWithColorMultiplier — FCBlockDirtSlab.RenderBlock:511
+    // (grass subtype of dirt slab, legacy ID 206): tinted top face, untinted base side faces,
+    // then a tinted second pass over the sides with the grass side-overlay icon.
     public boolean renderGrassBlockWithColorMultiplier(Block block, int x, int y, int z, float r, float g, float b, Icon sideOverlayIcon) {
-        return false;
+        this.enableAO = false;
+        Tessellator t = Tessellator.instance;
+        boolean rendered = false;
+        float brightnessBottom = 0.5F;
+        float brightnessTop = 1.0F;
+        float brightnessZSides = 0.8F;
+        float brightnessXSides = 0.6F;
+        float topR = brightnessTop * r;
+        float topG = brightnessTop * g;
+        float topB = brightnessTop * b;
+
+        int brightness = block.getMixedBrightnessForBlock(this.blockAccess, x, y, z);
+
+        if (block.shouldSideBeRendered(this.blockAccess, x, y - 1, z, 0)) {
+            t.setBrightness(this.renderMinY > 0.0D ? brightness : block.getMixedBrightnessForBlock(this.blockAccess, x, y - 1, z));
+            t.setColorOpaque_F(brightnessBottom, brightnessBottom, brightnessBottom);
+            this.renderFaceYNeg(block, (double)x, (double)y, (double)z, this.getBlockIcon(block, this.blockAccess, x, y, z, 0));
+            rendered = true;
+        }
+
+        if (block.shouldSideBeRendered(this.blockAccess, x, y + 1, z, 1)) {
+            t.setBrightness(this.renderMaxY < 1.0D ? brightness : block.getMixedBrightnessForBlock(this.blockAccess, x, y + 1, z));
+            t.setColorOpaque_F(topR, topG, topB);
+            this.renderFaceYPos(block, (double)x, (double)y, (double)z, this.getBlockIcon(block, this.blockAccess, x, y, z, 1));
+            rendered = true;
+        }
+
+        Icon sideIcon;
+
+        if (block.shouldSideBeRendered(this.blockAccess, x, y, z - 1, 2)) {
+            t.setBrightness(this.renderMinZ > 0.0D ? brightness : block.getMixedBrightnessForBlock(this.blockAccess, x, y, z - 1));
+            t.setColorOpaque_F(brightnessZSides, brightnessZSides, brightnessZSides);
+            sideIcon = this.getBlockIcon(block, this.blockAccess, x, y, z, 2);
+            this.renderFaceZNeg(block, (double)x, (double)y, (double)z, sideIcon);
+
+            t.setColorOpaque_F(brightnessZSides * r, brightnessZSides * g, brightnessZSides * b);
+            this.renderFaceZNeg(block, (double)x, (double)y, (double)z, sideOverlayIcon);
+
+            rendered = true;
+        }
+
+        if (block.shouldSideBeRendered(this.blockAccess, x, y, z + 1, 3)) {
+            t.setBrightness(this.renderMaxZ < 1.0D ? brightness : block.getMixedBrightnessForBlock(this.blockAccess, x, y, z + 1));
+            t.setColorOpaque_F(brightnessZSides, brightnessZSides, brightnessZSides);
+            sideIcon = this.getBlockIcon(block, this.blockAccess, x, y, z, 3);
+            this.renderFaceZPos(block, (double)x, (double)y, (double)z, sideIcon);
+
+            t.setColorOpaque_F(brightnessZSides * r, brightnessZSides * g, brightnessZSides * b);
+            this.renderFaceZPos(block, (double)x, (double)y, (double)z, sideOverlayIcon);
+
+            rendered = true;
+        }
+
+        if (block.shouldSideBeRendered(this.blockAccess, x - 1, y, z, 4)) {
+            t.setBrightness(this.renderMinX > 0.0D ? brightness : block.getMixedBrightnessForBlock(this.blockAccess, x - 1, y, z));
+            t.setColorOpaque_F(brightnessXSides, brightnessXSides, brightnessXSides);
+            sideIcon = this.getBlockIcon(block, this.blockAccess, x, y, z, 4);
+            this.renderFaceXNeg(block, (double)x, (double)y, (double)z, sideIcon);
+
+            t.setColorOpaque_F(brightnessXSides * r, brightnessXSides * g, brightnessXSides * b);
+            this.renderFaceXNeg(block, (double)x, (double)y, (double)z, sideOverlayIcon);
+
+            rendered = true;
+        }
+
+        if (block.shouldSideBeRendered(this.blockAccess, x + 1, y, z, 5)) {
+            t.setBrightness(this.renderMaxX < 1.0D ? brightness : block.getMixedBrightnessForBlock(this.blockAccess, x + 1, y, z));
+            t.setColorOpaque_F(brightnessXSides, brightnessXSides, brightnessXSides);
+            sideIcon = this.getBlockIcon(block, this.blockAccess, x, y, z, 5);
+            this.renderFaceXPos(block, (double)x, (double)y, (double)z, sideIcon);
+
+            t.setColorOpaque_F(brightnessXSides * r, brightnessXSides * g, brightnessXSides * b);
+            this.renderFaceXPos(block, (double)x, (double)y, (double)z, sideOverlayIcon);
+
+            rendered = true;
+        }
+
+        return rendered;
     }
 
     // ================================================================
@@ -1797,7 +1884,82 @@ public class RenderBlocks {
         return true;
     }
 
-    public boolean renderBlockMinecartTrack(BlockRailBase block, int x, int y, int z) { return false; }
+    // 1.5.2 RenderBlocks.renderBlockMinecartTrack — flat rail plane at y+1/16 (raised ends on
+    // slopes) with metadata-based UV rotation, double-sided; dispatched from renderBlockByRenderType
+    // case 9 for FCBlockDetectorRail (wood/soulforged-steel detector rails).
+    public boolean renderBlockMinecartTrack(BlockRailBase block, int x, int y, int z) {
+        Tessellator t = Tessellator.instance;
+        int meta = this.blockAccess.getBlockMetadata(x, y, z);
+        Icon icon = this.getBlockIconFromSideAndMetadata(block, 0, meta);
+
+        if (this.hasOverrideBlockTexture()) {
+            icon = this.overrideBlockTexture;
+        }
+
+        if (block.isPowered()) {
+            meta &= 7;
+        }
+
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        t.setBrightness(block.getMixedBrightnessForBlock(this.blockAccess, x, y, z));
+        t.setColorOpaque_F(1.0F, 1.0F, 1.0F);
+        double minU = icon != null ? (double)icon.getMinU() : 0;
+        double minV = icon != null ? (double)icon.getMinV() : 0;
+        double maxU = icon != null ? (double)icon.getMaxU() : 1;
+        double maxV = icon != null ? (double)icon.getMaxV() : 1;
+        double railHeight = 0.0625D;
+        double x1 = (double)(x + 1);
+        double x2 = (double)(x + 1);
+        double x3 = (double)(x + 0);
+        double x4 = (double)(x + 0);
+        double z1 = (double)(z + 0);
+        double z2 = (double)(z + 1);
+        double z3 = (double)(z + 1);
+        double z4 = (double)(z + 0);
+        double y1 = (double)y + railHeight;
+        double y2 = (double)y + railHeight;
+        double y3 = (double)y + railHeight;
+        double y4 = (double)y + railHeight;
+
+        if (meta != 1 && meta != 2 && meta != 3 && meta != 7) {
+            if (meta == 8) {
+                x1 = x2 = (double)(x + 0);
+                x3 = x4 = (double)(x + 1);
+                z1 = z4 = (double)(z + 1);
+                z2 = z3 = (double)(z + 0);
+            } else if (meta == 9) {
+                x1 = x4 = (double)(x + 0);
+                x2 = x3 = (double)(x + 1);
+                z1 = z2 = (double)(z + 0);
+                z3 = z4 = (double)(z + 1);
+            }
+        } else {
+            x1 = x4 = (double)(x + 1);
+            x2 = x3 = (double)(x + 0);
+            z1 = z2 = (double)(z + 1);
+            z3 = z4 = (double)(z + 0);
+        }
+
+        if (meta != 2 && meta != 4) {
+            if (meta == 3 || meta == 5) {
+                ++y2;
+                ++y3;
+            }
+        } else {
+            ++y1;
+            ++y4;
+        }
+
+        t.addVertexWithUV(x1, y1, z1, maxU, minV);
+        t.addVertexWithUV(x2, y2, z2, maxU, maxV);
+        t.addVertexWithUV(x3, y3, z3, minU, maxV);
+        t.addVertexWithUV(x4, y4, z4, minU, minV);
+        t.addVertexWithUV(x4, y4, z4, minU, minV);
+        t.addVertexWithUV(x3, y3, z3, minU, maxV);
+        t.addVertexWithUV(x2, y2, z2, maxU, maxV);
+        t.addVertexWithUV(x1, y1, z1, maxU, minV);
+        return true;
+    }
 
     public boolean renderBlockLadder(Block block, int x, int y, int z) {
         // Ladder renders as a flat plane on one face based on metadata
@@ -2093,36 +2255,31 @@ public class RenderBlocks {
     public boolean RenderBlockHopper(Block block, int x, int y, int z) { return false; }
 
     // --- renderBlockTorch ---
+    // 1.5.2 RenderBlocks.renderBlockTorch (FCMOD-patched) — render type 2, FCBlockTorchBase
+    // subclasses; wall orientations 1-4 lean out of the wall via renderTorchAtAngle.
     public boolean renderBlockTorch(Block block, int x, int y, int z) {
         int meta = blockAccess != null ? blockAccess.getBlockMetadata(x, y, z) : 0;
+        // FCMOD: orientation from FCBlockTorchBase.GetOrientation(meta) == meta & 7
+        int orientation = meta & 7;
         Tessellator t = Tessellator.instance;
-        Icon icon = getBlockIconFromSideAndMetadata(block, 0, meta);
-        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
-        double minU = icon != null ? icon.getMinU() : 0;
-        double maxU = icon != null ? icon.getMaxU() : 1;
-        double minV = icon != null ? icon.getMinV() : 0;
-        double maxV = icon != null ? icon.getMaxV() : 1;
-        // Render as crossed squares (simplified torch — actual torch has angle)
-        double w = 0.0625; // 1 pixel width
-        double cx = x + 0.5, cz = z + 0.5;
-        // Two crossed planes for the torch stick
-        t.setNormal(0, 1, 0);
-        t.addVertexWithUV(cx - w, y + 0, cz, minU, maxV);
-        t.addVertexWithUV(cx - w, y + 0.625, cz, minU, minV);
-        t.addVertexWithUV(cx + w, y + 0.625, cz, maxU, minV);
-        t.addVertexWithUV(cx + w, y + 0, cz, maxU, maxV);
-        t.addVertexWithUV(cx + w, y + 0, cz, minU, maxV);
-        t.addVertexWithUV(cx + w, y + 0.625, cz, minU, minV);
-        t.addVertexWithUV(cx - w, y + 0.625, cz, maxU, minV);
-        t.addVertexWithUV(cx - w, y + 0, cz, maxU, maxV);
-        t.addVertexWithUV(cx, y + 0, cz - w, minU, maxV);
-        t.addVertexWithUV(cx, y + 0.625, cz - w, minU, minV);
-        t.addVertexWithUV(cx, y + 0.625, cz + w, maxU, minV);
-        t.addVertexWithUV(cx, y + 0, cz + w, maxU, maxV);
-        t.addVertexWithUV(cx, y + 0, cz + w, minU, maxV);
-        t.addVertexWithUV(cx, y + 0.625, cz + w, minU, minV);
-        t.addVertexWithUV(cx, y + 0.625, cz - w, maxU, minV);
-        t.addVertexWithUV(cx, y + 0, cz - w, maxU, maxV);
+        t.setBrightness(block.getMixedBrightnessForBlock(this.blockAccess, x, y, z));
+        t.setColorOpaque_F(1.0F, 1.0F, 1.0F);
+        double torchLean = 0.4000000059604645D;
+        double wallOffset = 0.5D - torchLean;
+        double wallHeight = 0.20000000298023224D;
+
+        if (orientation == 1) {
+            this.renderTorchAtAngle(block, (double)x - wallOffset, (double)y + wallHeight, (double)z, -torchLean, 0.0D, meta);
+        } else if (orientation == 2) {
+            this.renderTorchAtAngle(block, (double)x + wallOffset, (double)y + wallHeight, (double)z, torchLean, 0.0D, meta);
+        } else if (orientation == 3) {
+            this.renderTorchAtAngle(block, (double)x, (double)y + wallHeight, (double)z - wallOffset, 0.0D, -torchLean, meta);
+        } else if (orientation == 4) {
+            this.renderTorchAtAngle(block, (double)x, (double)y + wallHeight, (double)z + wallOffset, 0.0D, torchLean, meta);
+        } else {
+            this.renderTorchAtAngle(block, (double)x, (double)y, (double)z, 0.0D, 0.0D, meta);
+        }
+
         return true;
     }
 
@@ -2232,7 +2389,65 @@ public class RenderBlocks {
 
     // --- Torch / helper rendering ---
 
-    public void renderTorchAtAngle(Block block, double x, double y, double z, double angleX, double angleZ, int metadata) {}
+    // 1.5.2 RenderBlocks.renderTorchAtAngle — tilted, wall-offset torch geometry; called from
+    // renderBlockTorch for FCBlockTorchBase wall orientations 1-4 (upright with 0 angles otherwise).
+    public void renderTorchAtAngle(Block block, double x, double y, double z, double angleX, double angleZ, int metadata) {
+        Tessellator t = Tessellator.instance;
+        Icon icon = this.getBlockIconFromSideAndMetadata(block, 0, metadata);
+
+        if (this.hasOverrideBlockTexture()) {
+            icon = this.overrideBlockTexture;
+        }
+
+        t.setCurrentTextureName(icon != null ? icon.getIconName() : null);
+        double minU = icon != null ? (double)icon.getMinU() : 0;
+        double minV = icon != null ? (double)icon.getMinV() : 0;
+        double maxU = icon != null ? (double)icon.getMaxU() : 1;
+        double maxV = icon != null ? (double)icon.getMaxV() : 1;
+        double topMinU = icon != null ? (double)icon.getInterpolatedU(7.0D) : 0.4375;
+        double topMinV = icon != null ? (double)icon.getInterpolatedV(6.0D) : 0.375;
+        double topMaxU = icon != null ? (double)icon.getInterpolatedU(9.0D) : 0.5625;
+        double topMaxV = icon != null ? (double)icon.getInterpolatedV(8.0D) : 0.5;
+        double bottomMinU = icon != null ? (double)icon.getInterpolatedU(7.0D) : 0.4375;
+        double bottomMinV = icon != null ? (double)icon.getInterpolatedV(13.0D) : 0.8125;
+        double bottomMaxU = icon != null ? (double)icon.getInterpolatedU(9.0D) : 0.5625;
+        double bottomMaxV = icon != null ? (double)icon.getInterpolatedV(15.0D) : 0.9375;
+        x += 0.5D;
+        z += 0.5D;
+        double xNeg = x - 0.5D;
+        double xPos = x + 0.5D;
+        double zNeg = z - 0.5D;
+        double zPos = z + 0.5D;
+        double halfWidth = 0.0625D;
+        double topHeight = 0.625D;
+        // Top face of the torch head
+        t.addVertexWithUV(x + angleX * (1.0D - topHeight) - halfWidth, y + topHeight, z + angleZ * (1.0D - topHeight) - halfWidth, topMinU, topMinV);
+        t.addVertexWithUV(x + angleX * (1.0D - topHeight) - halfWidth, y + topHeight, z + angleZ * (1.0D - topHeight) + halfWidth, topMinU, topMaxV);
+        t.addVertexWithUV(x + angleX * (1.0D - topHeight) + halfWidth, y + topHeight, z + angleZ * (1.0D - topHeight) + halfWidth, topMaxU, topMaxV);
+        t.addVertexWithUV(x + angleX * (1.0D - topHeight) + halfWidth, y + topHeight, z + angleZ * (1.0D - topHeight) - halfWidth, topMaxU, topMinV);
+        // Bottom face of the torch stick
+        t.addVertexWithUV(x + halfWidth + angleX, y, z - halfWidth + angleZ, bottomMaxU, bottomMinV);
+        t.addVertexWithUV(x + halfWidth + angleX, y, z + halfWidth + angleZ, bottomMaxU, bottomMaxV);
+        t.addVertexWithUV(x - halfWidth + angleX, y, z + halfWidth + angleZ, bottomMinU, bottomMaxV);
+        t.addVertexWithUV(x - halfWidth + angleX, y, z - halfWidth + angleZ, bottomMinU, bottomMinV);
+        // Four full-height side planes, sheared by the lean angles at the base
+        t.addVertexWithUV(x - halfWidth, y + 1.0D, zNeg, minU, minV);
+        t.addVertexWithUV(x - halfWidth + angleX, y + 0.0D, zNeg + angleZ, minU, maxV);
+        t.addVertexWithUV(x - halfWidth + angleX, y + 0.0D, zPos + angleZ, maxU, maxV);
+        t.addVertexWithUV(x - halfWidth, y + 1.0D, zPos, maxU, minV);
+        t.addVertexWithUV(x + halfWidth, y + 1.0D, zPos, minU, minV);
+        t.addVertexWithUV(x + angleX + halfWidth, y + 0.0D, zPos + angleZ, minU, maxV);
+        t.addVertexWithUV(x + angleX + halfWidth, y + 0.0D, zNeg + angleZ, maxU, maxV);
+        t.addVertexWithUV(x + halfWidth, y + 1.0D, zNeg, maxU, minV);
+        t.addVertexWithUV(xNeg, y + 1.0D, z + halfWidth, minU, minV);
+        t.addVertexWithUV(xNeg + angleX, y + 0.0D, z + halfWidth + angleZ, minU, maxV);
+        t.addVertexWithUV(xPos + angleX, y + 0.0D, z + halfWidth + angleZ, maxU, maxV);
+        t.addVertexWithUV(xPos, y + 1.0D, z + halfWidth, maxU, minV);
+        t.addVertexWithUV(xPos, y + 1.0D, z - halfWidth, minU, minV);
+        t.addVertexWithUV(xPos + angleX, y + 0.0D, z - halfWidth + angleZ, minU, maxV);
+        t.addVertexWithUV(xNeg + angleX, y + 0.0D, z - halfWidth + angleZ, maxU, maxV);
+        t.addVertexWithUV(xNeg, y + 1.0D, z - halfWidth, maxU, minV);
+    }
     public void drawCrossedSquares(Block block, int metadata, double x, double y, double z, float brightness) {}
     public void renderBlockStemSmall(Block block, int metadata, double x, double y, double z, double height) {}
     public void renderBlockStemBig(BlockStem block, int metadata, int connectedBlockId, double x, double y, double z, double height) {}
@@ -2486,7 +2701,32 @@ public class RenderBlocks {
 
     // --- Falling block rendering ---
 
-    public void renderBlockSandFalling(Block block, World world, int x, int y, int z, int metadata) {}
+    // 1.5.2 RenderBlocks.renderBlockSandFalling — RenderFallingSand.doRender draws airborne
+    // falling blocks (FCEntityFallingBlock: loose blocks, gravel, falling slabs) through this,
+    // centered on -0.5 offsets at the entity position with world brightness. The vanilla
+    // var12/var13 anaglyph remnants always resolve to 1.0 and are folded in.
+    public void renderBlockSandFalling(Block block, World world, int x, int y, int z, int metadata) {
+        float brightnessBottom = 0.5F;
+        float brightnessTop = 1.0F;
+        float brightnessZSides = 0.8F;
+        float brightnessXSides = 0.6F;
+        Tessellator t = Tessellator.instance;
+        t.startDrawingQuads();
+        t.setBrightness(block.getMixedBrightnessForBlock(world, x, y, z));
+        t.setColorOpaque_F(brightnessBottom, brightnessBottom, brightnessBottom);
+        this.renderFaceYNeg(block, -0.5D, -0.5D, -0.5D, this.getBlockIconFromSideAndMetadata(block, 0, metadata));
+        t.setColorOpaque_F(brightnessTop, brightnessTop, brightnessTop);
+        this.renderFaceYPos(block, -0.5D, -0.5D, -0.5D, this.getBlockIconFromSideAndMetadata(block, 1, metadata));
+        t.setColorOpaque_F(brightnessZSides, brightnessZSides, brightnessZSides);
+        this.renderFaceZNeg(block, -0.5D, -0.5D, -0.5D, this.getBlockIconFromSideAndMetadata(block, 2, metadata));
+        t.setColorOpaque_F(brightnessZSides, brightnessZSides, brightnessZSides);
+        this.renderFaceZPos(block, -0.5D, -0.5D, -0.5D, this.getBlockIconFromSideAndMetadata(block, 3, metadata));
+        t.setColorOpaque_F(brightnessXSides, brightnessXSides, brightnessXSides);
+        this.renderFaceXNeg(block, -0.5D, -0.5D, -0.5D, this.getBlockIconFromSideAndMetadata(block, 4, metadata));
+        t.setColorOpaque_F(brightnessXSides, brightnessXSides, brightnessXSides);
+        this.renderFaceXPos(block, -0.5D, -0.5D, -0.5D, this.getBlockIconFromSideAndMetadata(block, 5, metadata));
+        t.draw();
+    }
 
     // --- Icon helpers ---
 

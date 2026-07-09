@@ -4,8 +4,87 @@ Originally audited 2026-03-28. Re-audited 2026-06-05 (see below). Link-audited
 2026-07-08 (see below). Every remaining stub, no-op, empty body, hardcoded
 return, and TODO across the btw.modern and btw.forge layers.
 
-**Remaining estimated stubs: ~400**
-(down from ~1100+ originally — many btw.modern files fully implemented)
+**Remaining estimated stubs: ~400** — SUPERSEDED by the 2026-07-08 stub
+elimination below: a 9-agent verified triage reduced the claim to **103 real
+live stubs**, of which ~100 are now implemented. See that section for what
+actually remains.
+
+---
+
+## 2026-07-08 Stub elimination (verified triage + implementation)
+
+A 9-agent inventory re-triaged every claimed stub against the CURRENT runtime
+winner rules, live caller chains, and the vanilla/ ground truth. Of 234
+verdicts: **103 live stubs** (real gaps with named caller chains), 68
+intentional bridge no-ops, 19 correct override points, 30 stale claims that
+already work, 14 dead-shadowed. Headline stale claims killed: "PathFinder
+returns null" (real A* has been live since the winner flip), "EntityLiving ~95
+stubs" (shadowed class — dead code), "BlockFluid.getFlowDirection breaks water
+wheels" (FCEntityWaterWheel has its own copy).
+
+**Implemented (all faithful 1.5.2 ports, per-method source citations in code):**
+fire spread (SetFireProperties now writes the BlockFire arrays FCBlockFire
+reads; canNeighborBurn/canBlockCatchFire), water displacement
+(GetPreventsFluidFlow — buckets no longer delete solid blocks), saw
+(OnBlockSawed for all blocks, not just logs), grass/mycelium spread,
+mortar/loose-snow stabilization, World physics/light/spawn-cap/ender-chest
+methods (+ FcWorldSavedData persistence), Chunk methods, the full enchanting
+chain (BlockEnchantmentTable.onBlockActivated + ContainerEnchantment +
+buildEnchantmentList/calcItemStackEnchantability replacing invented logic),
+thorns (func_92098_i/func_92099_a real), potions (ItemPotion.getEffects,
+PotionHelper tables, EntityPotion.onImpact), EntitySenses.canSee, ItemFood
+potion effects + wolf-food methods, ItemBlock dispenser/burn-time/buoyancy/
+filter/piston-pack delegation, ItemStack.canHarvestBlock/splitStack,
+Container.mergeItemStack (FCMOD bFavorHotbar) + slotClick + SlotCrafting
+onCrafting, chest lid animation chain (TileEntityChest.updateEntity +
+ContainerChest + block-event bridge WorldBridge.addBlockEvent ->
+ProxyBlock.triggerEvent -> TileEntity.receiveClientEvent), furnace FCMOD
+cook-time shifts, XP-orb pickup (xpCooldown + playerTouch + PlayerBridge
+addExperience/onItemPickup), UpdateGloomState (+ WorldBridge.getLightBrightness
+with skylightSubtracted, required for gloom to ever be FALSE),
+IsCarryingBlastingOil/Detonate, proxy forwarding (interact, hurt->
+attackEntityFrom, isPickable, two-way fire sync, damage-source attacker),
+EntityTracker via EntityTrackerBridge, EntityList.getClassFromID + spawn-egg
+383 mapping, falling-block rendering (RenderFallingSand + Block.
+RenderFallingBlock), grass/rail/torch/anvil render methods, EntityPlayerMP
+exhaustion/health-hunger updates + Api field-dedup (hardcore-spawn state).
+
+**Now DONE (2026-07-08 follow-up — review pass + remaining ports):**
+- **Village subsystem** — Village/VillageDoorInfo/VillageCollection/VillageAgressor
+  ported verbatim from 1.5.2; WorldBridge.ModSpecificTick drives villageCollectionObj.tick
+  (village discovery from doors, reputation, mating). All 9 Village methods +
+  VillageDoorInfo now resolve in LinkAudit. Deferred: cross-session NBT persistence of
+  village data (in-memory rediscovery from doors each session — 1.5.2 rebuilds within
+  seconds; only reputation + the 3600-tick breeding cooldown reset on restart) and
+  VillageSiege (no LinkAudit-flagged caller).
+- **RenderItem + ItemRenderer** — full port; registered for EntityItem in RenderManager.
+  Placed tools / campfire food / furnace contents / wicker-basket items now render.
+- **AchievementList crafting constants + SlotCrafting.onCrafting dispatch** — the 13
+  constants and vanilla dispatch chain (inert: addStat is a bridge no-op, but faithful).
+
+**Adversarial review fixes (9-agent pass, ~24 findings applied):** soul-sand speed
+inversion (Forge speed hooks now COMPOSE FC's modifier with the modern factor instead of
+replacing — was making soul sand faster than stone); Block.GetDoesFireDamageToEntities
+5-arg delegation (fire/lava contact damage was dead); WeightedRandom dead stub (broke
+enchanting); Potion heal/harm PotionHealth (isInstant); EntityPotion.onImpact splash;
+WorldBridge extends WorldServer (EntityTracker packet bridge was unreachable);
+getLightBrightness table lookup + skylightSubtracted ticked (gloom/Nether light);
+proxy hurt/die guards (double-drop / resurrection on burn death); translateDamageSource
+indirect (arrows were direct melee); Enchantment.func_92089_a → canApply; DamageSource
+fcGloom → magic (armor bypass); FCContainerMenu openContainer reset; and more.
+
+**Still open (the honest remaining list):**
+- **ItemFood modern-effect double-application** — vanilla foods with FC counterparts that
+  carry modern FoodProperties effects (rotten flesh, pufferfish, spider eye...) apply BOTH
+  the modern effect and FC's onFoodEaten effect. Fix spec'd: a LivingEntity.addEatEffect
+  mixin cancelling for FC-counterpart items (mirrors FoodDataMixin.btw$eatItem). Narrow.
+- **Spawn-egg itemDamage → entity-id** — eggs map to legacy id 383 but the FC stack's
+  itemDamage isn't set to the 1.5.2 entity id, so EntityAgeable baby-spawn picks wrong.
+  Needs a modern-EntityType → legacy-id table in ItemStackHelper.toFcStack.
+- 68 intentional bridge no-ops (GUI display methods, GL state, client-only
+  paths handled by the modern engine) — correct as designed, not gaps.
+- The dead flat-FC graph (mech-power/urn/canvas/lightning FCEntity* copies) + WatchableObject
+  — LinkAudit-flagged but verified unreachable (nothing instantiates the flat copies).
 
 ---
 

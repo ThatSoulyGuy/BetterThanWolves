@@ -641,11 +641,13 @@ public class ProxyBlock extends Block implements EntityBlock {
         // getSpeedFactor() has no world/position context, but FC's GetMovementModifier
         // may query block metadata which requires a world. Catch NPE for blocks that
         // need metadata (like dirt slabs) — the mixin handles position-aware speed.
+        // Compose with the vanilla speed factor (from block properties) rather than
+        // replacing it, matching the mixin path for vanilla-with-FC-counterpart blocks.
         try {
             float modifier = fc().GetMovementModifier(null, 0, 0, 0);
-            return modifier > 0 ? modifier : 1.0F;
+            return modifier > 0 ? super.getSpeedFactor() * modifier : super.getSpeedFactor();
         } catch (NullPointerException e) {
-            return 1.0F;
+            return super.getSpeedFactor();
         }
     }
 
@@ -821,6 +823,24 @@ public class ProxyBlock extends Block implements EntityBlock {
     // ================================================================
     // EntityBlock implementation — FC tile entity bridge
     // ================================================================
+
+    /**
+     * Routes block events (WorldBridge.addBlockEvent -> Level.blockEvent) into
+     * the FC tile entity, mirroring 1.5.2 BlockContainer.onBlockEventReceived ->
+     * TileEntity.receiveClientEvent. Chest lid viewer-count sync (event 1) and
+     * any other FC TE events flow through here on both sides.
+     */
+    @Override
+    public boolean triggerEvent(net.minecraft.world.level.block.state.BlockState state,
+                                 net.minecraft.world.level.Level level,
+                                 BlockPos pos, int id, int param) {
+        super.triggerEvent(state, level, pos, id, param);
+        if (level.getBlockEntity(pos) instanceof ProxyBlockEntity pbe
+                && pbe.getFcTileEntity() != null) {
+            return pbe.getFcTileEntity().receiveClientEvent(id, param);
+        }
+        return false;
+    }
 
     /**
      * Returns whether this ProxyBlock's FC block creates a tile entity.

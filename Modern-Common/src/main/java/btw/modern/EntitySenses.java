@@ -1,28 +1,67 @@
 package btw.modern;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Entity sensing (sight) helper.
- * Mirrors net.minecraft.src.EntitySenses.
+ * 1.5.2 EntitySenses — fc EntityAITarget.isSuitableTarget/continueExecuting call
+ * taskOwner.getEntitySenses().canSee(target) every targeting tick for all live
+ * FC mobs, so this gates aggro on real line of sight.
  */
 public class EntitySenses {
 
+    EntityLiving entityObj;
+
+    /** Cache of entities which we can see */
+    List seenEntities = new ArrayList();
+
+    /** Cache of entities which we cannot see */
+    List unseenEntities = new ArrayList();
+
+    /**
+     * Compile-only: the DEAD Modern-Common EntityLiving shim constructs
+     * EntitySenses without an owner. The frozen runtime EntityLiving always
+     * uses the (EntityLiving) constructor below.
+     */
     public EntitySenses() {}
+
     /** Vanilla 1.5.2 EntityLiving constructor calls {@code new EntitySenses(this)}. */
-    public EntitySenses(EntityLiving entity) {}
+    public EntitySenses(EntityLiving entity) {
+        this.entityObj = entity;
+    }
 
     /**
-     * Vanilla 1.5.2 EntityAITarget.isSuitableTarget checks
-     * {@code shouldCheckSight && !canSee(target)} — if canSee returns false,
-     * the AI rejects EVERY target and the mob never attacks/follows anything.
-     * A true default is the safe no-op: "can always see" means the AI task
-     * delegates targeting to distance/path checks instead of LOS.
+     * 1.5.2 EntitySenses.clearSensingCache — frozen EntityLiving.updateAITasks
+     * calls this once per tick to invalidate the per-tick canSee() memoization.
      */
-    public boolean canSee(Entity entity) { return true; }
+    public void clearSensingCache() {
+        this.seenEntities.clear();
+        this.unseenEntities.clear();
+    }
 
     /**
-     * Vanilla 1.5.2 EntityLiving.updateAITasks() calls this once per tick to
-     * invalidate the per-tick canSee() memoization. We don't memoize, so
-     * the no-op is correct — but the method must exist or the call site NPEs.
+     * 1.5.2 EntitySenses.canSee — checks the per-tick caches, then delegates to
+     * the frozen EntityLiving.canEntityBeSeen (eye-to-eye raytrace backed by
+     * WorldBridge.rayTraceBlocks), caching the result.
      */
-    public void clearSensingCache() {}
+    public boolean canSee(Entity entity) {
+        if (this.seenEntities.contains(entity)) {
+            return true;
+        } else if (this.unseenEntities.contains(entity)) {
+            return false;
+        } else {
+            this.entityObj.worldObj.theProfiler.startSection("canSee");
+            boolean canSee = this.entityObj.canEntityBeSeen(entity);
+            this.entityObj.worldObj.theProfiler.endSection();
+
+            if (canSee) {
+                this.seenEntities.add(entity);
+            } else {
+                this.unseenEntities.add(entity);
+            }
+
+            return canSee;
+        }
+    }
 }

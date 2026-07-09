@@ -88,36 +88,69 @@ public abstract class World implements IBlockAccess {
         return Block.isNormalCube(getBlockId(x, y, z));
     }
 
-    /**
-     * Vanilla 1.5.2 World.isBoundingBoxBurning — returns true if the
-     * entity's bounding box intersects fire or lava. Called by vanilla
-     * Entity.moveEntity. Default stub returns false; WorldBridge
-     * overrides to check the live MC level.
-     */
+    // 1.5.2 World.isBoundingBoxBurning (FCMOD Entity overload, vanilla/server World.java:2112) —
+    // frozen Entity.moveEntity (vanilla Entity.java:2849) calls it every tick for contact fire/lava damage.
+    // FCMOD: contracts the entity's box and asks each block GetDoesFireDamageToEntities.
     public boolean isBoundingBoxBurning(Entity entity) {
+        // FCMOD: Added
+        AxisAlignedBB aabb = entity.boundingBox.contract(0.001D, 0.001D, 0.001D);
+        // END FCMOD
+
+        int minX = MathHelper.floor_double(aabb.minX);
+        int maxX = MathHelper.floor_double(aabb.maxX + 1.0D);
+        int minY = MathHelper.floor_double(aabb.minY);
+        int maxY = MathHelper.floor_double(aabb.maxY + 1.0D);
+        int minZ = MathHelper.floor_double(aabb.minZ);
+        int maxZ = MathHelper.floor_double(aabb.maxZ + 1.0D);
+
+        if (this.checkChunksExist(minX, minY, minZ, maxX, maxY, maxZ)) {
+            for (int x = minX; x < maxX; ++x) {
+                for (int y = minY; y < maxY; ++y) {
+                    for (int z = minZ; z < maxZ; ++z) {
+                        // FCMOD: Changed — per-block fire damage check
+                        Block block = Block.blocksList[getBlockId(x, y, z)];
+
+                        if (block != null && block.GetDoesFireDamageToEntities(this, x, y, z, entity)) {
+                            // END FCMOD
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
         return false;
     }
 
-    /**
-     * Overload used by some FC code paths that want to check a specific
-     * AABB (e.g., looking ahead for movement). Same behavior as above.
-     */
+    // 1.5.2 World.isBoundingBoxBurning (pre-FCMOD AABB overload) — frozen
+    // Entity.java:890 fire-check path; scans the box for fire/lava block IDs.
     public boolean isBoundingBoxBurning(AxisAlignedBB aabb) {
+        int minX = MathHelper.floor_double(aabb.minX);
+        int maxX = MathHelper.floor_double(aabb.maxX + 1.0D);
+        int minY = MathHelper.floor_double(aabb.minY);
+        int maxY = MathHelper.floor_double(aabb.maxY + 1.0D);
+        int minZ = MathHelper.floor_double(aabb.minZ);
+        int maxZ = MathHelper.floor_double(aabb.maxZ + 1.0D);
+
+        if (this.checkChunksExist(minX, minY, minZ, maxX, maxY, maxZ)) {
+            for (int x = minX; x < maxX; ++x) {
+                for (int y = minY; y < maxY; ++y) {
+                    for (int z = minZ; z < maxZ; ++z) {
+                        int id = this.getBlockId(x, y, z);
+
+                        if ((Block.fire != null && id == Block.fire.blockID)
+                                || (Block.lavaMoving != null && id == Block.lavaMoving.blockID)
+                                || (Block.lavaStill != null && id == Block.lavaStill.blockID)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
         return false;
     }
 
-    /**
-     * Vanilla 1.5.2 World.handleMaterialAcceleration — scans every block
-     * intersecting {@code aabb}, and for each one whose block material
-     * equals {@code material}, nudges {@code entity}'s motion in the
-     * direction of the liquid's flow.  Called from {@code Entity.handleWaterMovement}
-     * and {@code Entity.handleLavaMovement}.  Returns true if any matching
-     * block was found.
-     *
-     * <p>This is the exact algorithm from vanilla 1.5.2, needed so FC's
-     * canonical Entity.moveEntity recognizes entities as being in water/
-     * lava for drag, buoyancy, and flow-push physics.</p>
-     */
     /**
      * Vanilla 1.5.2 World.func_85174_u — returns true if the block at
      * (x,y,z) has a full-cube collision box (average AABB edge length
@@ -134,27 +167,51 @@ public abstract class World implements IBlockAccess {
         return false;
     }
 
+    // 1.5.2 World.handleMaterialAcceleration (vanilla/server World.java:2158) —
+    // frozen Entity.handleWaterMovement (Entity.java:1081) calls it every tick;
+    // accumulates the fluid flow vector below the fluid surface and pushes the
+    // entity's motion by 0.014 per normalized component (water-stream transport).
     public boolean handleMaterialAcceleration(AxisAlignedBB aabb, Material material, Entity entity) {
-        int minX = (int) Math.floor(aabb.minX);
-        int maxX = (int) Math.floor(aabb.maxX + 1.0D);
-        int minY = (int) Math.floor(aabb.minY);
-        int maxY = (int) Math.floor(aabb.maxY + 1.0D);
-        int minZ = (int) Math.floor(aabb.minZ);
-        int maxZ = (int) Math.floor(aabb.maxZ + 1.0D);
-        for (int x = minX; x < maxX; ++x) {
-            for (int y = minY; y < maxY; ++y) {
-                for (int z = minZ; z < maxZ; ++z) {
-                    int id = getBlockId(x, y, z);
-                    if (id <= 0) continue;
-                    Block block = Block.blocksList[id];
-                    if (block == null) continue;
-                    if (block.blockMaterial == material) {
-                        return true;
+        int minX = MathHelper.floor_double(aabb.minX);
+        int maxX = MathHelper.floor_double(aabb.maxX + 1.0D);
+        int minY = MathHelper.floor_double(aabb.minY);
+        int maxY = MathHelper.floor_double(aabb.maxY + 1.0D);
+        int minZ = MathHelper.floor_double(aabb.minZ);
+        int maxZ = MathHelper.floor_double(aabb.maxZ + 1.0D);
+
+        if (!this.checkChunksExist(minX, minY, minZ, maxX, maxY, maxZ)) {
+            return false;
+        } else {
+            boolean foundMatch = false;
+            Vec3 flowVec = this.getWorldVec3Pool().getVecFromPool(0.0D, 0.0D, 0.0D);
+
+            for (int x = minX; x < maxX; ++x) {
+                for (int y = minY; y < maxY; ++y) {
+                    for (int z = minZ; z < maxZ; ++z) {
+                        Block block = Block.blocksList[this.getBlockId(x, y, z)];
+
+                        if (block != null && block.blockMaterial == material) {
+                            double fluidTop = (double)((float)(y + 1) - BlockFluid.getFluidHeightPercent(this.getBlockMetadata(x, y, z)));
+
+                            if ((double)maxY >= fluidTop) {
+                                foundMatch = true;
+                                block.velocityToAddToEntity(this, x, y, z, entity, flowVec);
+                            }
+                        }
                     }
                 }
             }
+
+            if (flowVec.lengthVector() > 0.0D && entity.func_96092_aw()) {
+                flowVec = flowVec.normalize();
+                double push = 0.014D;
+                entity.motionX += flowVec.xCoord * push;
+                entity.motionY += flowVec.yCoord * push;
+                entity.motionZ += flowVec.zCoord * push;
+            }
+
+            return foundMatch;
         }
-        return false;
     }
 
     /**
@@ -249,7 +306,34 @@ public abstract class World implements IBlockAccess {
 
     public void notifyBlocksOfNeighborChange(int x, int y, int z, int blockID) {}
 
-    public void notifyBlocksOfNeighborChange(int x, int y, int z, int blockID, int excludedSide) {}
+    // 1.5.2 World.notifyBlocksOfNeighborChange(x,y,z,id,side) (vanilla/server World.java:708) —
+    // FCBlockRedstoneRepeater.java:69-84 post-rotation redstone cleanup; notifies the
+    // 6 neighbors except the excluded side (notifyBlockOfNeighborChange is real via WorldBridge).
+    public void notifyBlocksOfNeighborChange(int x, int y, int z, int blockID, int excludedSide) {
+        if (excludedSide != 4) {
+            this.notifyBlockOfNeighborChange(x - 1, y, z, blockID);
+        }
+
+        if (excludedSide != 5) {
+            this.notifyBlockOfNeighborChange(x + 1, y, z, blockID);
+        }
+
+        if (excludedSide != 0) {
+            this.notifyBlockOfNeighborChange(x, y - 1, z, blockID);
+        }
+
+        if (excludedSide != 1) {
+            this.notifyBlockOfNeighborChange(x, y + 1, z, blockID);
+        }
+
+        if (excludedSide != 2) {
+            this.notifyBlockOfNeighborChange(x, y, z - 1, blockID);
+        }
+
+        if (excludedSide != 3) {
+            this.notifyBlockOfNeighborChange(x, y, z + 1, blockID);
+        }
+    }
 
     public void notifyBlockOfNeighborChange(int x, int y, int z, int blockID) {}
 
@@ -297,26 +381,91 @@ public abstract class World implements IBlockAccess {
 
     public void setLightValue(EnumSkyBlock enumSkyBlock, int x, int y, int z, int lightValue) {}
 
+    // 1.5.2 World.getLightBrightness (vanilla/server World.java:1018) — frozen
+    // Entity.getBrightness → EntityMob/EntityAnimal.getBlockPathWeight wander/flee
+    // scoring; light value mapped through the provider's brightness curve.
     public float getLightBrightness(int x, int y, int z) {
-        return 0;
+        if (provider == null) return 0;
+        return provider.lightBrightnessTable[this.getBlockLightValue(x, y, z)];
     }
 
     public int getLightBrightnessForSkyBlocks(int x, int y, int z, int lightValue) {
         return 0;
     }
 
+    // 1.5.2 World.GetBlockNaturalLightValue (BTW-patched vanilla/server World.java:4704) —
+    // saved sky light with the current skylight subtraction applied.
     public int GetBlockNaturalLightValue(int i, int j, int k) {
-        return 0;
+        return GetBlockNaturalLightValue_do(i, j, k, true, skylightSubtracted);
     }
 
+    // 1.5.2 World.GetBlockNaturalLightValueMaximum (vanilla/server World.java:4709) —
+    // FCBlockFarmland.java:228 crop growth gate, FCBlockGrass/FCBlockDirtSlab/
+    // FCBlockTallGrass grass spread, FCTileEntityUnfiredBrick.java:109 brick drying.
+    // Saved sky light with zero skylight subtraction (works under glass/leaves/overhangs).
     public int GetBlockNaturalLightValueMaximum(int i, int j, int k) {
-        // Returns the maximum natural (sky) light the block can receive.
-        // If the block can see the sky, it gets full sunlight (15).
-        return canBlockSeeTheSky(i, j, k) ? 15 : 0;
+        return GetBlockNaturalLightValue_do(i, j, k, true, 0);
     }
 
+    // 1.5.2 World.GetNaturalLightBrightness (vanilla/server World.java:4714)
     public float GetNaturalLightBrightness(int i, int j, int k) {
-        return 0;
+        if (provider == null) return 0;
+        return provider.lightBrightnessTable[GetBlockNaturalLightValue(i, j, k)];
+    }
+
+    // 1.5.2 World.GetBlockNaturalLightValue_do (vanilla/server World.java:4719) —
+    // version of getBlockLightValue_do modified to only consider natural light,
+    // propagating through neighbors for non-opaque blocks.
+    private int GetBlockNaturalLightValue_do(int i, int j, int k, boolean bConsiderNeighbors, int iSkylightToSubtract) {
+        if (i >= -30000000 && k >= -30000000 && i < 30000000 && k < 30000000) {
+            if (bConsiderNeighbors) {
+                int iBlockID = getBlockId(i, j, k);
+
+                if (iBlockID >= 0 && iBlockID < Block.useNeighborBrightness.length
+                        && Block.useNeighborBrightness[iBlockID]) {
+                    int iNeighbor1 = GetBlockNaturalLightValue_do(i, j + 1, k, false, iSkylightToSubtract);
+                    int iNeighbor2 = GetBlockNaturalLightValue_do(i + 1, j, k, false, iSkylightToSubtract);
+                    int iNeighbor3 = GetBlockNaturalLightValue_do(i - 1, j, k, false, iSkylightToSubtract);
+                    int iNeighbor4 = GetBlockNaturalLightValue_do(i, j, k + 1, false, iSkylightToSubtract);
+                    int iNeighbor5 = GetBlockNaturalLightValue_do(i, j, k - 1, false, iSkylightToSubtract);
+
+                    if (iNeighbor2 > iNeighbor1) {
+                        iNeighbor1 = iNeighbor2;
+                    }
+
+                    if (iNeighbor3 > iNeighbor1) {
+                        iNeighbor1 = iNeighbor3;
+                    }
+
+                    if (iNeighbor4 > iNeighbor1) {
+                        iNeighbor1 = iNeighbor4;
+                    }
+
+                    if (iNeighbor5 > iNeighbor1) {
+                        iNeighbor1 = iNeighbor5;
+                    }
+
+                    return iNeighbor1;
+                }
+            }
+
+            if (j < 0) {
+                return 0;
+            } else {
+                if (j >= 256) {
+                    j = 255;
+                }
+
+                Chunk chunk = this.getChunkFromChunkCoords(i >> 4, k >> 4);
+
+                i &= 15;
+                k &= 15;
+
+                return chunk.GetBlockNaturalLightValue(i, j, k, iSkylightToSubtract);
+            }
+        } else {
+            return 15;
+        }
     }
 
     // --- Height methods ---
@@ -483,8 +632,34 @@ public abstract class World implements IBlockAccess {
         return new ArrayList();
     }
 
+    // 1.5.2 World.getCollidingBlockBounds (vanilla/server World.java:1511) — frozen
+    // Entity.pushOutOfBlocks (Entity.java:2040) and move-to-free-space (Entity.java:1831);
+    // block collision boxes only, no entity boxes (uses a local list instead of
+    // vanilla's shared collidingBoundingBoxes field, matching the bridge style).
     public List getCollidingBlockBounds(AxisAlignedBB aabb) {
-        return new ArrayList();
+        List list = new ArrayList();
+        int minX = MathHelper.floor_double(aabb.minX);
+        int maxX = MathHelper.floor_double(aabb.maxX + 1.0D);
+        int minY = MathHelper.floor_double(aabb.minY);
+        int maxY = MathHelper.floor_double(aabb.maxY + 1.0D);
+        int minZ = MathHelper.floor_double(aabb.minZ);
+        int maxZ = MathHelper.floor_double(aabb.maxZ + 1.0D);
+
+        for (int x = minX; x < maxX; ++x) {
+            for (int z = minZ; z < maxZ; ++z) {
+                if (this.blockExists(x, 64, z)) {
+                    for (int y = minY - 1; y < maxY; ++y) {
+                        Block block = Block.blocksList[this.getBlockId(x, y, z)];
+
+                        if (block != null) {
+                            block.addCollisionBoxesToList(this, x, y, z, aabb, list, (Entity) null);
+                        }
+                    }
+                }
+            }
+        }
+
+        return list;
     }
 
     public abstract boolean checkNoEntityCollision(AxisAlignedBB aabb);
@@ -535,8 +710,11 @@ public abstract class World implements IBlockAccess {
         return false;
     }
 
+    // 1.5.2 World.isBlockHighHumidity (vanilla/server World.java:3863) —
+    // FCBlockFire.java:94,216,245,363 fire spread/burn-rate humidity resistance.
     public boolean isBlockHighHumidity(int x, int y, int z) {
-        return false;
+        BiomeGenBase biome = this.getBiomeGenForCoords(x, z);
+        return biome != null && biome.isHighHumidity();
     }
 
     public float getRainStrength(float partialTicks) {
@@ -559,7 +737,16 @@ public abstract class World implements IBlockAccess {
         return false;
     }
 
+    // 1.5.2 World.IsPrecipitatingAtPos(i,k) (BTW-patched vanilla/server World.java:5191) —
+    // FCEntityWindMillVertical.java:634 rain-over-rotor scan and FCEntityWindMill.java:283
+    // storm damage; column check without sky visibility (isRaining real via WorldBridge).
     public boolean IsPrecipitatingAtPos(int i, int k) {
+        if (isRaining()) {
+            BiomeGenBase biome = getBiomeGenForCoords(i, k);
+
+            return biome != null && (biome.getEnableSnow() || biome.CanRainInBiome());
+        }
+
         return false;
     }
 
@@ -583,8 +770,13 @@ public abstract class World implements IBlockAccess {
         return 0;
     }
 
+    // 1.5.2 World.getMoonPhase (vanilla/server World.java:1576) — FCEntityWolf.
+    // IsWildAndHostile (phase 0 = full moon) and FCEntityAIWolfHowl howl trigger;
+    // delegates to the provider's (time/24000 % 8) formula. WorldBridge overrides
+    // with the live level's moon phase (same numbering).
     public int getMoonPhase() {
-        return 0;
+        if (provider == null) return 0;
+        return provider.getMoonPhase(this.getWorldTime());
     }
 
     public int calculateSkylightSubtracted(float partialTicks) {
@@ -641,20 +833,40 @@ public abstract class World implements IBlockAccess {
         return 256;
     }
 
-    public void setItemData(String key, WorldSavedData data) {}
+    // 1.5.2 World.setItemData/loadItemData/getUniqueDataId (vanilla/server World.java:3873-3894) —
+    // FCItemEmptyMap.java:41,45 map crafting; delegates to mapStorage exactly like
+    // vanilla (WorldBridge installs a live MapStorage backed by the MC level).
+    public void setItemData(String key, WorldSavedData data) {
+        if (this.mapStorage != null) {
+            this.mapStorage.setData(key, data);
+        }
+    }
 
     public WorldSavedData loadItemData(Class dataClass, String key) {
-        return null;
+        return this.mapStorage != null ? this.mapStorage.loadData(dataClass, key) : null;
     }
 
     public int getUniqueDataId(String key) {
-        return 0;
+        return this.mapStorage != null ? this.mapStorage.getUniqueDataId(key) : 0;
     }
 
     // --- Explosion ---
 
+    // 1.5.2 World.NewExplosionNoFX (BTW-patched vanilla/server World.java:4902) —
+    // FCBlockLogSmouldering.Explode (FCBlockLogSmouldering.java:389); copy of
+    // newExplosion() that suppresses the audio/visual effects. WorldBridge
+    // overrides with a modern-engine explosion without client FX.
     public Explosion NewExplosionNoFX(Entity entity, double x, double y, double z, float strength, boolean isFlaming, boolean isSmoking) {
-        return null;
+        Explosion explosion = new Explosion(this, entity, x, y, z, strength);
+
+        explosion.isFlaming = isFlaming;
+        explosion.isSmoking = isSmoking;
+        explosion.m_bSuppressFX = true;
+
+        explosion.doExplosionA();
+        explosion.doExplosionB(false); // false tells individual block destruction effects not to play
+
+        return explosion;
     }
 
     // --- Random seed ---
@@ -725,7 +937,31 @@ public abstract class World implements IBlockAccess {
         return 0;
     }
 
-    public void NotifyNearbyAnimalsOfPlayerBlockAddOrRemove(EntityPlayer player, Block block, int i, int j, int k) {}
+    // 1.5.2 World.NotifyNearbyAnimalsOfPlayerBlockAddOrRemove (vanilla/server World.java:4678) —
+    // FCItemPlacesAsBlock.java:111, FCItemBlockAestheticNonOpaque.java:260,
+    // FCItemBlockCompanionCube.java:203, FCItemBlockSlab.java:93; hardcore-animal
+    // spooking on player block placement (entity query real via WorldBridge).
+    public void NotifyNearbyAnimalsOfPlayerBlockAddOrRemove(EntityPlayer player, Block block, int i, int j, int k) {
+        if (!isRemote && block.blockMaterial.blocksMovement() && !player.capabilities.isCreativeMode) {
+            double dXBlock = (double)i + 0.5D;
+            double dYBlock = (double)j + 0.5D;
+            double dZBlock = (double)k + 0.5D;
+
+            AxisAlignedBB targetBox = AxisAlignedBB.getAABBPool().getAABB(dXBlock - 8D, dYBlock - 4D, dZBlock - 8D, dXBlock + 8D, dYBlock + 4D, dZBlock + 8D);
+
+            List animalList = this.getEntitiesWithinAABB(EntityAnimal.class, targetBox);
+
+            java.util.Iterator animalIterator = animalList.iterator();
+
+            while (animalIterator.hasNext()) {
+                EntityAnimal tempAnimal = (EntityAnimal)animalIterator.next();
+
+                if (!tempAnimal.isLivingDead) {
+                    tempAnimal.OnNearbyPlayerBlockAddOrRemove(player);
+                }
+            }
+        }
+    }
 
     // --- BTW-added: Sun/moon ---
 
@@ -766,7 +1002,16 @@ public abstract class World implements IBlockAccess {
         return m_LootingBeaconLocationList;
     }
 
+    // 1.5.2 World.GetAmbientLootingEffectAtLocation (BTW-patched vanilla/server World.java:4883) —
+    // frozen EntityLiving.GetAmbientLootingModifier (EntityLiving.java:3423) on every mob death;
+    // the beacon location list is real via WorldBridge.initFcDataHolders.
     public int GetAmbientLootingEffectAtLocation(int iLocI, int iLocJ, int iLocK) {
+        FCBeaconEffectLocationList lootingList = GetLootingBeaconLocationList();
+
+        if (lootingList != null) {
+            return lootingList.GetMostPowerfulBeaconEffectForLocation(iLocI, iLocK);
+        }
+
         return 0;
     }
 
@@ -906,7 +1151,34 @@ public abstract class World implements IBlockAccess {
 
     // --- Block density ---
 
-    public float getBlockDensity(Vec3 pos, AxisAlignedBB bb) { return 0.0F; }
+    // 1.5.2 World.getBlockDensity (vanilla/server World.java:2308) — FCExplosionMining.java:173
+    // exposure fraction for mining charge entity damage; samples rays from AABB points
+    // to the explosion center via rayTraceBlocks (real via WorldBridge).
+    public float getBlockDensity(Vec3 pos, AxisAlignedBB bb) {
+        double stepX = 1.0D / ((bb.maxX - bb.minX) * 2.0D + 1.0D);
+        double stepY = 1.0D / ((bb.maxY - bb.minY) * 2.0D + 1.0D);
+        double stepZ = 1.0D / ((bb.maxZ - bb.minZ) * 2.0D + 1.0D);
+        int unblocked = 0;
+        int total = 0;
+
+        for (float fx = 0.0F; fx <= 1.0F; fx = (float)((double)fx + stepX)) {
+            for (float fy = 0.0F; fy <= 1.0F; fy = (float)((double)fy + stepY)) {
+                for (float fz = 0.0F; fz <= 1.0F; fz = (float)((double)fz + stepZ)) {
+                    double sampleX = bb.minX + (bb.maxX - bb.minX) * (double)fx;
+                    double sampleY = bb.minY + (bb.maxY - bb.minY) * (double)fy;
+                    double sampleZ = bb.minZ + (bb.maxZ - bb.minZ) * (double)fz;
+
+                    if (this.rayTraceBlocks(this.getWorldVec3Pool().getVecFromPool(sampleX, sampleY, sampleZ), pos) == null) {
+                        ++unblocked;
+                    }
+
+                    ++total;
+                }
+            }
+        }
+
+        return (float)unblocked / (float)total;
+    }
 
     // --- Tile entity collection ---
 

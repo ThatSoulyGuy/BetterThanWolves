@@ -231,6 +231,21 @@ public class ProxyItem extends Item implements LegacyProxyItem {
     @Override
     public boolean hurtEnemy(ItemStack stack, LivingEntity target, LivingEntity attacker) {
         if (fc() == null) return super.hurtEnemy(stack, target, attacker);
+        // 1.5.2 flow damages the held stack in place (FCItemTool.hitEntity →
+        // stack.damageItem(2, attacker)); route through PlayerBridge's live
+        // inventory stack + writeback so the durability loss isn't discarded
+        // on a throwaway toFcStack copy (same pattern as finishUsingItem).
+        if (attacker instanceof Player player && !player.level().isClientSide()) {
+            PlayerBridge pb = PlayerBridge.getOrCreate(player);
+            pb.syncFromReal();
+            btw.modern.ItemStack fcStack = pb.getCurrentEquippedItem();
+            if (fcStack != null) {
+                btw.modern.EntityLiving fcTarget = LivingEntityBridge.wrapLiving(target);
+                boolean result = fc().hitEntity(fcStack, fcTarget, pb);
+                pb.syncInventoryToReal();
+                return result;
+            }
+        }
         btw.modern.ItemStack fcStack = ItemStackHelper.toFcStack(stack);
         if (fcStack != null) {
             btw.modern.EntityLiving fcTarget = LivingEntityBridge.wrapLiving(target);
