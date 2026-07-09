@@ -52,8 +52,16 @@ public final class FCEnvHurtGuard {
             UPDATING.remove();
         }
         // Only undo SUFFOCATION: still alive, lost health this tick, and eye is in a solid block.
-        if (fc.health > 0 && fc.health < hpBefore && eyeInSuffocatingBlock(fc, mcProxy)) {
-            fc.health = hpBefore;
+        if (eyeInSuffocatingBlock(fc, mcProxy)) {
+            // Spurious suffocation sets BOTH a health drain and hurtTime. hurtTime syncs to the
+            // client (FCEntityStateCodec -> writeEntityToNBT/HurtTime) and drives FC's
+            // RenderLiving dark-red damage pass (glColor4f(b,0,0,0.4)); clearing it here removes
+            // the stuck-on red tint. Health is only reverted when actually drained and non-lethal
+            // (so fall/lava and real deaths are untouched -- see class javadoc).
+            fc.hurtTime = 0;
+            if (fc.health > 0 && fc.health < hpBefore) {
+                fc.health = hpBefore;
+            }
         }
     }
 

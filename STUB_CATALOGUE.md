@@ -1116,3 +1116,17 @@ because a mob hurting another entity passes the victim (!= updater, still flashe
 combat runs outside onUpdate. Health is still reverted only for genuine suffocation (surgical,
 in runOnUpdate), so fall/lava damage is untouched. Verified: run 16:47 shows 0 KILLED removals
 (only DISCARDED despawns) and [MOB-DMG]=0.
+
+## 2026-07-09 (v) Fix stuck dark-red tint on FC mobs (synced hurtTime -> FC RenderLiving)
+
+The red survived (u) because it was never the MC hurt overlay -- FCEntityRenderer renders FC mobs
+with OverlayTexture.NO_OVERLAY. The dark red is FC's own RenderLiving damage pass
+(RenderLiving.java:184-186: if hurtTime>0||deathTime>0 -> glColor4f(brightness,0,0,0.4)), baked
+into the captured vertex colors. Source: FC's spurious suffocation sets fcEntity.hurtTime=10 every
+tick; (t) reverted health but NOT hurtTime, so the server value stayed high and rode the ongoing
+FCEntityStateSync (BTWNetwork.broadcastFCEntityState -> FCEntityStateCodec.writeState ->
+writeEntityToNBT "HurtTime") to the client fcEntity, which the FC renderer reads. Fix: in
+FCEnvHurtGuard.runOnUpdate, clear fcEntity.hurtTime=0 whenever the mob is (falsely) suffocating --
+runs before broadcastFCEntityState in all three proxy ticks, so the client gets HurtTime=0.
+deathTime left alone (real death animations must still show). The setEntityState(2) suppression
+stays for the spurious MC hurt SOUND (renderer ignores MC overlay).
