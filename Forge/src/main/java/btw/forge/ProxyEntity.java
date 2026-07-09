@@ -301,12 +301,21 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
                 }
             }
         }
-        syncFromFc();
-        // Periodically broadcast FC entity state (NBT + DataWatcher) to
-        // tracking clients so dynamic state like windmill rotation speed
-        // stays in sync after storms / overpower events.
-        if (!level().isClientSide && fcEntity != null && (tickCount % 10) == 0) {
-            BTWNetwork.broadcastFCEntityState(this, fcEntity);
+        // Position/rotation writeback is SERVER-ONLY. On the client the modern
+        // entity's position is driven by the server via the entity tracker + vanilla
+        // interpolation (lerp); writing the client-side FC re-simulation back with
+        // setPos/setYRot every tick fought that interpolation and caused rubber-banding
+        // when entities move or turn. onUpdate still runs client-side (above) so FC
+        // animation state (e.g. windmill/waterwheel rotation) keeps advancing; only the
+        // authoritative position/rotation stays server-driven. Mirrors the mob proxies.
+        if (!level().isClientSide) {
+            syncFromFc();
+            // Periodically broadcast FC entity state (NBT + DataWatcher) to
+            // tracking clients so dynamic state like windmill rotation speed
+            // stays in sync after storms / overpower events.
+            if (fcEntity != null && (tickCount % 10) == 0) {
+                BTWNetwork.broadcastFCEntityState(this, fcEntity);
+            }
         }
         super.tick();
     }

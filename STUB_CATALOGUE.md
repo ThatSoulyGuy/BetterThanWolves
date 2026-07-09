@@ -25,6 +25,25 @@ FOUND a separate UNDER-application: PlayerBridge.pendingMeleeDamageModifier was
 stored (PlayerMixin.attack@HEAD = GetMeleeDamageModifier()) but NEVER consumed —
 FC melee damage scaling was a no-op.
 
+## 2026-07-09 (d) — FC entity movement rubber-banding
+
+Symptom: FC entities rubber-band when they move or turn. Root cause: generic
+ProxyEntity.tick() ran the full FC simulation (syncToFc -> onUpdate -> syncFromFc)
+and wrote position/rotation back via setPos/setYRot UNCONDITIONALLY — including on
+the CLIENT. So the client re-simulated FC physics and overwrote the server-driven,
+vanilla-interpolated (lerp) position every tick; the two fought = rubber-band. The
+developer had even noticed the client re-sim (createDummyClientWorld comment about
+entities "falling through the floor" client-side) and tried to fix it by making
+client FC physics MATCH the server — impossible to do perfectly, hence the residual
+banding. The mob proxies (ProxyMob/Animal/PathfinderMob) already gate this correctly;
+only generic ProxyEntity (windmills, waterwheels, moving platforms, projectiles,
+urns, mining charges — exactly the "turn or move" entities) didn't. Fix: gate the
+position/rotation writeback (syncFromFc) + FC-state broadcast to server-only. onUpdate
+still runs client-side for animation (windmill/waterwheel rotation counters); the
+authoritative position/rotation is server-driven + lerp-interpolated. If mobs still
+show subtle banding, the next suspects are the server-side NaN-sanitization snap-back
+(ProxyMob) and the EntityType updateInterval.
+
 ## 2026-07-09 (c) — block orientation-on-placement wired (axle mesh bug)
 
 Symptom: horizontal axle mesh looked scrambled. Root cause: ProxyBlock had NO
