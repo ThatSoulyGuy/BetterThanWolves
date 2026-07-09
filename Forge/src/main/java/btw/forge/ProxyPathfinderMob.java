@@ -198,6 +198,7 @@ public class ProxyPathfinderMob extends PathfinderMob
 
             try {
                 fcEntity.onUpdate();
+                PossessionDiagnostics.poll(this, fcEntity);
             } catch (Throwable e) {
                 if (tickCount % 100 == 0) {
                     LOGGER.warn("FC entity {} onUpdate() threw:", fcEntity.getClass().getSimpleName(), e);

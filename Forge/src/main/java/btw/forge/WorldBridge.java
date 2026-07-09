@@ -1029,8 +1029,16 @@ public class WorldBridge extends btw.modern.World {
     public boolean spawnEntityInWorld(btw.modern.Entity entity) {
         if (entity == null) return false;
         try {
-            LOGGER.info("spawnEntityInWorld: {} at ({}, {}, {})",
-                    entity.getClass().getSimpleName(), entity.posX, entity.posY, entity.posZ);
+            LOGGER.info("spawnEntityInWorld: {} at ({}, {}, {}) dim={}",
+                    entity.getClass().getSimpleName(), entity.posX, entity.posY, entity.posZ,
+                    level.dimension().location());
+            // DIAGNOSTIC: overworld ghasts come only from possessed-squid conversion.
+            // A [GHAST-SPAWN] in dim=minecraft:overworld confirms the possession chain
+            // fired -- correlate with the BTW-Possession log to find where it seeded.
+            if ("FCEntityGhast".equals(entity.getClass().getSimpleName())) {
+                LOGGER.warn("[GHAST-SPAWN] FCEntityGhast (squid->ghast conversion) dim={} pos=({}, {}, {})",
+                        level.dimension().location(), entity.posX, entity.posY, entity.posZ);
+            }
             net.minecraft.world.entity.Entity proxy =
                     EntityProxyFactory.createProxy(entity, level);
             if (proxy == null) {

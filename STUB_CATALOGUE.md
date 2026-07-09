@@ -27,12 +27,31 @@ synced each tick by `BTWNetwork.PenaltySync` (`clientHealthPenalty`/`clientHunge
 `clientFatPenalty`/`clientGloomLevel`). Client prediction and server correction now
 agree, so the debuff is felt consistently.
 
-Note (related, not a defect): "random ghast noises" while moving around are the FC
-Infernal Enchanter's approach "whoosh" (`mob.ghast.fireball` -> `GHAST_SHOOT`, correct
-mapping). It fires once per entry into its 4.5-block radius; running/jumping near it
-re-triggers it. This is authentic BTW behavior. The client-auth movement jitter above
-could push the server player position across the 4.5 boundary spuriously, so this fix
-should also reduce the apparent randomness.
+## 2026-07-09 (f) "Random ghast_hurt in a fresh world" — instrumentation
+
+Symptom: in a fresh world (nothing built), `entity.ghast.hurt` plays at random.
+
+Trace: `ghast_hurt` <- `mob.ghast.scream` (SoundMapping). No FC entity/mob uses it as a
+sound; the block emitters need structures. The real source is BTW's possessed-squid ->
+overworld-ghast mechanic: a fully-possessed squid leaps and has a 25% chance to convert
+into an `FCEntityGhast` (`FCEntitySquid:686`); that overworld ghast idle-moans but
+screams `mob.ghast.scream` (`GHAST_HURT`) when hurt (`EntityGhast.getHurtSound`).
+
+Key gate: possession never self-seeds in the overworld — `EntityCreature.HandlePossession:494`
+only spontaneously possesses when `provider.dimensionId == -1` (Nether). The overworld
+needs a seed (a possessed creature arriving/dying, a portal). The bridge's dimension
+wiring is correct (`WorldBridge:87-104`, overworld=0), so static analysis can't explain a
+fresh, never-Nether world producing ghasts — it needs a runtime trace.
+
+Instrumentation added (bridge-layer, diagnostic only — NOT a behavior change):
+`PossessionDiagnostics.poll(this, fcEntity)` after `onUpdate()` in ProxyMob/ProxyAnimal/
+ProxyPathfinderMob reads `GetPossessionLevel()` reflectively (shadowed frozen member) and
+logs every level transition with dimension + position (`[BTW-Possession]`). `WorldBridge.
+spawnEntityInWorld` now logs the dimension and flags `[GHAST-SPAWN]` for each FCEntityGhast.
+A `0->1` possession or `[GHAST-SPAWN]` in `dim=minecraft:overworld` in a never-Nether world
+= confirmed over-seeding bug; the log then localizes where it seeded. (Earlier guess that
+the noises were the Infernal Enchanter's `GHAST_SHOOT` "whoosh" applies only to worlds that
+have one placed — a different sound from the fresh-world `GHAST_HURT`.)
 
 ## 2026-07-09 Double-application sweep (movement "super fast" bug)
 

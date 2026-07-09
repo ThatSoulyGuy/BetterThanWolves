@@ -280,6 +280,7 @@ public class ProxyAnimal extends Animal
 
             try {
                 fcEntity.onUpdate();
+                PossessionDiagnostics.poll(this, fcEntity);
             } catch (Throwable e) {
                 String key = fcEntity.getClass().getSimpleName() + "|" + e.getClass().getName();
                 if (LOGGED_TICK_FAILURES.add(key)) {
