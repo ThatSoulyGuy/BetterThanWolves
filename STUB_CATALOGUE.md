@@ -1028,3 +1028,27 @@ FCEntityLightningBolt redirect bolts to it, an iron lightning rod predating vani
   created eagerly by ProxyBlock.newBlockEntity so it's populated immediately). Falls through to
   the vanilla chest if no spot is found, so the player is never left empty-handed. Untested
   in-game (needs a bonus-chest world). Registered in the mixin config's common list.
+
+## 2026-07-09 (q) Two systemic FC block-render fixes (workflow-diagnosed)
+
+A 4-investigator workflow root-caused the wicker-basket scrambled mesh. Two distinct defects:
+
+- GL11 STATIC MATRIX LEAK (systemic — could scramble ANY FC block): btw.modern.Tessellator
+  is thread-local (render thread captures entity/TESR geometry; chunk-builder worker threads
+  capture block-model geometry) and consults GL11's matrix per vertex. But GL11's matrix stack,
+  tracking flag, color and normal were process-global `static`. A render-thread FC TESR (the
+  basket's own animated lid, windmill, water wheel) enables tracking and pushes an animation
+  matrix; a CONCURRENT worker-thread block capture saw matrixTrackingEnabled==true and ran the
+  block's box vertices through that foreign matrix, baking scrambled positions into the chunk.
+  The basket looked "fixed" only by timing luck. Fix: made GL11 state thread-local (per-thread
+  State, mirroring Tessellator), so worker-thread block captures never observe the render
+  thread's matrix. Belt-and-suspenders: FCBakedModel now calls GL11.disableMatrixTracking()
+  before each block startCapturing(). This matches the note left after the axle fix (aa978b8).
+
+- INVISIBLE BASKET LID (missing color-multiplier emit): FCBlockBasketWicker draws its lid/handle
+  /interior via RenderAsBlockWithColorMultiplier, but that path was a no-op stub at two levels of
+  the port: FCUtilsPrimitiveGeometric's no-color-arg variant (should derive the tint from
+  block.colorMultiplier and delegate to the 8-arg — restored, faithful to FC) and AxisAlignedBB's
+  8-arg variant (never overridden -> inherited no-op; added, mirrors RenderAsBlock but tints via
+  setColorOpaque_F). The base box rendered via RenderAsBlock, which is why only the lid vanished.
+  The known-good spike/lightning rod use only RenderAsBlock, so they were unaffected.

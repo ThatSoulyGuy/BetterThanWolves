@@ -165,6 +165,12 @@ public class FCBakedModel implements BakedModel {
 
         for (int meta = 0; meta < 16; meta++) {
             btw.modern.Tessellator tess = btw.modern.Tessellator.instance;
+            // Block-model capture must NOT apply any GL matrix transform: block
+            // geometry is emitted in block-local coords via render bounds. GL11's
+            // matrix state is thread-local, but a same-thread FC TESR could leave
+            // tracking enabled — disable it here so no foreign/animation matrix can
+            // scramble the block's vertices (see GL11 javadoc).
+            btw.modern.GL11.disableMatrixTracking();
             tess.setTranslation(0, 0, 0);
             tess.setNormal(0, 1, 0);
             tess.setColorOpaque_F(1, 1, 1);
@@ -381,6 +387,9 @@ public class FCBakedModel implements BakedModel {
             btw.modern.RenderBlocks renderer = new btw.modern.RenderBlocks();
             renderer.blockAccess = realAccess;
 
+            // See doCaptureAndBuild: block capture emits block-local geometry, so
+            // no GL matrix transform may apply. Disable tracking on this thread.
+            btw.modern.GL11.disableMatrixTracking();
             tess.setTranslation(0, 0, 0);
             tess.setNormal(0, 1, 0);
             tess.setColorOpaque_F(1, 1, 1);

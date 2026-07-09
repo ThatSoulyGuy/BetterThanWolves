@@ -373,6 +373,33 @@ public class AxisAlignedBB extends FCUtilsPrimitiveGeometric {
     }
 
     @Override
+    public boolean RenderAsBlockWithColorMultiplier(RenderBlocks renderBlocks, Block block, int i, int j, int k,
+            float fRed, float fGreen, float fBlue) {
+        // Mirrors RenderAsBlock but tints the faces with the supplied color multiplier.
+        // Was inherited as a no-op (FCUtilsPrimitiveGeometric stub), so any FC block that
+        // draws boxes through the color-multiplier path (e.g. the wicker basket lid/handle
+        // /interior) emitted zero geometry and rendered invisible.
+        renderBlocks.setRenderBounds(minX, minY, minZ, maxX, maxY, maxZ);
+
+        int meta = 0;
+        if (renderBlocks.blockAccess != null) {
+            meta = renderBlocks.blockAccess.getBlockMetadata(i, j, k);
+        }
+
+        Tessellator t = Tessellator.instance;
+        t.setColorOpaque_F(fRed, fGreen, fBlue);
+
+        renderBlocks.renderFaceYNeg(block, i, j, k, renderBlocks.getBlockIconFromSideAndMetadata(block, 0, meta));
+        renderBlocks.renderFaceYPos(block, i, j, k, renderBlocks.getBlockIconFromSideAndMetadata(block, 1, meta));
+        renderBlocks.renderFaceZNeg(block, i, j, k, renderBlocks.getBlockIconFromSideAndMetadata(block, 2, meta));
+        renderBlocks.renderFaceZPos(block, i, j, k, renderBlocks.getBlockIconFromSideAndMetadata(block, 3, meta));
+        renderBlocks.renderFaceXNeg(block, i, j, k, renderBlocks.getBlockIconFromSideAndMetadata(block, 4, meta));
+        renderBlocks.renderFaceXPos(block, i, j, k, renderBlocks.getBlockIconFromSideAndMetadata(block, 5, meta));
+
+        return true;
+    }
+
+    @Override
     public boolean RenderAsBlockWithTexture(RenderBlocks renderBlocks, Block block, int i, int j, int k, Icon icon) {
         renderBlocks.setRenderBounds(minX, minY, minZ, maxX, maxY, maxZ);
 

@@ -10,6 +10,16 @@ package btw.modern;
  *
  * <p>Enable/disable, color, blend, and other GL state calls remain no-ops
  * since MC 1.20.1 uses its own rendering pipeline for these.</p>
+ *
+ * <p><b>Thread-local state:</b> the matrix stack, color, and normal are held
+ * per-thread. The {@link Tessellator} is itself thread-local (the render thread
+ * captures entity/tile-entity geometry while chunk-builder worker threads capture
+ * block-model geometry) and it consults this GL state <i>per vertex</i>. When this
+ * state was process-global {@code static}, a render-thread FC TESR that enabled
+ * matrix tracking and pushed an animation matrix (e.g. the animated wicker-basket
+ * lid) would contaminate a <i>concurrent</i> worker-thread block capture, baking
+ * that foreign transform into the block's box vertices — the "scrambled mesh"
+ * symptom. Making the state thread-local isolates the two capture pipelines.</p>
  */
 public class GL11 {
 
@@ -41,45 +51,58 @@ public class GL11 {
     public static final int GL_FOG = 0x0B60;
 
     // ================================================================
-    // Software matrix stack
+    // Software matrix stack (thread-local — see class javadoc)
     // ================================================================
 
     /** 4x4 matrix stored as float[16] in column-major order (OpenGL convention). */
     private static final int STACK_DEPTH = 32;
-    private static final float[][] matrixStack = new float[STACK_DEPTH][16];
-    private static int stackPointer = 0;
 
-    /** Whether matrix tracking is active (only during entity/TE rendering capture). */
-    private static boolean matrixTrackingEnabled = false;
+    /** Per-thread GL emulation state (matrix stack, tracking flag, color, normal). */
+    private static final class State {
+        final float[][] matrixStack = new float[STACK_DEPTH][16];
+        int stackPointer = 0;
+        boolean matrixTrackingEnabled = false;
+        float colorR = 1, colorG = 1, colorB = 1, colorA = 1;
+        float normalX = 0, normalY = 1, normalZ = 0;
 
-    static {
-        loadIdentity(matrixStack[0]);
+        State() {
+            loadIdentity(matrixStack[0]);
+        }
     }
 
-    /** Enable matrix tracking for entity rendering capture. */
+    private static final ThreadLocal<State> STATE = ThreadLocal.withInitial(State::new);
+
+    private static State s() {
+        return STATE.get();
+    }
+
+    /** Enable matrix tracking for entity rendering capture (this thread only). */
     public static void enableMatrixTracking() {
-        matrixTrackingEnabled = true;
-        stackPointer = 0;
-        loadIdentity(matrixStack[0]);
+        State st = s();
+        st.matrixTrackingEnabled = true;
+        st.stackPointer = 0;
+        loadIdentity(st.matrixStack[0]);
     }
 
     /** Disable matrix tracking (returns to no-op mode for block rendering). */
     public static void disableMatrixTracking() {
-        matrixTrackingEnabled = false;
+        s().matrixTrackingEnabled = false;
     }
 
     public static boolean isMatrixTrackingEnabled() {
-        return matrixTrackingEnabled;
+        return s().matrixTrackingEnabled;
     }
 
     /** Returns a copy of the current 4x4 matrix (column-major). */
     public static float[] getMatrix() {
-        return matrixStack[stackPointer].clone();
+        State st = s();
+        return st.matrixStack[st.stackPointer].clone();
     }
 
     /** Transforms a point (x,y,z) by the current matrix. Returns {x',y',z'}. */
     public static float[] transformPoint(float x, float y, float z) {
-        float[] m = matrixStack[stackPointer];
+        State st = s();
+        float[] m = st.matrixStack[st.stackPointer];
         float rx = m[0]*x + m[4]*y + m[8]*z  + m[12];
         float ry = m[1]*x + m[5]*y + m[9]*z  + m[13];
         float rz = m[2]*x + m[6]*y + m[10]*z + m[14];
@@ -88,7 +111,8 @@ public class GL11 {
 
     /** Returns true if the current matrix has a negative determinant (odd number of axis flips). */
     public static boolean hasNegativeDeterminant() {
-        float[] m = matrixStack[stackPointer];
+        State st = s();
+        float[] m = st.matrixStack[st.stackPointer];
         // 3x3 upper-left determinant (rotation+scale part)
         float det = m[0] * (m[5] * m[10] - m[6] * m[9])
                   - m[4] * (m[1] * m[10] - m[2] * m[9])
@@ -98,7 +122,8 @@ public class GL11 {
 
     /** Transforms a normal (x,y,z) by the current matrix (no translation). */
     public static float[] transformNormal(float nx, float ny, float nz) {
-        float[] m = matrixStack[stackPointer];
+        State st = s();
+        float[] m = st.matrixStack[st.stackPointer];
         float rx = m[0]*nx + m[4]*ny + m[8]*nz;
         float ry = m[1]*nx + m[5]*ny + m[9]*nz;
         float rz = m[2]*nx + m[6]*ny + m[10]*nz;
@@ -110,21 +135,24 @@ public class GL11 {
     // --- Matrix operations ---
 
     public static void glPushMatrix() {
-        if (!matrixTrackingEnabled) return;
-        if (stackPointer < STACK_DEPTH - 1) {
-            System.arraycopy(matrixStack[stackPointer], 0, matrixStack[stackPointer + 1], 0, 16);
-            stackPointer++;
+        State st = s();
+        if (!st.matrixTrackingEnabled) return;
+        if (st.stackPointer < STACK_DEPTH - 1) {
+            System.arraycopy(st.matrixStack[st.stackPointer], 0, st.matrixStack[st.stackPointer + 1], 0, 16);
+            st.stackPointer++;
         }
     }
 
     public static void glPopMatrix() {
-        if (!matrixTrackingEnabled) return;
-        if (stackPointer > 0) stackPointer--;
+        State st = s();
+        if (!st.matrixTrackingEnabled) return;
+        if (st.stackPointer > 0) st.stackPointer--;
     }
 
     public static void glTranslatef(float x, float y, float z) {
-        if (!matrixTrackingEnabled) return;
-        float[] m = matrixStack[stackPointer];
+        State st = s();
+        if (!st.matrixTrackingEnabled) return;
+        float[] m = st.matrixStack[st.stackPointer];
         m[12] += m[0]*x + m[4]*y + m[8]*z;
         m[13] += m[1]*x + m[5]*y + m[9]*z;
         m[14] += m[2]*x + m[6]*y + m[10]*z;
@@ -135,27 +163,29 @@ public class GL11 {
     }
 
     public static void glRotatef(float angle, float ax, float ay, float az) {
-        if (!matrixTrackingEnabled) return;
+        State st = s();
+        if (!st.matrixTrackingEnabled) return;
         float rad = (float) Math.toRadians(angle);
         float c = (float) Math.cos(rad);
-        float s = (float) Math.sin(rad);
+        float s2 = (float) Math.sin(rad);
         float len = (float) Math.sqrt(ax*ax + ay*ay + az*az);
         if (len < 0.0001f) return;
         ax /= len; ay /= len; az /= len;
         float t = 1 - c;
 
         float[] r = new float[16];
-        r[0]  = t*ax*ax + c;      r[4]  = t*ax*ay - s*az;  r[8]  = t*ax*az + s*ay;  r[12] = 0;
-        r[1]  = t*ax*ay + s*az;   r[5]  = t*ay*ay + c;     r[9]  = t*ay*az - s*ax;  r[13] = 0;
-        r[2]  = t*ax*az - s*ay;   r[6]  = t*ay*az + s*ax;  r[10] = t*az*az + c;     r[14] = 0;
-        r[3]  = 0;                 r[7]  = 0;               r[11] = 0;               r[15] = 1;
+        r[0]  = t*ax*ax + c;      r[4]  = t*ax*ay - s2*az;  r[8]  = t*ax*az + s2*ay;  r[12] = 0;
+        r[1]  = t*ax*ay + s2*az;  r[5]  = t*ay*ay + c;      r[9]  = t*ay*az - s2*ax;  r[13] = 0;
+        r[2]  = t*ax*az - s2*ay;  r[6]  = t*ay*az + s2*ax;  r[10] = t*az*az + c;      r[14] = 0;
+        r[3]  = 0;                 r[7]  = 0;                r[11] = 0;                r[15] = 1;
 
-        multiplyMatrix(matrixStack[stackPointer], r);
+        multiplyMatrix(st.matrixStack[st.stackPointer], r);
     }
 
     public static void glScalef(float sx, float sy, float sz) {
-        if (!matrixTrackingEnabled) return;
-        float[] m = matrixStack[stackPointer];
+        State st = s();
+        if (!st.matrixTrackingEnabled) return;
+        float[] m = st.matrixStack[st.stackPointer];
         m[0] *= sx; m[1] *= sx; m[2] *= sx;
         m[4] *= sy; m[5] *= sy; m[6] *= sy;
         m[8] *= sz; m[9] *= sz; m[10] *= sz;
@@ -166,8 +196,9 @@ public class GL11 {
     }
 
     public static void glLoadIdentity() {
-        if (!matrixTrackingEnabled) return;
-        loadIdentity(matrixStack[stackPointer]);
+        State st = s();
+        if (!st.matrixTrackingEnabled) return;
+        loadIdentity(st.matrixStack[st.stackPointer]);
     }
 
     public static void glMatrixMode(int mode) {}
@@ -179,15 +210,18 @@ public class GL11 {
     public static void glDisable(int cap) {}
 
     // --- Color (tracked for vertex coloring) ---
-    private static float colorR = 1, colorG = 1, colorB = 1, colorA = 1;
-
     public static void glColor3f(float r, float g, float b) {
-        colorR = r; colorG = g; colorB = b; colorA = 1;
+        State st = s();
+        st.colorR = r; st.colorG = g; st.colorB = b; st.colorA = 1;
     }
     public static void glColor4f(float r, float g, float b, float a) {
-        colorR = r; colorG = g; colorB = b; colorA = a;
+        State st = s();
+        st.colorR = r; st.colorG = g; st.colorB = b; st.colorA = a;
     }
-    public static float[] getColor() { return new float[]{colorR, colorG, colorB, colorA}; }
+    public static float[] getColor() {
+        State st = s();
+        return new float[]{st.colorR, st.colorG, st.colorB, st.colorA};
+    }
 
     public static void glColorMaterial(int face, int mode) {}
 
@@ -195,11 +229,14 @@ public class GL11 {
     public static void glDepthMask(boolean flag) {}
 
     // --- Normal (tracked) ---
-    private static float normalX, normalY = 1, normalZ;
     public static void glNormal3f(float x, float y, float z) {
-        normalX = x; normalY = y; normalZ = z;
+        State st = s();
+        st.normalX = x; st.normalY = y; st.normalZ = z;
     }
-    public static float[] getNormal() { return new float[]{normalX, normalY, normalZ}; }
+    public static float[] getNormal() {
+        State st = s();
+        return new float[]{st.normalX, st.normalY, st.normalZ};
+    }
 
     // --- Blending (no-op) ---
     public static void glBlendFunc(int sfactor, int dfactor) {}
