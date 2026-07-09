@@ -25,6 +25,25 @@ FOUND a separate UNDER-application: PlayerBridge.pendingMeleeDamageModifier was
 stored (PlayerMixin.attack@HEAD = GetMeleeDamageModifier()) but NEVER consumed —
 FC melee damage scaling was a no-op.
 
+## 2026-07-09 (c) — block orientation-on-placement wired (axle mesh bug)
+
+Symptom: horizontal axle mesh looked scrambled. Root cause: ProxyBlock had NO
+getStateForPlacement / onBlockPlaced wiring, so FC's onBlockPlaced — the 1.5.2
+mechanism that encodes orientation into metadata from the clicked face — was
+NEVER called. Every ProxyBlock was placed with META=0, so the axle always got
+GetAxisAlignment=0 (vertical-axis geometry) regardless of how it was oriented
+(log confirmed metaAfter=0 on every placement). Added ProxyBlock.getStateForPlacement
+calling fc().onBlockPlaced(world, x,y,z, clickedFace(get3DDataValue == FC side),
+hit, 0) and storing the result in META. FC side numbering (0/1=down/up, 2/3=N/S,
+4/5=W/E) matches Direction.get3DDataValue exactly; onBlockPlaced defaults to
+returning metadata unchanged, so non-orienting blocks stay META=0. This fixes
+orientation for the axle AND every FC block that orients on placement (logs,
+directional blocks). NOTE: the six shim renderFace methods were verified to emit
+geometrically-correct vertices from the render bounds, so correct metadata =>
+correct render. If any FC block's mesh still scrambles after this, the next
+suspect is the GL11 software matrix not being isolated during FCBakedModel bake
+(bakeForState doesn't reset/guard matrix tracking) — deferred (needs in-game repro).
+
 ## 2026-07-09 (b) — melee modifier wired + soul urn rendering
 
 - **Melee damage modifier now applied**: PlayerMixin.btw$applyMeleeDamageModifier

@@ -83,6 +83,36 @@ public class ProxyBlock extends Block implements EntityBlock {
     }
 
     /**
+     * Derives the placement METADATA from the FC block's onBlockPlaced, keyed on the clicked
+     * face — the 1.5.2 mechanism for orientation-on-placement (axle axis, log axis, directional
+     * blocks). Without this every ProxyBlock was placed with META=0, so e.g. the horizontal
+     * axle always got the vertical-axis geometry. FC's `side` numbering (0/1=down/up, 2/3=N/S,
+     * 4/5=W/E) matches Direction.get3DDataValue exactly. onBlockPlaced defaults to returning
+     * the metadata unchanged, so non-orienting blocks keep META=0.
+     */
+    @Override
+    public BlockState getStateForPlacement(net.minecraft.world.item.context.BlockPlaceContext ctx) {
+        BlockState base = super.getStateForPlacement(ctx);
+        if (base == null) base = this.defaultBlockState();
+        try {
+            BlockPos pos = ctx.getClickedPos();
+            int side = ctx.getClickedFace().get3DDataValue();
+            Vec3 hit = ctx.getClickLocation();
+            float hx = (float) (hit.x - pos.getX());
+            float hy = (float) (hit.y - pos.getY());
+            float hz = (float) (hit.z - pos.getZ());
+            btw.modern.World fcWorld = ctx.getLevel() instanceof ServerLevel sl
+                    ? WorldBridge.getOrCreate(sl) : null;
+            int meta = fc().onBlockPlaced(fcWorld, pos.getX(), pos.getY(), pos.getZ(),
+                    side, hx, hy, hz, 0);
+            return base.setValue(META, meta & 15);
+        } catch (Throwable t) {
+            // FC onBlockPlaced may need world data unavailable client-side — server corrects it.
+            return base;
+        }
+    }
+
+    /**
      * Builds modern Block.Properties from the legacy FC block's fields.
      */
     private static BlockBehaviour.Properties buildProperties(btw.modern.Block fcBlock) {
