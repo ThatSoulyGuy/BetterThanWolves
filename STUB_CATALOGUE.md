@@ -27,6 +27,25 @@ synced each tick by `BTWNetwork.PenaltySync` (`clientHealthPenalty`/`clientHunge
 `clientFatPenalty`/`clientGloomLevel`). Client prediction and server correction now
 agree, so the debuff is felt consistently.
 
+## 2026-07-09 (i) Soul urns render with placeholder texture
+
+Symptom: soul urns (FCEntityUrn) render as a billboard but with the wrong/placeholder
+texture.
+
+Root cause: FCClientRenderUrn draws `Item.itemsList[m_iItemShiftedIndex].itemIcon` — an
+item-icon billboard. The itemIcon is a `NamedIcon` whose UV getters record the bare FC
+icon name (soul urn = "fcitemurnsoul") on the Tessellator and return 0..1 UVs. The entity
+capture pipeline's `resolveEntityTexture` then mapped that bare name to
+`betterthanwolves:textures/fcitemurnsoul` — no `item/` subdir, no `.png` — which doesn't
+exist, so it fell back to the placeholder. (The item texture ships at
+`textures/item/fcitemurnsoul.png`.)
+
+Fix: `resolveEntityTexture` now detects a bare Icon name (no `/`, no `.png`) and maps it to
+`textures/item/<name>.png` (or `textures/block/<name>.png` for `fcBlock*` icons), with the
+0..1 UVs mapping the whole 16x16 sprite. Also benefits any other item-icon billboard
+(thrown snowball/egg) whose item has a populated NamedIcon. Full-path textures (mob/,
+item/…png, btwmodtex/) are unaffected — only previously-broken bare names change.
+
 ## 2026-07-09 (g) Frozen-vanilla entities don't render (fc_xp_orb, arrows, ...)
 
 Symptom: some FC entities never render, e.g. `fc_xp_orb` (XP orbs invisible).

@@ -356,6 +356,19 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
                 return new ResourceLocation(BTWForgeMod.MOD_ID, "textures/entity/" + name);
             }
 
+            // Bare FC Icon name (no path separator, no extension) — comes from NamedIcon,
+            // not a loadTexture() path. Used by item-icon billboards (the soul urn draws
+            // Item.itemsList[m_iItemShiftedIndex].itemIcon; likewise thrown snowball/egg)
+            // and RenderBlocks block icons. FC ships these as individual 16x16 files under
+            // textures/item/ (or textures/block/ for fcBlock* icons), and the icon's 0..1
+            // UVs map the whole file. Without this they resolved to "textures/<name>" (no
+            // subdir, no .png) and fell back to the placeholder — the "soul urns don't
+            // render properly" bug.
+            if (!lower.contains("/") && !lower.endsWith(".png")) {
+                String subdir = lower.startsWith("fcblock") ? "block/" : "item/";
+                return new ResourceLocation(BTWForgeMod.MOD_ID, "textures/" + subdir + lower + ".png");
+            }
+
             // All FC texture paths (mob/, armor/, item/, etc.) use bundled
             // 1.5.2 originals. MC 1.20.1 textures have different dimensions
             // (64x64 vs 64x32) and reorganized paths that break FC's UV maps.
