@@ -296,33 +296,19 @@ public class FCContainerMenu extends AbstractContainerMenu {
      * <p>FC-specific slot behavior (validation, stack limits) is bridged via
      * {@link ContainerMappedSlot#mayPlace} and {@link ContainerMappedSlot#getMaxStackSize}.</p>
      */
+    // Use MC's native click handling — NOT FC's Container.slotClick. Routing through FC
+    // slotClick caused two bugs: (1) the cursor/remote-slot state desynced from the client,
+    // so interactions needed a second click to "catch up"; (2) FC's 1.5.2 drag encoding
+    // doesn't match MC's QUICK_CRAFT protocol, so drag-place-across-slots did nothing.
+    // MC's clicked() implements PICKUP / QUICK_MOVE / SWAP / CLONE / THROW / QUICK_CRAFT
+    // (drag) / PICKUP_ALL (double-click collect) correctly against the bridged slots
+    // (ContainerMappedSlot / PlayerMappedSlot over InventoryAdapter, a live FC-inventory
+    // view), and FC slot hooks (isItemValid, canTakeStack, onPickupFromSlot, onSlotChanged
+    // -> onInventoryChanged -> onCraftMatrixChanged) fire through those slots. No FC
+    // slotClick reimplementation needed — matching the design note above.
+    // (Override retained only to keep the intent documented; it is a pure delegation.)
     @Override
     public void clicked(int slotId, int button, net.minecraft.world.inventory.ClickType type, Player player) {
-        if (fcContainer != null && fcPlayer != null) {
-            try {
-                fcPlayer.syncFromReal();
-                int fcMode = switch (type) {
-                    case PICKUP -> 0;
-                    case QUICK_MOVE -> 1;
-                    case SWAP -> 2;
-                    case CLONE -> 3;
-                    case THROW -> 4;
-                    case QUICK_CRAFT -> 5;
-                    case PICKUP_ALL -> 6;
-                };
-                fcContainer.slotClick(slotId, button, fcMode, fcPlayer);
-                // Sync FC inventory back to MC
-                if (fcPlayer.inventory instanceof InventoryBridge ib) {
-                    ib.writeBackAll();
-                }
-                // Sync cursor
-                btw.modern.ItemStack fcCursor = fcPlayer.inventory.getItemStack();
-                setCarried(fcCursor != null ? ItemStackHelper.toMcStack(fcCursor) : net.minecraft.world.item.ItemStack.EMPTY);
-                return;
-            } catch (Throwable e) {
-                LOGGER.debug("FC slotClick failed, falling back to MC: {}", e.getMessage());
-            }
-        }
         super.clicked(slotId, button, type, player);
     }
 
