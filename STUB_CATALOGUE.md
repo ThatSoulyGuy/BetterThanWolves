@@ -1102,3 +1102,17 @@ First attempt reverted ALL onUpdate health loss; an adversarial review caught th
 fall damage and, on a lethal fall, duped loot + revived the corpse (onDeath fires inside onUpdate).
 The surgical suffocation-only version above was re-reviewed clean. Note: FC suffocation never goes
 through MC hurt(), so the [MOB-DMG] log won't show it -- verify by eye (no red) after relaunch.
+
+## 2026-07-09 (u) Fix stuck-on red overlay (FC self-suffocation hurt event)
+
+After (t), FC mobs stopped dying (health restored) but the red hurt overlay stayed stuck on.
+Cause: (t) gated BOTH the health-revert and the setEntityState(2) suppression on an MC-side
+eyeInSuffocatingBlock re-probe. The health check runs post-onUpdate (end-of-tick position) and
+worked; but FC raises the hurt event MID-onUpdate at the pre-movement position, where MC's
+isSuffocating diverges from FC's isBlockNormalCube -> the re-probe missed it -> event 2
+broadcast every tick -> client hurtTime pinned at 10 -> permanent red. Fix: the red suppression
+now uses only `entity == UPDATING` (isSelfHurt) with no geometry re-check -- reliable, and safe
+because a mob hurting another entity passes the victim (!= updater, still flashes) and real
+combat runs outside onUpdate. Health is still reverted only for genuine suffocation (surgical,
+in runOnUpdate), so fall/lava damage is untouched. Verified: run 16:47 shows 0 KILLED removals
+(only DISCARDED despawns) and [MOB-DMG]=0.

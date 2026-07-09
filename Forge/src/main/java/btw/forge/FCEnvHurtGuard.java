@@ -58,12 +58,19 @@ public final class FCEnvHurtGuard {
     }
 
     /**
-     * True if {@code entity} is hurting itself inside its own {@code onUpdate()} <b>and</b> is
-     * suffocating (eye in a solid block). {@link WorldBridge#setEntityState} uses this to drop
-     * the phantom red flash without swallowing fall/lava self-flashes or combat flashes.
+     * True if {@code entity} is hurting <b>itself</b> inside its own {@code onUpdate()}.
+     * {@link WorldBridge#setEntityState} uses this to drop the phantom red flash. We deliberately
+     * do NOT re-check suffocation geometry here: FC raises the hurt event mid-{@code onUpdate} at
+     * the pre-movement position, where an MC-side {@code isSuffocating} re-probe diverges from
+     * FC's {@code isBlockNormalCube} and misses it, letting the flash leak through and stick on.
+     * A mob hurting another entity passes the VICTIM to {@code setEntityState} (so that entity
+     * != the updater and still flashes), and external combat runs outside {@code onUpdate}, so
+     * this only ever swallows a mob's own self-inflicted flash (suffocation, and harmlessly the
+     * rare self fall/lava flash). Health is still reverted only for real suffocation, in
+     * {@link #runOnUpdate}, so fall/lava damage itself is untouched.
      */
-    public static boolean isSelfSuffocating(btw.modern.Entity entity, net.minecraft.world.entity.Entity mcProxy) {
-        return entity != null && entity == UPDATING.get() && eyeInSuffocatingBlock(entity, mcProxy);
+    public static boolean isSelfHurt(btw.modern.Entity entity) {
+        return entity != null && entity == UPDATING.get();
     }
 
     /**
