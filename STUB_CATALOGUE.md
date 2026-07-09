@@ -1013,3 +1013,18 @@ falls back to minX..maxZ on any failure. Targeted guard (fullCube && !renderAsNo
 it off normal blocks. Fixes collision + selection outline for all FCBlockSpike variants.
 (FYI the rod's function: it attracts thunderstorm lightning strikes — WorldServer:1477 /
 FCEntityLightningBolt redirect bolts to it, an iron lightning rod predating vanilla's 1.17 one.)
+
+## 2026-07-09 (p) Worldgen phase 2: wood species drops + bonus basket
+
+- WOOD SPECIES DROPS (commit a2f259b): the one real wood bug — chopping a natural spruce/
+  birch/jungle log/leaf/plank/slab dropped OAK. Fixed via BlockLog.damageDropped(meta)=meta&3
+  + ProxyRegistry.getModernBlockVariant variant table (17/18/5/126 -> 4 species blocks) +
+  ItemStackHelper consulting it.
+- BONUS BASKET: FC replaces the vanilla spawn bonus chest with a Wicker Basket (block 1031)
+  holding one Golden Dung (item 22290) — a gag in place of free starter loot.
+  BonusChestFeatureMixin @Injects BonusChestFeature.place (HEAD, cancellable): scans near the
+  origin for a surface spot, places the basket ProxyBlock, and sets its single storage slot to
+  golden dung via FCTileEntityBasketWicker.SetStorageStack (reflective; the FC tile entity is
+  created eagerly by ProxyBlock.newBlockEntity so it's populated immediately). Falls through to
+  the vanilla chest if no spot is found, so the player is never left empty-handed. Untested
+  in-game (needs a bonus-chest world). Registered in the mixin config's common list.
