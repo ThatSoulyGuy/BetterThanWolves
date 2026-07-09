@@ -456,17 +456,20 @@ public abstract class EntityPlayer extends EntityLiving {
     // =========================================================================
 
     /**
-     * Returns a modifier based on the maximum status penalty level.
-     * penalty 0 -> 1.0, 1 -> 1.0, 2 -> 0.75, 3 -> 0.5, 4+ -> 0.25
+     * Pure computation of the FC health/exhaustion modifier from its raw inputs.
+     * Extracted so the CLIENT — which only has the synced penalty levels (not a full
+     * EntityPlayer) — can reproduce the exact server-side value for the local player's
+     * movement penalty. Keeping ONE formula here prevents client/server divergence.
+     * See the client-side movement-penalty mixin.
+     *
+     * penalty 0/1 -> 1.0, 2 -> 0.75, 3 -> 0.5, 4+ -> 0.25; halved again if gloom > 0.
      */
-    public float GetHealthAndExhaustionModifier() {
+    public static float computeHealthAndExhaustionModifier(int iMaxPenaltyLevel, int iGloomLevel) {
         float fModifier = 1.0F;
 
-        int iPenaltyLevel = GetMaximumStatusPenaltyLevel();
-
-        if (iPenaltyLevel >= 2) {
-            if (iPenaltyLevel >= 3) {
-                if (iPenaltyLevel >= 4) {
+        if (iMaxPenaltyLevel >= 2) {
+            if (iMaxPenaltyLevel >= 3) {
+                if (iMaxPenaltyLevel >= 4) {
                     fModifier = 0.25F;
                 } else {
                     fModifier = 0.5F;
@@ -476,20 +479,26 @@ public abstract class EntityPlayer extends EntityLiving {
             }
         }
 
+        if (iGloomLevel > 0) {
+            fModifier *= 0.5F;
+        }
+
         return fModifier;
+    }
+
+    /**
+     * Returns a modifier based on the maximum status penalty level.
+     * penalty 0 -> 1.0, 1 -> 1.0, 2 -> 0.75, 3 -> 0.5, 4+ -> 0.25
+     */
+    public float GetHealthAndExhaustionModifier() {
+        return computeHealthAndExhaustionModifier(GetMaximumStatusPenaltyLevel(), 0);
     }
 
     /**
      * Returns GetHealthAndExhaustionModifier() halved if gloom level > 0.
      */
     public float GetHealthAndExhaustionModifierWithSightlessModifier() {
-        float fModifier = GetHealthAndExhaustionModifier();
-
-        if (GetGloomLevel() > 0) {
-            fModifier *= 0.5F;
-        }
-
-        return fModifier;
+        return computeHealthAndExhaustionModifier(GetMaximumStatusPenaltyLevel(), GetGloomLevel());
     }
 
     public float GetMiningSpeedModifier() {

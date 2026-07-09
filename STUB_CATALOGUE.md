@@ -4,6 +4,36 @@ Originally audited 2026-03-28. Re-audited 2026-06-05 (see below). Link-audited
 2026-07-08 (see below). Every remaining stub, no-op, empty body, hardcoded
 return, and TODO across the btw.modern and btw.forge layers.
 
+## 2026-07-09 (e) Movement penalty vanishes while running/jumping
+
+Symptom: the FC land-movement debuff (hunger/fat/low-health/gloom) intermittently
+disappears — the player suddenly moves at vanilla speed, especially while running
+and jumping.
+
+Root cause: the local player's movement is **client-authoritative**. `LocalPlayer`
+computes its own `getSpeed()`, moves itself, and reports the position to the server.
+`LivingEntityMixin.btw$applyMovementPenalty` only applied the FC modifier for
+`ServerPlayer`, so the client kept predicting vanilla speed; the server merely
+*corrected* over-fast movement via its anti-move tolerance — which is looser for
+airborne/jumping motion, so the debuff "leaked away" exactly when running and jumping.
+
+Fix (bridged): extracted the modifier formula into a shared static
+`btw.modern.EntityPlayer.computeHealthAndExhaustionModifier(maxPenaltyLevel, gloomLevel)`
+(the two instance getters now delegate to it, so there is one source of truth). Added
+`btw.forge.mixin.ClientPlayerSpeedMixin` — registered in the mixin config's `"client"`
+array so `LocalPlayer` is never referenced on a dedicated server — which applies the
+same modifier to the local player's `getSpeed()` using the penalty levels already
+synced each tick by `BTWNetwork.PenaltySync` (`clientHealthPenalty`/`clientHungerPenalty`/
+`clientFatPenalty`/`clientGloomLevel`). Client prediction and server correction now
+agree, so the debuff is felt consistently.
+
+Note (related, not a defect): "random ghast noises" while moving around are the FC
+Infernal Enchanter's approach "whoosh" (`mob.ghast.fireball` -> `GHAST_SHOOT`, correct
+mapping). It fires once per entry into its 4.5-block radius; running/jumping near it
+re-triggers it. This is authentic BTW behavior. The client-auth movement jitter above
+could push the server player position across the 4.5 boundary spuriously, so this fix
+should also reduce the apparent randomness.
+
 ## 2026-07-09 Double-application sweep (movement "super fast" bug)
 
 Symptom: player moves too fast. Root cause: DOUBLE application of FC's block

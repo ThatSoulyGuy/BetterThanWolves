@@ -22,6 +22,9 @@
     "SwiftSneakLevelMixin",
     "TotemOfUndyingMixin"
   ],
+  "client": [
+    "ClientPlayerSpeedMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }
