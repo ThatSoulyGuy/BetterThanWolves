@@ -50,6 +50,22 @@ classes we kept finding in game get caught automatically. Three tiers:
 
 Backlog surfaced by the first BridgeAudit run — CLEARED 2026-07-09 (l) below.
 
+## 2026-07-09 (m) Stoked-fire (Hibachi) custom flame effect — animate it
+
+The stoked fire that forms over a stoked Hibachi already rendered its custom flame geometry
+(FCBakedModel captures FCBlockFireStoked.RenderBlock for every ProxyBlock) with its authentic
+texture (the block atlas force-stitches all block/ textures, so resolveTexture step 1 finds
+betterthanwolves:block/fcblockfirestokedstub_0 before the soul_fire fallback). But FC's flame
+is procedurally ANIMATED (FCClientTextureFireStoked) and only two STATIC 16x16 frames ship, so
+the bridge showed a dead, non-flickering flame.
+
+Fix: tools/GenStokedFireAnim.java stitches the two shipped frames into 2-frame 16x32 animated
+strips (each variant flickering into the other) + writes .mcmeta, so MC's block atlas animates
+them. No code change needed (FCBakedModel already resolves + captures the flame); the FCBakedModel
+soul_fire entries are now just a fallback. Result: a flickering "stoked" flame using BTW's own
+art, distinct from vanilla fire (custom geometry + texture). Caveat: a 2-frame flicker, not FC's
+smooth procedural animation.
+
 ## 2026-07-09 (l) Clear the BridgeAudit backlog (silent effects/sounds, fish texture)
 
 - Fish bobber texture: RenderFish now loadTexture("/gui/particles.png") — the FC particles
