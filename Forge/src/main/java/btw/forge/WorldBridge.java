@@ -1379,6 +1379,131 @@ public class WorldBridge extends btw.modern.World {
             case 2285: // eat fail
                 playSoundEffect(px, py, pz, "random.eat", 0.25F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 0.5F);
                 break;
+            // ---- ported from FC ClientPlayCustomAuxFX (2026-07-09) — these effects were
+            // silent (fired but unhandled). Sound side only; the FC particle side is a
+            // separate follow-up (needs client particle spawning). 2241 (dispenser smoke)
+            // and 2282 (cactus explode) are particle-only in FC, so they stay silent.
+            case 2222: // animal birthing
+                playSoundEffect(px, py, pz, "mob.slime.attack", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                break;
+            case 2223: // saw damages entity
+                playSoundEffect(px, py, pz, "minecart.base", 1F + rand.nextFloat() * 0.1F, 2F + rand.nextFloat() * 0.1F);
+                break;
+            case 2224: // nether growth spores burst
+                playSoundEffect(px, py, pz, "random.fuse", 2F, rand.nextFloat() * 0.4F + 1.5F);
+                break;
+            case 2225: // ghast scream (data==1 = soulforged-steel low pitch)
+                playSoundEffect(px, py, pz, "mob.ghast.scream", 1F,
+                        data == 1 ? rand.nextFloat() * 0.4F + 0.25F : rand.nextFloat() * 0.4F + 0.8F);
+                break;
+            case 2228: // ghast moan
+                playSoundEffect(px, py, pz, "mob.ghast.moan", 0.5F, 2.6F + (rand.nextFloat() - rand.nextFloat()) * 0.8F);
+                break;
+            case 2229: // mining charge explosion
+                playSoundEffect(px, py, pz, "random.explode", 4F, (1F + (rand.nextFloat() - rand.nextFloat()) * 0.2F) * 0.7F);
+                break;
+            case 2230: // hopper XP eject
+                playSoundEffect(px, py, pz, "liquid.lavapop", 0.5F + rand.nextFloat() * 0.25F, 0.5F + rand.nextFloat() * 0.25F);
+                break;
+            case 2235: // mechanical device explode
+                playSoundEffect(px, py, pz, "mob.zombie.woodbreak", 0.5F, 0.60F + rand.nextFloat() * 0.25F);
+                break;
+            case 2239: // wolf hurt
+                playSoundEffect(px, py, pz, "mob.wolf.hurt", 0.4F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                break;
+            case 2240: // chicken hurt
+                playSoundEffect(px, py, pz, "mob.chicken.hurt", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                break;
+            case 2242: // companion cube death
+                playSoundEffect(px, py, pz, "mob.wolf.whine", 0.5F, 2.6F + (rand.nextFloat() - rand.nextFloat()) * 0.8F);
+                break;
+            case 2243: // possessed chicken explosion
+                playSoundEffect(px, py, pz, "random.explode", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                playSoundEffect(px, py, pz, "mob.chicken.hurt", 2F, rand.nextFloat() * 0.4F + 1.2F);
+                break;
+            case 2244: // ender block collect
+                playFcBlockSound(px, py, pz, data & 0xfff, true);
+                break;
+            case 2245: // ender block convert
+                playFcBlockSound(px, py, pz, data & 0xfff, true);
+                playSoundEffect(px, py, pz, "mob.endermen.portal", 1F, 1F);
+                break;
+            case 2246: // ender block place
+                playFcBlockSound(px, py, pz, data & 0xfff, false);
+                playSoundEffect(px, py, pz, "mob.endermen.hit", 1F, 1F);
+                break;
+            case 2247: // ender change dimension
+                playSoundEffect(px, py, pz, "ambient.weather.thunder", 3F, rand.nextFloat() * 0.4F + 0.8F);
+                break;
+            case 2248: // soul urn shatter
+                playSoundEffect(px, py, pz, "random.glass", 1F, 1.2F / (rand.nextFloat() * 0.2F + 0.9F));
+                playSoundEffect(px, py, pz, "mob.ghast.scream", 0.2F, rand.nextFloat() * 0.2F + 0.5F);
+                break;
+            case 2251: // melon impact
+                playSoundEffect(px, py, pz, "mob.zombie.wood", 0.1F, 0.40F + rand.nextFloat() * 0.25F);
+                break;
+            case 2252: // block destroy (respect particle settings)
+                playFcBlockSound(px, py, pz, data & 0xfff, true);
+                break;
+            case 2253: // cow milk fill
+            case 2254: // cow milked
+            case 2261: // sheep wool regrow
+            case 2262: // squid tentacle fling
+                playSoundEffect(px, py, pz, "mob.slime.attack", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 0.6F);
+                break;
+            case 2255: // cow -> mooshroom
+                playSoundEffect(px, py, pz, "mob.slime.attack", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                playSoundEffect(px, py, pz, "mob.cow.hurt", 1F,
+                        (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F + (data > 0 ? 0.5F : 0F));
+                break;
+            case 2258: // creeper neutered
+                playSoundEffect(px, py, pz, "mob.sheep.shear", 1F, 1F);
+                playSoundEffect(px, py, pz, "mob.slime.attack", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.1F + 0.7F);
+                break;
+            case 2259: // possessed pig -> zombie pigman
+                playSoundEffect(px, py, pz, "mob.pig.death", 2F, rand.nextFloat() * 0.4F + 1.2F);
+                playSoundEffect(px, py, pz, "mob.zombiepig.zpigangry", 2F, ((rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F) * 1.8F);
+                playSoundEffect(px, py, pz, "mob.slime.attack", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                break;
+            case 2260: // possessed villager -> witch
+                playSoundEffect(px, py, pz, "ambient.weather.thunder", 3F, rand.nextFloat() * 0.4F + 0.8F);
+                playSoundEffect(px, py, pz, "mob.ghast.affectionate scream", 2F, 0.5F + rand.nextFloat() * 0.25F);
+                break;
+            case 2263: // snow golem created
+                playSoundEffect(px, py, pz, "random.glass", 1F, 1.2F / (rand.nextFloat() * 0.2F + 0.9F));
+                playSoundEffect(px, py, pz, "mob.enderdragon.growl", 0.25F, rand.nextFloat() * 0.2F + 1.8F);
+                break;
+            case 2264: // iron golem created
+                playSoundEffect(px, py, pz, "random.glass", 1F, 1.2F / (rand.nextFloat() * 0.2F + 0.9F));
+                playSoundEffect(px, py, pz, "mob.irongolem.death", 1F, rand.nextFloat() * 0.2F + 0.5F);
+                playSoundEffect(px, py, pz, "mob.enderdragon.growl", 0.5F, rand.nextFloat() * 0.2F + 1.5F);
+                break;
+            case 2265: // toss the milk
+                playSoundEffect(px, py, pz, "mob.slime.attack", 0.5F, (rand.nextFloat() - rand.nextFloat()) * 0.1F + 0.6F);
+                playSoundEffect(px, py, pz, "random.classic_hurt", 0.25F, 1.2F);
+                break;
+            case 2266: // dung applied to wolf
+                playSoundEffect(px, py, pz, "mob.slime.attack", 0.5F, (rand.nextFloat() - rand.nextFloat()) * 0.1F + 0.8F);
+                break;
+            case 2272: // block destroyed with improper tool
+                playSoundEffect(px, py, pz, "mob.zombie.woodbreak", 0.25F, 1F + rand.nextFloat() * 0.25F);
+                break;
+            case 2273: // possessed squid -> ghast
+                playSoundEffect(px, py, pz, "mob.slime.attack", 1F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                playSoundEffect(px, py, pz, "mob.ghast.scream", 10F, (rand.nextFloat() - rand.nextFloat()) * 0.2F + 1F);
+                break;
+            case 2277: // log smouldering explosion
+                playSoundEffect(px, py, pz, "random.explode", 4F, (1F + (rand.nextFloat() - rand.nextFloat()) * 0.2F) * 0.7F);
+                playSoundEffect(px, py, pz, "mob.zombie.wood", 1.25F, 0.5F + rand.nextFloat() * 0.1F);
+                break;
+            case 2279: // wither created
+                playSoundEffect(px, py, pz, "random.glass", 1F, 1.2F / (rand.nextFloat() * 0.2F + 0.9F));
+                playSoundEffect(px, py, pz, "mob.wither.death", 1F, rand.nextFloat() * 0.2F + 0.5F);
+                playSoundEffect(px, py, pz, "mob.enderdragon.growl", 0.5F, rand.nextFloat() * 0.2F + 1.5F);
+                break;
+            case 2281: // flaming netherrack fall
+                playSoundEffect(px, py, pz, "mob.ghast.fireball", 0.1F, 0.5F + rand.nextFloat() * 0.1F);
+                break;
             default:
                 // Unknown FC effect — try vanilla levelEvent as fallback
                 try {
@@ -1388,7 +1513,24 @@ public class WorldBridge extends btw.modern.World {
         }
     }
 
-    
+    /**
+     * Plays a block's break/step sound for the ender-block and destroy aux-FX, which pack the
+     * source block id into the aux-FX data (id & 0xfff). Mirrors FC's
+     * {@code block.stepSound.getBreakSound()/getStepSound()} lookup in ClientPlayCustomAuxFX.
+     */
+    private void playFcBlockSound(double px, double py, double pz, int blockId, boolean breakSound) {
+        try {
+            if (blockId > 0 && blockId < btw.modern.Block.blocksList.length) {
+                btw.modern.Block blk = btw.modern.Block.blocksList[blockId];
+                if (blk != null && blk.stepSound != null) {
+                    String s = breakSound ? blk.stepSound.getBreakSound() : blk.stepSound.getStepSound();
+                    playSoundEffect(px, py, pz, s,
+                            (blk.stepSound.getVolume() + 1.0F) / 2.0F, blk.stepSound.getPitch() * 0.8F);
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
     public void playAuxSFXAtEntity(EntityPlayer player, int effectID,
                                    int x, int y, int z, int data) {
         level.levelEvent(null, effectID, new BlockPos(x, y, z), data);

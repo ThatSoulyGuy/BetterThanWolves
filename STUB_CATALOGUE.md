@@ -48,13 +48,28 @@ classes we kept finding in game get caught automatically. Three tiers:
    - BLOCK SPEED-FACTOR (common): no block's getSpeedFactor > 1.0 (the sprint-"flying" class —
      a >1 factor compounds into airborne momentum). Regression guard for 2026-07-09 (j).
 
-Backlog surfaced by the first BridgeAudit run (real gaps, not yet fixed):
-- 1 missing renderer texture: `/particles.png` (RenderFish bobber) — placeholder bobber.
-- 6 unmapped sounds (silent): mob.cow.say2, mob.cow.say4, "mob.ghast.affectionate scream",
-  mob.wolf.howl, mob.zombiepig.zpigangry, random.glass.
-- 37 aux-FX ids fired but unhandled in playFcAuxSFX (silent effect + no particles), incl.
-  2225/2228 ghast scream/moan, 2248 soul-urn shatter, saw damage, mining-charge explosion,
-  hopper XP eject, animal births/milking, all the possession-transform FX, etc.
+Backlog surfaced by the first BridgeAudit run — CLEARED 2026-07-09 (l) below.
+
+## 2026-07-09 (l) Clear the BridgeAudit backlog (silent effects/sounds, fish texture)
+
+- Fish bobber texture: RenderFish now loadTexture("/gui/particles.png") — the FC particles
+  atlas ships at textures/gui/particles.png (was "/particles.png" -> unshipped -> placeholder).
+- 6 unmapped sounds added to SoundMapping (were silent): mob.cow.say2/say4 -> COW_AMBIENT,
+  "mob.ghast.affectionate scream" -> GHAST_AMBIENT, mob.wolf.howl -> WOLF_HOWL,
+  mob.zombiepig.zpigangry -> ZOMBIFIED_PIGLIN_ANGRY, random.glass -> GLASS_BREAK. Plus
+  minecart.base -> MINECART_INSIDE (used by the saw aux-FX).
+- 35 of 37 unhandled aux-FX ids ported into WorldBridge.playFcAuxSFX (sounds transcribed
+  exactly from FC ClientPlayCustomAuxFX, incl. ghast scream/moan, soul-urn shatter, saw
+  damage, mining-charge/log-smouldering explosions, hopper XP eject, animal births/milking,
+  golem/wither creation, all possession transforms). Dynamic block-break sounds
+  (ender-block collect/convert/place, respect-particle destroy) use a new playFcBlockSound
+  helper reading block.stepSound. Sound side only.
+  Remaining (BridgeAudit still flags 2): 2241 dispenser-smoke and 2282 cactus-explode are
+  PARTICLE-ONLY in FC (no sound) — they need the aux-FX particle path, not a sound. That
+  (client-side particle spawning for aux-FX) is the next follow-up; the cleaner long-term
+  option is wiring FC's ClientPlayCustomAuxFX client-side to get sounds+particles for all 64.
+  Post-fix BridgeAudit: 0 unmapped sounds, 0 missing renderer textures, 2 particle-only
+  aux-FX remaining. LinkAudit unchanged.
 
 ## 2026-07-09 (j) Speed buffs / "flying" when sprinting
 

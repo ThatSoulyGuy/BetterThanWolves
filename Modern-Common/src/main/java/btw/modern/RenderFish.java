@@ -21,7 +21,10 @@ public class RenderFish extends Render {
 
         byte col = 1;
         byte row = 2;
-        this.loadTexture("/particles.png");
+        // FC's bobber sprite lives in the particles atlas; BTW ships it at gui/particles.png
+        // (resolveEntityTexture -> textures/gui/particles.png). "/particles.png" resolved to a
+        // non-shipped path and fell back to the placeholder.
+        this.loadTexture("/gui/particles.png");
 
         Tessellator tess = Tessellator.instance;
         float u0 = (float) (col * 8) / 128.0F;

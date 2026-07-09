@@ -53,6 +53,7 @@ public class SoundMapping {
         SOUND_MAP.put("random.successful_hit", SoundEvents.PLAYER_ATTACK_STRONG);
         SOUND_MAP.put("random.wood_click", SoundEvents.WOODEN_BUTTON_CLICK_ON);
         SOUND_MAP.put("random.bowhit", SoundEvents.ARROW_HIT);
+        SOUND_MAP.put("random.glass", SoundEvents.GLASS_BREAK);
 
         // ---- dig.* (block break sounds) ----
         SOUND_MAP.put("dig.stone", SoundEvents.STONE_BREAK);
@@ -79,17 +80,22 @@ public class SoundMapping {
         SOUND_MAP.put("mob.sheep.say", SoundEvents.SHEEP_AMBIENT);
         SOUND_MAP.put("mob.sheep.step", SoundEvents.SHEEP_STEP);
         SOUND_MAP.put("mob.slime.attack", SoundEvents.SLIME_ATTACK);
+        // FC saw grinding uses the minecart rumble as its "base" grind sound.
+        SOUND_MAP.put("minecart.base", SoundEvents.MINECART_INSIDE);
         SOUND_MAP.put("mob.slime.big", SoundEvents.SLIME_SQUISH);
         SOUND_MAP.put("mob.slime.small", SoundEvents.SLIME_SQUISH_SMALL);
         SOUND_MAP.put("mob.ghast.fireball", SoundEvents.GHAST_SHOOT);
         SOUND_MAP.put("mob.ghast.moan", SoundEvents.GHAST_AMBIENT);
         SOUND_MAP.put("mob.ghast.scream", SoundEvents.GHAST_HURT);
+        // BTW "affectionate scream" (witch idle / possession transforms) — reuse ghast ambient.
+        SOUND_MAP.put("mob.ghast.affectionate scream", SoundEvents.GHAST_AMBIENT);
         SOUND_MAP.put("mob.zombie.wood", SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR);
         SOUND_MAP.put("mob.zombie.woodbreak", SoundEvents.ZOMBIE_BREAK_WOODEN_DOOR);
         SOUND_MAP.put("mob.zombie.say", SoundEvents.ZOMBIE_AMBIENT);
         SOUND_MAP.put("mob.zombie.hurt", SoundEvents.ZOMBIE_HURT);
         SOUND_MAP.put("mob.zombie.death", SoundEvents.ZOMBIE_DEATH);
         SOUND_MAP.put("mob.zombie.step", SoundEvents.ZOMBIE_STEP);
+        SOUND_MAP.put("mob.zombiepig.zpigangry", SoundEvents.ZOMBIFIED_PIGLIN_ANGRY);
         SOUND_MAP.put("mob.wolf.bark", SoundEvents.WOLF_AMBIENT);
         SOUND_MAP.put("mob.wolf.step", SoundEvents.WOLF_STEP);
         SOUND_MAP.put("mob.wolf.hurt", SoundEvents.WOLF_HURT);
@@ -97,7 +103,11 @@ public class SoundMapping {
         SOUND_MAP.put("mob.wolf.growl", SoundEvents.WOLF_GROWL);
         SOUND_MAP.put("mob.wolf.panting", SoundEvents.WOLF_PANT);
         SOUND_MAP.put("mob.wolf.whine", SoundEvents.WOLF_WHINE);
+        SOUND_MAP.put("mob.wolf.howl", SoundEvents.WOLF_HOWL);
         SOUND_MAP.put("mob.cow.say", SoundEvents.COW_AMBIENT);
+        // BTW-added cow variant moos (FCBlockBellows / milking) — no distinct vanilla event.
+        SOUND_MAP.put("mob.cow.say2", SoundEvents.COW_AMBIENT);
+        SOUND_MAP.put("mob.cow.say4", SoundEvents.COW_AMBIENT);
         SOUND_MAP.put("mob.cow.hurt", SoundEvents.COW_HURT);
         SOUND_MAP.put("mob.cow.step", SoundEvents.COW_STEP);
         SOUND_MAP.put("mob.cow.death", SoundEvents.COW_DEATH);
