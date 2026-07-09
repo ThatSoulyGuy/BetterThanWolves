@@ -55,8 +55,10 @@ public abstract class BonusChestFeatureMixin {
                     try {
                         BlockEntity be = level.getBlockEntity(pos);
                         // Resolve golden dung by its FC field, not itemsList[22290]: the FC Item
-                        // ctor offsets itemID by 256, so the raw id is the wrong slot.
-                        btw.modern.Item dungItem = (btw.modern.Item) Class.forName("btw.modern.FCBetterThanWolves")
+                        // ctor offsets itemID by 256, so the raw id is the wrong slot. The FC core
+                        // class lives at net.minecraft.src.btw.core (NOT btw.modern — that package
+                        // only holds the relocated base classes the FC classes extend).
+                        btw.modern.Item dungItem = (btw.modern.Item) Class.forName("net.minecraft.src.btw.core.FCBetterThanWolves")
                                 .getField("fcItemGoldenDung").get(null);
                         if (be instanceof ProxyBlockEntity pbe && pbe.getFcTileEntity() != null
                                 && dungItem != null) {
@@ -66,7 +68,9 @@ public abstract class BonusChestFeatureMixin {
                                     .invoke(fcTe, dung);
                             pbe.setChanged();
                         }
-                    } catch (Throwable ignored) {
+                    } catch (Throwable t) {
+                        com.mojang.logging.LogUtils.getLogger()
+                                .warn("BTW: bonus basket placed but golden dung not set", t);
                     }
                     cir.setReturnValue(true);
                     return;
