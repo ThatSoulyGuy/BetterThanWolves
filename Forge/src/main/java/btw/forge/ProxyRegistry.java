@@ -107,6 +107,36 @@ public class ProxyRegistry {
         return null;
     }
 
+    /**
+     * 1.5.2 blocks whose metadata subtypes are distinct 1.20.1 blocks (wood species). Legacy
+     * worldgen collapses all four species onto one legacy id, so the single getModernBlock()
+     * mapping always resolves to oak. This table restores the species from the drop's metadata
+     * (bits 0-1) so a chopped spruce/birch/jungle log/leaf/plank/slab yields the correct block.
+     */
+    private static final Map<Integer, net.minecraft.world.level.block.Block[]> VARIANT_BLOCKS =
+            new java.util.HashMap<>();
+    static {
+        VARIANT_BLOCKS.put(17, new net.minecraft.world.level.block.Block[]{
+                Blocks.OAK_LOG, Blocks.SPRUCE_LOG, Blocks.BIRCH_LOG, Blocks.JUNGLE_LOG});
+        VARIANT_BLOCKS.put(18, new net.minecraft.world.level.block.Block[]{
+                Blocks.OAK_LEAVES, Blocks.SPRUCE_LEAVES, Blocks.BIRCH_LEAVES, Blocks.JUNGLE_LEAVES});
+        VARIANT_BLOCKS.put(5, new net.minecraft.world.level.block.Block[]{
+                Blocks.OAK_PLANKS, Blocks.SPRUCE_PLANKS, Blocks.BIRCH_PLANKS, Blocks.JUNGLE_PLANKS});
+        VARIANT_BLOCKS.put(126, new net.minecraft.world.level.block.Block[]{
+                Blocks.OAK_SLAB, Blocks.SPRUCE_SLAB, Blocks.BIRCH_SLAB, Blocks.JUNGLE_SLAB});
+    }
+
+    /**
+     * Returns the 1.20.1 block variant for a legacy id + damage/metadata (wood species in bits
+     * 0-1), or null if the id has no per-metadata variants.
+     */
+    public static net.minecraft.world.level.block.Block getModernBlockVariant(int legacyId, int damage) {
+        net.minecraft.world.level.block.Block[] variants = VARIANT_BLOCKS.get(legacyId);
+        if (variants == null) return null;
+        int idx = damage & 3;
+        return idx < variants.length ? variants[idx] : variants[0];
+    }
+
     // ================================================================
     // Vanilla Block -> legacy ID mapping
     // ================================================================

@@ -38,6 +38,18 @@ public class ItemStackHelper {
         int legacyId = fcStack.itemID;
         if (legacyId <= 0) return net.minecraft.world.item.ItemStack.EMPTY;
 
+        // Multi-variant legacy blocks (logs/leaves/planks/slabs) encode the wood species in the
+        // item damage — resolve the right 1.20.1 block so a spruce log doesn't drop as oak. The
+        // modern variants are distinct items with no damage subtype, so return directly.
+        net.minecraft.world.level.block.Block variant =
+                ProxyRegistry.getModernBlockVariant(legacyId, fcStack.getItemDamage());
+        if (variant != null) {
+            Item variantItem = variant.asItem();
+            if (variantItem != null && variantItem != net.minecraft.world.item.Items.AIR) {
+                return new net.minecraft.world.item.ItemStack(variantItem, fcStack.stackSize);
+            }
+        }
+
         // Try as an item first
         Item modernItem = ProxyRegistry.getModernItem(legacyId);
 
