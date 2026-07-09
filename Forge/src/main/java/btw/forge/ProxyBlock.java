@@ -666,20 +666,12 @@ public class ProxyBlock extends Block implements EntityBlock {
     // Passive property queries — engine reads these constantly
     // ================================================================
 
-    @Override
-    public float getSpeedFactor() {
-        // getSpeedFactor() has no world/position context, but FC's GetMovementModifier
-        // may query block metadata which requires a world. Catch NPE for blocks that
-        // need metadata (like dirt slabs) — the mixin handles position-aware speed.
-        // Compose with the vanilla speed factor (from block properties) rather than
-        // replacing it, matching the mixin path for vanilla-with-FC-counterpart blocks.
-        try {
-            float modifier = fc().GetMovementModifier(null, 0, 0, 0);
-            return modifier > 0 ? super.getSpeedFactor() * modifier : super.getSpeedFactor();
-        } catch (NullPointerException e) {
-            return super.getSpeedFactor();
-        }
-    }
+    // NOTE: getSpeedFactor() is deliberately NOT overridden to apply FC's GetMovementModifier.
+    // MC 1.20.1 multiplies getSpeedFactor into carried deltaMovement every tick (Entity.move),
+    // so the +20% hard-surface bonus compounded into airborne momentum → the sprint-jump
+    // "flying" bug. FC applied that bonus to the INPUT speed instead, which the bridge now
+    // reproduces in the getSpeed hooks (FCMovementBonus). The inherited getSpeedFactor (the
+    // block's own speed factor, e.g. soul sand's slowdown) is left intact.
 
     @Override
     public net.minecraft.world.phys.shapes.VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos,

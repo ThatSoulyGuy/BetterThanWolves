@@ -31,18 +31,32 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class ClientPlayerSpeedMixin {
 
     @Inject(method = "getSpeed", at = @At("RETURN"), cancellable = true)
-    private void btw$applyClientMovementPenalty(CallbackInfoReturnable<Float> cir) {
-        if (!((Object) this instanceof LocalPlayer)) {
+    private void btw$applyClientMovement(CallbackInfoReturnable<Float> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (!(self instanceof LocalPlayer)) {
             return;
         }
 
+        float original = cir.getReturnValue();
+        float value = original;
+
+        // FC health/hunger/fat/gloom penalty (always <= 1.0), from the server-synced levels.
         int maxPenalty = Math.max(BTWNetwork.clientHealthPenalty,
                 Math.max(BTWNetwork.clientHungerPenalty, BTWNetwork.clientFatPenalty));
-        float modifier = btw.modern.EntityPlayer.computeHealthAndExhaustionModifier(
+        float penalty = btw.modern.EntityPlayer.computeHealthAndExhaustionModifier(
                 maxPenalty, BTWNetwork.clientGloomLevel);
+        if (penalty < 1.0F) {
+            value *= penalty;
+        }
 
-        if (modifier < 1.0F) {
-            cir.setReturnValue(cir.getReturnValue() * modifier);
+        // FC hard-surface +20% bonus, applied to the INPUT speed — identical to the server
+        // (LivingEntityMixin) so client-authoritative prediction agrees and doesn't rubber-band.
+        // Applied via getSpeed (bounded) rather than getSpeedFactor (which compounded into
+        // airborne momentum → the sprint-jump "flying" bug).
+        value *= btw.forge.FCMovementBonus.getBlockBelowSpeedBonus(self);
+
+        if (value != original) {
+            cir.setReturnValue(value);
         }
     }
 }

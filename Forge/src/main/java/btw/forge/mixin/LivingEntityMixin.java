@@ -72,9 +72,20 @@ public abstract class LivingEntityMixin {
         LivingEntity self = (LivingEntity) (Object) this;
         if (self instanceof ServerPlayer sp) {
             PlayerBridge pb = PlayerBridge.getOrCreate(sp);
-            float modifier = pb.GetLandMovementModifier();
-            if (modifier < 1.0F) {
-                cir.setReturnValue(cir.getReturnValue() * modifier);
+            float original = cir.getReturnValue();
+            float value = original;
+            // FC health/hunger/fat/gloom penalty (always <= 1.0).
+            float penalty = pb.GetLandMovementModifier();
+            if (penalty < 1.0F) {
+                value *= penalty;
+            }
+            // FC hard-surface +20% bonus, applied to the INPUT speed (bounded, airborne-safe),
+            // exactly as FC's moveEntityWithHeading. NOT via getSpeedFactor, which multiplies
+            // carried momentum every tick and compounds to unbounded speed when airborne over a
+            // hard block (the sprint-jump "flying" bug). Must match ClientPlayerSpeedMixin.
+            value *= btw.forge.FCMovementBonus.getBlockBelowSpeedBonus(self);
+            if (value != original) {
+                cir.setReturnValue(value);
             }
         }
     }

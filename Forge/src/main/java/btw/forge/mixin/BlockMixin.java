@@ -126,20 +126,14 @@ public abstract class BlockMixin {
     // getSpeedFactor -> FC GetMovementModifier
     // ================================================================
 
-    // @At("RETURN") + multiply: compose FC's GetMovementModifier with the modern speed
-    // factor instead of replacing it (replacing inverted soul sand — see LivingEntityMixin).
-    @Inject(method = "getSpeedFactor", at = @At("RETURN"), cancellable = true)
-    private void btw$getSpeedFactor(CallbackInfoReturnable<Float> cir) {
-        btw.modern.Block fcBlock = btw$getFcBlock();
-        if (fcBlock == null) return;
-
-        try {
-            float modifier = fcBlock.GetMovementModifier(null, 0, 0, 0);
-            if (modifier > 0) {
-                cir.setReturnValue(cir.getReturnValue() * modifier);
-            }
-        } catch (Exception ignored) {}
-    }
+    // NO getSpeedFactor hook here — DELIBERATELY removed. FC's GetMovementModifier (the +20%
+    // hard-surface bonus) must NOT be applied through getSpeedFactor: MC 1.20.1 multiplies
+    // getSpeedFactor into carried deltaMovement every tick in Entity.move(), so a factor > 1.0
+    // compounds into momentum and, while airborne (sprint-jumping), the retention product
+    // 0.91 × 1.2 = 1.092 > 1 makes speed grow unbounded ("practically flying"). FC applied it
+    // to the INPUT speed (moveEntityWithHeading), so the bridge now does the same in the
+    // getSpeed hooks (LivingEntityMixin / ClientPlayerSpeedMixin via FCMovementBonus). Slowdown
+    // blocks (soul sand, honey) keep working via their own vanilla getSpeedFactor + getFriction.
 
     // ================================================================
     // getFriction -> FC slipperiness

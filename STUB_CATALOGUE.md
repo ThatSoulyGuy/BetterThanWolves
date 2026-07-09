@@ -27,6 +27,37 @@ synced each tick by `BTWNetwork.PenaltySync` (`clientHealthPenalty`/`clientHunge
 `clientFatPenalty`/`clientGloomLevel`). Client prediction and server correction now
 agree, so the debuff is felt consistently.
 
+## 2026-07-09 (j) Speed buffs / "flying" when sprinting
+
+Symptom: random speed buffs while walking (on some blocks); sprinting → practically flying.
+
+Root cause (verified via decompiled 1.20.1 sources + tick simulation, two adversarial
+passes): BTW's `Block.GetMovementModifier` (Modern-Common Block.java:894) returns 1.2 for
+every non-soil/non-grass block ("20% hard-surface bonus"), 1.0 otherwise — never < 1. The
+bridge routed it through `getSpeedFactor` (BlockMixin.btw$getSpeedFactor + ProxyBlock.
+getSpeedFactor, a single application — the old ×1.44 double via getBlockSpeedFactor was
+already removed). But MC 1.20.1 multiplies `getSpeedFactor` into carried `deltaMovement`
+EVERY tick in `Entity.move()`, so a factor > 1.0 compounds into momentum:
+  - Ground: bounded (0.6·0.91·1.2 = 0.655 < 1) → ~+32% on hard blocks = the "random" walking
+    buffs (random = only on non-soil blocks).
+  - AIRBORNE (sprint-jump / descending stairs & slopes): retention flips to 0.91·1.2 = 1.092
+    > 1 → geometric momentum GROWTH, unbounded while airborne over a hard block → "flying".
+FC applied the modifier to the INPUT speed instead (EntityLiving.moveEntityWithHeading:3369
+`fMoveSpeed *= GetMovementModifier`), which is bounded and never enters airborne momentum
+(airborne horizontal accel uses getFlyingSpeed, not getSpeed).
+
+Fix: apply the bonus the FC way — to `getSpeed()`, not `getSpeedFactor()`.
+- Removed the `* GetMovementModifier` from BlockMixin.getSpeedFactor (hook deleted) and
+  ProxyBlock.getSpeedFactor (override deleted) so getSpeedFactor stays the vanilla value.
+- New `btw.forge.FCMovementBonus.getBlockBelowSpeedBonus(LivingEntity)`: on-ground only,
+  keyed on the block below the feet, returns its GetMovementModifier (1.0/1.2).
+- Multiply getSpeed by it in BOTH hooks — LivingEntityMixin (ServerPlayer) and
+  ClientPlayerSpeedMixin (LocalPlayer), OUTSIDE the `< 1.0` penalty guard, composed with the
+  FC penalty — so client-authoritative prediction matches the server (no rubber-band).
+Bounded (+20% top speed), airborne-safe, player-only (FC's AI mobs ignore the boost). Soul
+sand/honey keep slowing via their own getSpeedFactor/getFriction (untouched); this also
+removes the prior 0.4→0.48 soul-sand inflation.
+
 ## 2026-07-09 (i) Soul urns render with placeholder texture
 
 Symptom: soul urns (FCEntityUrn) render as a billboard but with the wrong/placeholder
