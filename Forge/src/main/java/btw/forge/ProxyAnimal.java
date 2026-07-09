@@ -284,7 +284,7 @@ public class ProxyAnimal extends Animal
             double snapMotX = fcEntity.motionX, snapMotY = fcEntity.motionY, snapMotZ = fcEntity.motionZ;
 
             try {
-                fcEntity.onUpdate();
+                FCEnvHurtGuard.runOnUpdate(fcEntity, this);
                 PossessionDiagnostics.poll(this, fcEntity);
             } catch (Throwable e) {
                 String key = fcEntity.getClass().getSimpleName() + "|" + e.getClass().getName();

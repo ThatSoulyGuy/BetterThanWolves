@@ -199,7 +199,7 @@ public class ProxyPathfinderMob extends PathfinderMob
             float snapYaw = fcEntity.rotationYaw, snapPitch = fcEntity.rotationPitch;
 
             try {
-                fcEntity.onUpdate();
+                FCEnvHurtGuard.runOnUpdate(fcEntity, this);
                 PossessionDiagnostics.poll(this, fcEntity);
             } catch (Throwable e) {
                 if (tickCount % 100 == 0) {

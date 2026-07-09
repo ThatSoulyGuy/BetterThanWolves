@@ -1844,6 +1844,12 @@ public class WorldBridge extends btw.modern.World {
     public void setEntityState(btw.modern.Entity entity, byte state) {
         if (entity == null) return;
         net.minecraft.world.entity.Entity proxy = fcToForgeEntity.get(entity);
+        // Drop the hurt flash (event 2) that FC's spurious suffocation raises inside a puppet's
+        // onUpdate(): FC's isEntityInsideOpaqueBlock false-fires on FC-driven puppets whose
+        // position MC collision doesn't match. Only suppressed while THIS entity is updating
+        // itself AND is genuinely eye-in-block (see FCEnvHurtGuard) -- fall/lava self-flashes,
+        // hits it lands on others, and real combat all still flash normally.
+        if (state == 2 && FCEnvHurtGuard.isSelfSuffocating(entity, proxy)) return;
         if (proxy != null) {
             level.broadcastEntityEvent(proxy, state);
         }

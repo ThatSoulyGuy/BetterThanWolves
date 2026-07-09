@@ -348,7 +348,7 @@ public class ProxyMob extends Mob
 
             double preMotY = fcEntity.motionY;
             try {
-                fcEntity.onUpdate();
+                FCEnvHurtGuard.runOnUpdate(fcEntity, this);
                 PossessionDiagnostics.poll(this, fcEntity);
             } catch (Throwable e) {
                 if (tickCount % 100 == 0) {

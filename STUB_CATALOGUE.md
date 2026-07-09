@@ -1079,3 +1079,26 @@ view, so isInWall() fired spuriously on essentially every mob. Fix: override isI
 on ProxyMob/ProxyAnimal/ProxyPathfinderMob — FC already applies its own suffocation inside
 fcEntity.onUpdate(), so MC's check is redundant as well as wrong. A temporary [MOB-DMG] WARN in
 ProxyMob.hurt() (logs src/amount) is kept for one confirming run and will be removed after.
+
+## 2026-07-09 (t) Fix FC mobs turning red / dying: FC-side spurious suffocation
+
+After (s) suppressed MC's suffocation (isInWall->false), mobs still flashed red and slowly
+died -- the [MOB-DMG] diagnostic confirmed src=inWall (42670 hits) but showed inWall=true only
+because the tested build predated (s). Once (s) actually ran, MC dealt no damage yet the red
+persisted: FC applies its OWN suffocation inside fcEntity.onUpdate() (EntityLiving.onLivingUpdate
+-> isEntityInsideOpaqueBlock -> attackEntityFrom(inWall,1)), which both drains fcEntity.health
+AND raises worldObj.setEntityState(this,(byte)2). WorldBridge.setEntityState broadcasts that as a
+client hurt event -> red flash (this is the src=generic amt=0.0 render-thread noise seen earlier).
+
+Fix (FCEnvHurtGuard): the 3 puppet classes run fcEntity.onUpdate() through runOnUpdate(fc, this).
+While the entity updates itself it's marked on the thread; WorldBridge.setEntityState drops the
+hurt event (2), and any drained health is restored -- but ONLY for suffocation: the mob is still
+alive (health>0, so lethal hits are never reverted -> no loot dupe / revive) AND its eye is in a
+solid block, probed MC-side with FC's exact geometry (fc.getEyeHeight()=height*0.85, fc.width, the
+same 8 corner points as isEntityInsideOpaqueBlock). Fall/cactus/lava self-damage, hits on other
+entities, and external MC-hurt() combat are all left untouched.
+
+First attempt reverted ALL onUpdate health loss; an adversarial review caught that it nullified
+fall damage and, on a lethal fall, duped loot + revived the corpse (onDeath fires inside onUpdate).
+The surgical suffocation-only version above was re-reviewed clean. Note: FC suffocation never goes
+through MC hurt(), so the [MOB-DMG] log won't show it -- verify by eye (no red) after relaunch.
