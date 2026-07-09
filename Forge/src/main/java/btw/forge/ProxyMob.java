@@ -530,10 +530,14 @@ public class ProxyMob extends Mob
     private boolean forwardingHurtToFc = false;
 
     public boolean hurt(DamageSource source, float amount) {
-        // [DIAG] capture what is damaging puppet mobs (red-flash + random-death bug)
-        LOGGER.warn("[MOB-DMG] fc={} src={} amt={} hpBefore={} y={} fire={} inWall={}",
-                fcClassName, source.type().msgId(), amount, getHealth(), getY(),
-                fcEntity != null ? fcEntity.fire : -999, isInWall());
+        // [DIAG] capture what is damaging puppet mobs (red-flash + random-death bug).
+        // Only real damage (amount > 0), to skip MC's amount=0 client-side probes. With the
+        // isInWall()->false fix, suffocation no longer fires, so this should now be quiet
+        // unless some OTHER source is still killing mobs.
+        if (amount > 0) {
+            LOGGER.warn("[MOB-DMG] fc={} src={} amt={} hpBefore={} y={}",
+                    fcClassName, source.type().msgId(), amount, getHealth(), getY());
+        }
         // Let MC's full hurt() pipeline run: hurt sound, red flash,
         // knockback, hit particles, hurt animation, AI revenge target,
         // damage application, death/loot. We do not short-circuit any
