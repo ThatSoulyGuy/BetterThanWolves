@@ -26,5 +26,8 @@ public final class BTWLootModifiers {
     public static final RegistryObject<Codec<FCRemoveItemFromLootModifier>> REMOVE_ITEM =
             LOOT_MODIFIERS.register("remove_item", FCRemoveItemFromLootModifier.CODEC);
 
+    public static final RegistryObject<Codec<FCAddItemToLootModifier>> ADD_ITEM =
+            LOOT_MODIFIERS.register("add_item", FCAddItemToLootModifier.CODEC);
+
     private BTWLootModifiers() {}
 }

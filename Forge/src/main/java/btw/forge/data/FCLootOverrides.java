@@ -78,6 +78,15 @@ public class FCLootOverrides extends GlobalLootModifierProvider {
         removeFromTable("no_music_disc_trail_ruins",
                 new ResourceLocation("minecraft", "archaeology/trail_ruins_rare"),
                 Items.MUSIC_DISC_RELIC);
+
+        // ---- FC structure loot ADDITIONS (worldgen phase 1) ----
+        // FC's jungle pyramid loot is a full re-weight of vanilla items except for ONE
+        // net-new FC item: the Lightning Rod (fcBlockLightningRod, id 1067 ->
+        // betterthanwolves:block_1067), at FC weight 5. We add just that item rather than
+        // replacing the whole table. chance ~0.2 approximates its weighted-pool odds.
+        addItemToTable("jungle_temple_lightning_rod",
+                new ResourceLocation("minecraft", "chests/jungle_temple"),
+                fcItem("block_1067"), 1, 1, 0.2F);
     }
 
     private void removeFromTable(String name, ResourceLocation tableId,
@@ -86,5 +95,19 @@ public class FCLootOverrides extends GlobalLootModifierProvider {
                 LootTableIdCondition.builder(tableId).build()
         };
         this.add(name, new FCRemoveItemFromLootModifier(conditions, item));
+    }
+
+    private void addItemToTable(String name, ResourceLocation tableId,
+                                net.minecraft.world.item.Item item,
+                                int minCount, int maxCount, float chance) {
+        LootItemCondition[] conditions = {
+                LootTableIdCondition.builder(tableId).build()
+        };
+        this.add(name, new FCAddItemToLootModifier(conditions, item, minCount, maxCount, chance));
+    }
+
+    private static net.minecraft.world.item.Item fcItem(String path) {
+        return net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                new ResourceLocation(BTWForgeMod.MOD_ID, path));
     }
 }

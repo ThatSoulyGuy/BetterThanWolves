@@ -968,3 +968,35 @@ The defaults are correct unless vanilla 1.5.2 Block.java had real logic in the b
 
 The biggest implementation gaps are now in **EntityLiving.java** and **Item.java** — these
 are the files most likely to cause gameplay issues with missing method bodies.
+
+## 2026-07-09 (n) Worldgen: FC content inventory + phase 1 (structure loot)
+
+Goal: keep 1.20.1 terrain, re-create FC's important worldgen CONTENT as native 1.20.1 pieces.
+5-agent inventory workflow mapped every FC worldgen delta to a 1.20.1 mechanism. Key results:
+
+- WOOD: "all wood is FC wood" is essentially DONE already — vanilla logs map to legacy 17 =
+  FCBlockLog, BlockBehaviorMixin routes chop/hardness/convert, WorldBridge.deriveVanillaMetadata
+  supplies orientation+wood-type. RESOLVED an agent contradiction: FC's tree-gen DELIBERATELY
+  stumps the base (WorldGenTrees:234/WorldGenBigTree:528/WorldGenForest:133/WorldGenHugeTrees do
+  `iTrunkMetadata | 12`), so the bridge's stump-synthesis is AUTHENTIC — keep it (one agent wrongly
+  called it a bug; verified). One real wood bug remains: harvested non-oak logs drop OAK (species
+  lost) — same for leaves/planks/slabs. Fix = BlockLog.damageDropped(meta)=meta&3 + a legacy->modern
+  variant table in ProxyRegistry consulted by ItemStackHelper. NOT yet done.
+- NETHER: FC adds almost NO nether worldgen. Blood moss + blood wood are SPREAD/GROW from
+  player-placed seeds (already work via ProxyBlock.randomTick), not worldgen. FCMapGenNetherBridge
+  = a mob-SPAWN change (do as add_spawns biome modifier), not blocks. Natural groves would be a
+  non-FC design add.
+- STRUCTURE LOOT: mostly re-weighted vanilla items (low value) + ONE net-new item (Lightning Rod
+  in jungle temples) + three wicker-basket containers (witch hut/desert well: structure processors,
+  high effort) + bonus basket + a mineshaft depth-rebalance (GLM). Strongholds/nether fortress: no
+  FC loot.
+- PLANTS/ORES: headline is the STRATA system (depth-based hardness/tool-tier on stone+ore, high
+  effort, needs re-anchoring to y=-64). Plus extra jungle sugar cane + underground brown mushrooms
+  (small features). Emerald/silverfish in hills = redundant with vanilla.
+- BONUS BASKET: replace vanilla bonus chest with the FC wicker basket holding one Golden Dung.
+
+Phase 1 shipped: Lightning Rod in jungle temples. New `add_item` GLM
+(FCAddItemToLootModifier + BTWLootModifiers.ADD_ITEM), data-gen entry in FCLootOverrides, and the
+generated JSON (data/betterthanwolves/loot_modifiers/jungle_temple_lightning_rod.json) targeting
+minecraft:chests/jungle_temple with betterthanwolves:block_1067 at chance 0.2. Compiles clean.
+Next: wood species-drop fix, bonus basket, mineshaft GLM, plants features, strata, nether spawns.
