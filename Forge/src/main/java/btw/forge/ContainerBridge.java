@@ -30,18 +30,16 @@ public class ContainerBridge {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-ContainerBridge");
 
-    /**
-     * Opens an FC container as an MC 1.20.1 menu.
-     *
-     * <p>This is the equivalent of FC's {@code ServerOpenCustomInterface}.
-     * It creates an {@link FCContainerMenu} that wraps the FC container
-     * and opens it on the server player, which triggers the client to
-     * create a matching screen.</p>
-     *
-     * @param player      the FC player bridge
-     * @param fcContainer the FC container to open
-     * @param title       the GUI title (displayed at the top of the screen)
-     */
+    private static final java.util.Map<String, String> FC_GUI_TITLES = java.util.Map.of(
+            "FCContainerSoulforge", "Soulforge",
+            "FCContainerInfernalEnchanter", "Infernal Enchanter",
+            "FCContainerBlockDispenser", "Block Dispenser",
+            "FCContainerWorkbench", "Crafting");
+
+    private static String invTitle(btw.modern.IInventory inv) {
+        return inv.isInvNameLocalized() ? inv.getInvName() : btw.modern.StatCollector.translateToLocal(inv.getInvName());
+    }
+
     public static void openFCContainer(PlayerBridge player,
                                         btw.modern.Container fcContainer,
                                         String title) {
@@ -51,10 +49,12 @@ public class ContainerBridge {
             return;
         }
 
+        String containerType = fcContainer.getClass().getSimpleName();
+        String shownTitle = FC_GUI_TITLES.getOrDefault(containerType, title != null ? title : "Container");
         MenuProvider menuProvider = new MenuProvider() {
             @Override
             public Component getDisplayName() {
-                return Component.literal(title != null ? title : "Container");
+                return Component.literal(shownTitle);
             }
 
             @Override
@@ -63,12 +63,8 @@ public class ContainerBridge {
             }
         };
 
-        // Open the screen. The extra data writer sends the slot layout so
-        // the client can create a matching FCContainerMenu without having
-        // the FC container instance.
         try {
             LOGGER.debug("Opening MC screen with {} slots", fcContainer.inventorySlots.size());
-            String containerType = fcContainer.getClass().getSimpleName();
             NetworkHooks.openScreen(serverPlayer, menuProvider, buf -> {
                 buf.writeUtf(containerType);
                 writeSlotLayout(buf, fcContainer);
@@ -78,9 +74,6 @@ public class ContainerBridge {
             LOGGER.error("Failed to open FC container screen: {}", e.toString(), e);
         }
 
-        // Register the player as a crafter so FC's detectAndSendChanges()
-        // can send progress bar updates (cook progress, bookshelf level, etc.)
-        // via ICrafting.sendProgressBarUpdate → PlayerBridge → FCContainerMenu DataSlots.
         try {
             if (!fcContainer.crafters.contains(player)) {
                 fcContainer.addCraftingToCrafters(player);
@@ -90,27 +83,15 @@ public class ContainerBridge {
         }
     }
 
-    /**
-     * Opens a simple chest-like GUI for an FC IInventory.
-     *
-     * <p>Creates a basic FC container that maps the IInventory's slots
-     * plus the player's inventory slots, then opens it as an MC menu.</p>
-     *
-     * @param player    the FC player bridge
-     * @param inventory the FC inventory to display
-     */
     public static void openChestGUI(PlayerBridge player, btw.modern.IInventory inventory) {
         ServerPlayer serverPlayer = player.getServerPlayer();
         if (serverPlayer == null) return;
 
-        // Create a simple FC container for the chest-like inventory
         btw.modern.Container chestContainer = new SimpleChestContainer(inventory, player);
 
-        // Set the FC container on the player (FC code may reference it)
         player.openContainer = chestContainer;
 
-        String name = inventory.isInvNameLocalized() ? inventory.getInvName() : "Container";
-        // We created the container ourselves, so we need to register crafter
+        String name = invTitle(inventory);
         openFCContainer(player, chestContainer, name);
     }
 
@@ -173,38 +154,15 @@ public class ContainerBridge {
         }
     }
 
-    // ================================================================
-    // Post-activation hook: detect when FC set openContainer
-    // ================================================================
-
-    /**
-     * Checks whether FC code set {@code player.openContainer} during a
-     * block activation (onBlockActivated) and opens the corresponding
-     * MC menu if so.
-     *
-     * <p>Call this AFTER invoking FC's {@code onBlockActivated()} from
-     * both {@link ProxyBlock#use} and {@link btw.forge.mixin.BlockBehaviorMixin}.
-     * The method snapshots the player's openContainer before the FC call,
-     * then compares after. If it changed, the new FC container is opened
-     * as an MC menu.</p>
-     *
-     * @param player         the PlayerBridge
-     * @param previousContainer the openContainer value BEFORE the FC call
-     */
     public static boolean checkAndOpenContainer(PlayerBridge player,
                                               btw.modern.Container previousContainer) {
         btw.modern.Container currentContainer = player.openContainer;
 
-        // Guard: if an FCContainerMenu is already open, skip duplicate opens.
-        // FC may call ServerOpenCustomInterface multiple times during a single
-        // block activation, creating duplicate containers.
         ServerPlayer sp = player.getServerPlayer();
         if (sp != null && sp.containerMenu instanceof FCContainerMenu) {
             return false;
         }
 
-        // If openContainer changed and is not null and not the player's
-        // own inventory container, then FC opened a new GUI
         if (currentContainer != null
                 && currentContainer != previousContainer
                 && currentContainer != player.inventoryContainer) {
@@ -217,20 +175,15 @@ public class ContainerBridge {
                 return false;
             }
 
-            // Determine a title from the FC container's first non-player inventory
             String title = "Container";
             for (int i = 0; i < currentContainer.inventorySlots.size(); i++) {
                 btw.modern.Slot slot = currentContainer.inventorySlots.get(i);
                 if (!(slot.inventory instanceof btw.modern.InventoryPlayer)) {
-                    if (slot.inventory.isInvNameLocalized()) {
-                        title = slot.inventory.getInvName();
-                    }
+                    title = invTitle(slot.inventory);
                     break;
                 }
             }
 
-            // FC's ServerOpenCustomInterface already called
-            // onCraftGuiOpened -> addCraftingToCrafters, so don't register again
             openFCContainer(player, currentContainer, title);
             return true;
         }

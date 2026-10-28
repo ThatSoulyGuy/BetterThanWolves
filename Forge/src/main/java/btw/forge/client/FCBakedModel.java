@@ -1078,10 +1078,6 @@ public class FCBakedModel implements BakedModel {
         @Override public ItemOverrides getOverrides() { return ItemOverrides.EMPTY; }
     }
 
-    // ================================================================
-    // Captured quad → BakedQuad conversion
-    // ================================================================
-
     private static BakedQuad convertCapturedQuad(btw.modern.Tessellator.CapturedQuad cq,
                                                   String fallbackTexture) {
         if (cq.vertices[0] == null) return null;
@@ -1089,11 +1085,21 @@ public class FCBakedModel implements BakedModel {
         btw.modern.Tessellator.CapturedVertex v0 = cq.vertices[0];
         Direction dir = directionFromNormal(v0.nx, v0.ny, v0.nz);
 
-        // Use the quad's texture name, or fall back to the block's icon
         String texName = cq.textureName;
         if (texName == null || texName.isEmpty()) texName = fallbackTexture;
         TextureAtlasSprite sprite = lookupSprite(texName != null ? texName : "");
         if (sprite == null) return null;
+
+        btw.modern.Tessellator.CapturedVertex p0 = cq.vertices[0], p1 = cq.vertices[1], p2 = cq.vertices[2], p3 = cq.vertices[3];
+        org.joml.Vector3f normal = new org.joml.Vector3f((float) (p2.x - p0.x), (float) (p2.y - p0.y), (float) (p2.z - p0.z))
+                .cross((float) (p3.x - p1.x), (float) (p3.y - p1.y), (float) (p3.z - p1.z));
+        if (normal.lengthSquared() > 1.0E-8F) {
+            normal.normalize();
+        } else {
+            normal.set(p0.nx, p0.ny, p0.nz);
+        }
+        int packedNormal = (((byte) (normal.x * 127)) & 0xFF) | ((((byte) (normal.y * 127)) & 0xFF) << 8)
+                | ((((byte) (normal.z * 127)) & 0xFF) << 16);
 
         int[] vertexData = new int[32];
         for (int i = 0; i < 4; i++) {
@@ -1103,22 +1109,15 @@ public class FCBakedModel implements BakedModel {
             vertexData[base + 0] = Float.floatToRawIntBits((float) v.x);
             vertexData[base + 1] = Float.floatToRawIntBits((float) v.y);
             vertexData[base + 2] = Float.floatToRawIntBits((float) v.z);
-            // Color (ABGR)
             int r = (int)(v.r * 255) & 0xFF;
             int g = (int)(v.g * 255) & 0xFF;
             int b = (int)(v.b * 255) & 0xFF;
             int a = (int)(v.a * 255) & 0xFF;
             vertexData[base + 3] = a << 24 | b << 16 | g << 8 | r;
-            // UV: map 0-1 normalized to atlas sprite coordinates
             vertexData[base + 4] = Float.floatToRawIntBits(sprite.getU(v.u * 16));
             vertexData[base + 5] = Float.floatToRawIntBits(sprite.getV(v.v * 16));
-            // Light: 0 = let MC compute from world lighting
             vertexData[base + 6] = 0;
-            // Normal (packed signed bytes)
-            int nx = ((byte)(v.nx * 127)) & 0xFF;
-            int ny = ((byte)(v.ny * 127)) & 0xFF;
-            int nz = ((byte)(v.nz * 127)) & 0xFF;
-            vertexData[base + 7] = nx | (ny << 8) | (nz << 16);
+            vertexData[base + 7] = packedNormal;
         }
 
         return new BakedQuad(vertexData, -1, dir, sprite, true);
@@ -1134,17 +1133,12 @@ public class FCBakedModel implements BakedModel {
         return Direction.UP;
     }
 
-    // ================================================================
-    // BakedModel interface
-    // ================================================================
-
     @Override
     public net.minecraftforge.client.ChunkRenderTypeSet getRenderTypes(
             BlockState state, RandomSource rand, net.minecraftforge.client.model.data.ModelData data) {
-        // Use cutoutMipped so transparent pixels in FC textures render correctly
-        // (alpha-tested transparency, with mipmapping). Solid blocks are unaffected.
-        return net.minecraftforge.client.ChunkRenderTypeSet.of(
-                net.minecraft.client.renderer.RenderType.cutoutMipped());
+        return net.minecraftforge.client.ChunkRenderTypeSet.of(fcBlock != null && fcBlock.getRenderBlockPass() == 1
+                ? net.minecraft.client.renderer.RenderType.translucent()
+                : net.minecraft.client.renderer.RenderType.cutoutMipped());
     }
 
     /**

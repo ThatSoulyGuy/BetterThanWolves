@@ -32,12 +32,23 @@ final class FCPuppetSupport {
 
     private static final Logger LOGGER = LogManager.getLogger("BTW-Puppet");
 
-    /** Once-per-key failure log gate, shared by the proxies (client render thread + server thread). */
     private static final Set<String> LOGGED_FAILURES = ConcurrentHashMap.newKeySet();
 
     private FCPuppetSupport() {}
 
-    /** True the first time {@code key} is seen; use to log a failure once. */
+    static void dropProtectedPlayerTargets(btw.modern.EntityLiving fc) {
+        if (isProtectedPlayer(fc.getAttackTarget())) fc.setAttackTarget(null);
+        if (isProtectedPlayer(fc.getAITarget())) fc.setRevengeTarget(null);
+        if (fc instanceof btw.modern.EntityCreature creature && isProtectedPlayer(creature.getEntityToAttack())) {
+            creature.setTarget(null);
+        }
+    }
+
+    private static boolean isProtectedPlayer(btw.modern.Entity entity) {
+        return entity instanceof PlayerBridge bridge && bridge.getRealPlayer() != null
+                && (bridge.getRealPlayer().getAbilities().invulnerable || bridge.getRealPlayer().isSpectator());
+    }
+
     static boolean firstFailure(String key) {
         return LOGGED_FAILURES.add(key);
     }

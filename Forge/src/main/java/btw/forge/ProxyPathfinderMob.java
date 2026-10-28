@@ -327,8 +327,8 @@ public class ProxyPathfinderMob extends PathfinderMob
             double snapPosX = fcEntity.posX, snapPosY = fcEntity.posY, snapPosZ = fcEntity.posZ;
             float snapYaw = fcEntity.rotationYaw, snapPitch = fcEntity.rotationPitch;
 
-            // D6: HP changes since the last tick, then FC's own damage this update — see ProxyMob.
             reconcileHealth();
+            FCPuppetSupport.dropProtectedPlayerTargets(fcEntity);
             try {
                 FCEnvHurtGuard.runOnUpdate(fcEntity, this);
                 PossessionDiagnostics.poll(this, fcEntity);

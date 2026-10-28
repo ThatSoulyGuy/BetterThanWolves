@@ -2,9 +2,18 @@ package btw.modern;
 
 public class BlockSnowBlock extends Block {
 
-    // 1.5.2 BlockSnowBlock constructor sets the random-tick flag (vanilla/server BlockSnowBlock.java:23)
     protected BlockSnowBlock(int id) {
         super(id, Material.craftedSnow);
         this.setTickRandomly(true);
+    }
+
+    @Override
+    public int idDropped(int metadata, java.util.Random random, int fortune) {
+        return Item.snowball.itemID;
+    }
+
+    @Override
+    public int quantityDropped(java.util.Random random) {
+        return 4;
     }
 }

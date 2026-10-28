@@ -365,7 +365,6 @@ public class ProxyBlock extends Block implements EntityBlock {
         }
     }
 
-    /** Maps FC particle names to MC 1.20.1 ParticleOptions. */
     public static net.minecraft.core.particles.ParticleOptions mapParticle(String name) {
         if (name == null) return null;
         if (name.equals("smoke")) return net.minecraft.core.particles.ParticleTypes.SMOKE;
@@ -392,17 +391,14 @@ public class ProxyBlock extends Block implements EntityBlock {
         if (name.equals("dripLava")) return net.minecraft.core.particles.ParticleTypes.DRIPPING_LAVA;
         if (name.equals("suspended")) return net.minecraft.core.particles.ParticleTypes.UNDERWATER;
         if (name.equals("heart")) return net.minecraft.core.particles.ParticleTypes.HEART;
-        // FC custom particles — map to closest vanilla equivalents
-        if (name.equals("fcwhitesmoke")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
+        if (name.equals("fcwhitesmoke")) return net.minecraft.core.particles.ParticleTypes.CLOUD;
         if (name.equals("fcblacksmoke")) return net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE;
         if (name.equals("fcsteam")) return net.minecraft.core.particles.ParticleTypes.CLOUD;
         if (name.equals("angryVillager")) return net.minecraft.core.particles.ParticleTypes.ANGRY_VILLAGER;
         if (name.startsWith("iconcrack_")) return net.minecraft.core.particles.ParticleTypes.ITEM_SNOWBALL;
         if (name.startsWith("blockcrack_")) return net.minecraft.core.particles.ParticleTypes.POOF;
-        // FC custom particles
-        if (name.equals("fcwhitesmoke")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
         if (name.equals("fccinders")) return net.minecraft.core.particles.ParticleTypes.FLAME;
-        if (name.equals("fcwhitecloud")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
+        if (name.equals("fcwhitecloud")) return net.minecraft.core.particles.ParticleTypes.CLOUD;
         return null;
     }
 
@@ -1141,18 +1137,10 @@ public class ProxyBlock extends Block implements EntityBlock {
         return getFcShape(level, pos);
     }
 
-    /**
-     * Gets the VoxelShape from FC's block bounds. Calls setBlockBoundsBasedOnState
-     * with a real IBlockAccess so FC blocks with state-dependent bounds (campfire,
-     * axle, etc.) return the correct shape.
-     */
     private net.minecraft.world.phys.shapes.VoxelShape getFcShape(BlockGetter level, BlockPos pos) {
         btw.modern.Block fcBlock = fc();
+        btw.modern.AxisAlignedBB bounds = null;
         try {
-            // Create a lightweight IBlockAccess from the BlockGetter. Neighbour ids are the ones FC sees in the
-            // live world (ProxyRegistry.getWorldBlockId, as WorldBridge.getBlockId): a modern-only solid reads
-            // as a ModernBlockStandIn, a double slab as 43/125 -- not air (design_blockmap U4). Shapes are FC
-            // collision logic on BOTH sides, so client prediction and server agree.
             btw.modern.IBlockAccess access = new btw.modern.IBlockAccess() {
                 @Override public int getBlockId(int x, int y, int z) {
                     BlockPos p = new BlockPos(x, y, z);
@@ -1169,17 +1157,13 @@ public class ProxyBlock extends Block implements EntityBlock {
                     return fcBlock.blockMaterial;
                 }
             };
-            fcBlock.setBlockBoundsBasedOnState(access, pos.getX(), pos.getY(), pos.getZ());
+            bounds = fcBlock.GetStateBoundsNoWrite(access, pos.getX(), pos.getY(), pos.getZ());
         } catch (Exception ignored) {
-            // If setBlockBoundsBasedOnState fails, use default bounds
         }
+        if (bounds == null) bounds = fcBlock.GetFixedBlockBoundsFromPool();
 
-        // FCBlockSpike (lightning rod, iron spike) and similar define their real shape in
-        // getCollisionBoundingBoxFromPool, NOT the minX..maxZ fields — so when the fields are
-        // still a full cube on a non-cube block, read the real collision box instead. Fixes the
-        // lightning rod's full-block collision under its ~1px model.
-        boolean fullCube = fcBlock.minX <= 0.001 && fcBlock.minY <= 0.001 && fcBlock.minZ <= 0.001
-                && fcBlock.maxX >= 0.999 && fcBlock.maxY >= 0.999 && fcBlock.maxZ >= 0.999;
+        boolean fullCube = bounds.minX <= 0.001 && bounds.minY <= 0.001 && bounds.minZ <= 0.001
+                && bounds.maxX >= 0.999 && bounds.maxY >= 0.999 && bounds.maxZ >= 0.999;
         if (fullCube && !fcBlock.renderAsNormalBlock()) {
             try {
                 btw.modern.AxisAlignedBB bb = fcBlock.getCollisionBoundingBoxFromPool(
@@ -1195,8 +1179,8 @@ public class ProxyBlock extends Block implements EntityBlock {
         }
 
         return net.minecraft.world.phys.shapes.Shapes.box(
-                fcBlock.minX, fcBlock.minY, fcBlock.minZ,
-                fcBlock.maxX, fcBlock.maxY, fcBlock.maxZ);
+                bounds.minX, bounds.minY, bounds.minZ,
+                bounds.maxX, bounds.maxY, bounds.maxZ);
     }
 
     private static double clamp01(double v) {

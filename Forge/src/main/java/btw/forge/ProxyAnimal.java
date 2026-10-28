@@ -314,8 +314,8 @@ public class ProxyAnimal extends Animal
             float snapYaw = fcEntity.rotationYaw, snapPitch = fcEntity.rotationPitch;
             double snapMotX = fcEntity.motionX, snapMotY = fcEntity.motionY, snapMotZ = fcEntity.motionZ;
 
-            // D6: HP changes since the last tick, then FC's own damage this update — see ProxyMob.
             reconcileHealth();
+            FCPuppetSupport.dropProtectedPlayerTargets(fcEntity);
             try {
                 FCEnvHurtGuard.runOnUpdate(fcEntity, this);
                 PossessionDiagnostics.poll(this, fcEntity);

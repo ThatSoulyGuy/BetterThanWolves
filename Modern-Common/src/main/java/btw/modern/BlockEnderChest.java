@@ -12,6 +12,16 @@ public class BlockEnderChest extends BlockContainer {
     }
 
     @Override
+    public int idDropped(int metadata, java.util.Random random, int fortune) {
+        return Block.obsidian.blockID;
+    }
+
+    @Override
+    public int quantityDropped(java.util.Random random) {
+        return 8;
+    }
+
+    @Override
     public void onBlockPlacedBy(World world, int x, int y, int z, EntityLiving placer, ItemStack stack) {
         int dir = MathHelper.floor_double((double)(placer.rotationYaw * 4.0F / 360.0F) + 0.5) & 3;
         int facing;

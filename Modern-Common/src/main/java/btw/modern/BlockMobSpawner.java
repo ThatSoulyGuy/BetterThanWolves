@@ -9,4 +9,9 @@ public class BlockMobSpawner extends BlockContainer {
     public TileEntity createNewTileEntity(World world) {
         return null;
     }
+
+    @Override
+    public int quantityDropped(java.util.Random random) {
+        return 0;
+    }
 }

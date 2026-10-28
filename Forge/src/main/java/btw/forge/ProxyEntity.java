@@ -72,11 +72,6 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
         return fcClassName;
     }
 
-    /**
-     * Creates the FC entity if missing — works on both client and server.
-     * On server: uses a real WorldBridge so FC logic functions.
-     * On client: uses a dummy world for rendering only.
-     */
     private void ensureFcEntity() {
         String className = getFcClassName();
         if (className == null || className.isEmpty()) return;
@@ -94,9 +89,7 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
                 var ctor = fcClass.getConstructor(btw.modern.World.class);
                 fcEntity = (btw.modern.Entity) ctor.newInstance(world);
             } catch (NoSuchMethodException e) {
-                var ctor = fcClass.getDeclaredConstructor();
-                ctor.setAccessible(true);
-                fcEntity = (btw.modern.Entity) ctor.newInstance();
+                fcEntity = constructWithWorldFirst(fcClass, world);
             }
             if (fcEntity != null) {
                 fcEntity.worldObj = world;
@@ -109,28 +102,32 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
         }
     }
 
-    /**
-     * Builds a client-side {@link btw.modern.World} backed by the actual
-     * MC client {@link net.minecraft.world.level.Level}. Earlier this
-     * returned an "all air" stub, which made FC physics see no blocks at
-     * all on the client — the visible model would fall through the floor
-     * every tick (server kept the entity pinned, but the client's FC
-     * tick simulated free-fall against an empty world).
-     *
-     * The block-query methods now delegate to the real client level via
-     * the same {@link ProxyRegistry} legacy-id mapping that the server
-     * {@link WorldBridge} uses, so client-side FC collision matches the
-     * server within MC's tick.
-     */
+    private static btw.modern.Entity constructWithWorldFirst(Class<?> fcClass, btw.modern.World world)
+            throws ReflectiveOperationException {
+        for (var ctor : fcClass.getConstructors()) {
+            Class<?>[] types = ctor.getParameterTypes();
+            if (types.length > 1 && types[0] == btw.modern.World.class) {
+                Object[] args = new Object[types.length];
+                args[0] = world;
+                for (int i = 1; i < types.length; i++) {
+                    if (types[i].isPrimitive()) {
+                        args[i] = java.lang.reflect.Array.get(java.lang.reflect.Array.newInstance(types[i], 1), 0);
+                    }
+                }
+                return (btw.modern.Entity) ctor.newInstance(args);
+            }
+        }
+        var ctor = fcClass.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        return (btw.modern.Entity) ctor.newInstance();
+    }
+
     public static btw.modern.World createDummyClientWorld() {
         return createDummyClientWorld(null);
     }
 
     public static btw.modern.World createDummyClientWorld(net.minecraft.world.level.Level mcLevel) {
         final net.minecraft.world.level.Level level = mcLevel;
-        // Client-local sound / aux / render calls go to the shared client sink only for a real client
-        // level (never from a server thread's world, and never on a dedicated server, where the
-        // client-only sink class is not loaded); without a level they are dropped.
         final boolean clientSink = level != null && level.isClientSide();
         return new btw.modern.World() {
             { this.isRemote = true; this.rand = new java.util.Random();
@@ -148,11 +145,6 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
                 net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(x, y, z);
                 net.minecraft.world.level.block.state.BlockState s = level.getBlockState(pos);
                 if (s.hasProperty(ProxyBlock.META)) return s.getValue(ProxyBlock.META);
-                // Vanilla-id blocks: the SAME legacy-metadata derivation the server's WorldBridge uses
-                // (log axis + stump bit, fluid level, facing, ...). Client PlayerBridge worlds predict
-                // digging through this (FCMiningSpeed): returning 0 made a stump log (FCBlockLog hardness
-                // x3 for meta 12) break 3x early on the client and reappear until the server finished.
-                // (Server-only vanillaMetaOverrides are not visible here.)
                 try {
                     return WorldBridge.deriveVanillaMetadata(level, s, pos);
                 } catch (Throwable t) {
@@ -178,13 +170,6 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
                 return block != null && block.blockMaterial != null && block.blockMaterial.isOpaque() && block.renderAsNormalBlock();
             }
 
-            /**
-             * Vanilla 1.5.2 Entity.moveEntity walks each block in the
-             * swept AABB and asks it for collision boxes. Without this
-             * the entity falls through everything because the default
-             * World.getCollidingBoundingBoxes returns an empty list.
-             * Mirrors {@link WorldBridge#getCollidingBoundingBoxes}.
-             */
             @Override
             @SuppressWarnings("unchecked")
             public java.util.List getCollidingBoundingBoxes(btw.modern.Entity entity, btw.modern.AxisAlignedBB aabb) {
@@ -221,24 +206,16 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
             public void notifyBlockChange(int x, int y, int z, int id) {}
             public boolean spawnEntityInWorld(btw.modern.Entity e) { return false; }
             public btw.modern.BiomeGenBase getBiomeGenForCoords(int x, int z) { return btw.modern.BiomeGenBase.plains; }
-            // 1.5.2 WorldClient + RenderGlobal sound contract (audit sounds S1). Client FC entities run
-            // onUpdate / handleHealthUpdate / client events here (tick() below, FCPuppetSupport
-            // .forwardEntityEvent): e.g. the cow kick, villager restock pop and zombie-cure moan play
-            // through World.playSound, which WorldClient played locally (WorldClient.java:483-505).
-            // playSoundEffect / playSoundAtEntity stay no-ops as in RenderGlobal (:1812, :1817): the
-            // server broadcasts those.
             public void playSoundEffect(double x, double y, double z, String s, float v, float p) {}
             public void playSoundAtEntity(btw.modern.Entity e, String s, float v, float p) {}
             @Override
             public void playSound(double x, double y, double z, String s, float v, float p, boolean distanceDelay) {
                 if (clientSink) btw.forge.client.LegacyClientSound.playLocal(x, y, z, s, v, p, distanceDelay);
             }
-            // vanilla/client World.java:4994-4997: the 6-arg overload is the 7-arg one without delay.
             @Override
             public void playSound(double x, double y, double z, String s, float v, float p) {
                 playSound(x, y, z, s, v, p, false);
             }
-            // RenderGlobal.playAuxSFX / broadcastSound, FC ids through FC's own client handler.
             public void playAuxSFX(int id, int x, int y, int z, int data) {
                 if (clientSink) btw.forge.client.LegacyClientSound.playAux(id, x, y, z, data);
             }
@@ -254,7 +231,6 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
             public boolean isBlockIndirectlyGettingPowered(int x, int y, int z) { return false; }
             public btw.modern.IChunkProvider createChunkProvider() { return null; }
             public boolean destroyBlock(int x, int y, int z, boolean drop) { return false; }
-            // 1.5.2 RenderGlobal.markBlockRangeForRenderUpdate re-meshed the range on the client (MPR-6).
             public void markBlockRangeForRenderUpdate(int x1, int y1, int z1, int x2, int y2, int z2) {
                 if (clientSink) btw.forge.client.ClientFcWorld.markRangeDirty(x1, y1, z1, x2, y2, z2);
             }
@@ -270,18 +246,18 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
             public int getFullBlockLightValue(int x, int y, int z) { return 15; }
             public boolean checkChunksExist(int x1, int y1, int z1, int x2, int y2, int z2) { return true; }
             public boolean checkNoEntityCollision(btw.modern.AxisAlignedBB bb) { return true; }
-            public void spawnParticle(String name, double x, double y, double z, double vx, double vy, double vz) {}
+            public void spawnParticle(String name, double x, double y, double z, double vx, double vy, double vz) {
+                if (clientSink) btw.forge.client.ClientFcWorld.forLevel((net.minecraft.client.multiplayer.ClientLevel) level)
+                        .spawnParticle(name, x, y, z, vx, vy, vz);
+            }
         };
     }
 
-    // ------------------------------------------------------------------
-    // Position / rotation synchronization
-    // ------------------------------------------------------------------
-
     private void syncToFc() {
         if (fcEntity == null) return;
-        // Use setPosition to keep boundingBox in sync — see ProxyMob.syncToFc.
-        fcEntity.setPosition(getX(), getY(), getZ());
+        if (fcEntity.posX != getX() || fcEntity.posY != getY() || fcEntity.posZ != getZ()) {
+            fcEntity.setPosition(getX(), getY(), getZ());
+        }
         fcEntity.prevPosX = xOld;
         fcEntity.prevPosY = yOld;
         fcEntity.prevPosZ = zOld;
@@ -304,44 +280,52 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
         setYRot(fcEntity.rotationYaw);
         setXRot(fcEntity.rotationPitch);
         setDeltaMovement(fcEntity.motionX, fcEntity.motionY, fcEntity.motionZ);
+        setOnGround(fcEntity.onGround);
         fallDistance = fcEntity.fallDistance;
         if (fcEntity.isDead) {
             discard();
         }
     }
 
-    // ------------------------------------------------------------------
-    // Lifecycle overrides
-    // ------------------------------------------------------------------
+    private double lerpX, lerpY, lerpZ;
+    private float lerpYRot, lerpXRot;
+    private int lerpSteps;
+
+    @Override
+    public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps, boolean teleport) {
+        lerpX = x;
+        lerpY = y;
+        lerpZ = z;
+        lerpYRot = yRot;
+        lerpXRot = xRot;
+        lerpSteps = steps;
+    }
+
+    private void stepLerp() {
+        if (lerpSteps <= 0) return;
+        setPos(getX() + (lerpX - getX()) / lerpSteps, getY() + (lerpY - getY()) / lerpSteps,
+                getZ() + (lerpZ - getZ()) / lerpSteps);
+        setYRot(getYRot() + net.minecraft.util.Mth.wrapDegrees(lerpYRot - getYRot()) / lerpSteps);
+        setXRot(getXRot() + (lerpXRot - getXRot()) / lerpSteps);
+        lerpSteps--;
+    }
 
     @Override
     public void tick() {
+        if (level().isClientSide) stepLerp();
         syncToFc();
         if (fcEntity != null) {
             try {
                 fcEntity.onUpdate();
             } catch (Throwable e) {
-                // Throwable, not Exception: a NoSuchMethodError/NoClassDefFoundError
-                // from a bridge gap is an Error and would kill the server tick.
-                // Logged once per (class, exception): this runs every tick on both sides.
                 if (LOGGED_TICK_FAILURES.add(fcEntity.getClass().getName() + '|' + e.getClass().getName())) {
                     LOGGER.warn("FC entity onUpdate() threw: {}: {}",
                             e.getClass().getSimpleName(), e.getMessage());
                 }
             }
         }
-        // Position/rotation writeback is SERVER-ONLY. On the client the modern
-        // entity's position is driven by the server via the entity tracker + vanilla
-        // interpolation (lerp); writing the client-side FC re-simulation back with
-        // setPos/setYRot every tick fought that interpolation and caused rubber-banding
-        // when entities move or turn. onUpdate still runs client-side (above) so FC
-        // animation state (e.g. windmill/waterwheel rotation) keeps advancing; only the
-        // authoritative position/rotation stays server-driven. Mirrors the mob proxies.
         if (!level().isClientSide) {
             syncFromFc();
-            // Periodically broadcast FC entity state (NBT + DataWatcher) to
-            // tracking clients so dynamic state like windmill rotation speed
-            // stays in sync after storms / overpower events.
             if (fcEntity != null && (tickCount % 10) == 0) {
                 BTWNetwork.broadcastFCEntityState(this, fcEntity);
             }

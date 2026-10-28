@@ -960,17 +960,23 @@ public abstract class Block {
         return 0;
     }
 
-    // --- BTW-added: Block dispenser methods ---
+    public ItemStack GetStackRetrievedByBlockDispenser(World world, int i, int j, int k) {
+        int iMetadata = world.getBlockMetadata(i, j, k);
+        if (canSilkHarvest(iMetadata)) return createStackedBlock(iMetadata);
+        int iIdDropped = idDropped(iMetadata, world.rand, 0);
+        return iIdDropped > 0 ? new ItemStack(iIdDropped, 1, damageDropped(iMetadata)) : null;
+    }
 
-    public ItemStack GetStackRetrievedByBlockDispenser(World world, int i, int j, int k) { return null; }
     public boolean IsBlockDestroyedByBlockDispenser(int iMetadata) { return false; }
-    public void OnRemovedByBlockDispenser(World world, int i, int j, int k) {}
 
-    // --- BTW-added: Lightning ---
+    public void OnRemovedByBlockDispenser(World world, int i, int j, int k) {
+        world.playAuxSFX(GetFcStaticInt("net.minecraft.src.btw.core.FCBetterThanWolves",
+                "m_iBlockDestroyRespectParticleSettingsAuxFXID", 2252), i, j, k,
+                blockID + (world.getBlockMetadata(i, j, k) << 12));
+        world.setBlockWithNotify(i, j, k, 0);
+    }
 
     public void OnStruckByLightning(World world, int i, int j, int k) {}
-
-    // --- BTW-added: Mob spawning ---
 
     public boolean CanMobsSpawnOn(World world, int i, int j, int k) { return true; }
     public float MobSpawnOnVerticalOffset(World world, int i, int j, int k) { return 0; }
@@ -1022,18 +1028,24 @@ public abstract class Block {
         return collisionPoint;
     }
 
-    // --- BTW-added: Grazing methods ---
-
     public boolean CanBeGrazedOn(IBlockAccess blockAccess, int i, int j, int k, EntityAnimal animal) { return false; }
-    public void OnGrazed(World world, int i, int j, int k, EntityAnimal animal) {}
+    public void OnGrazed(World world, int i, int j, int k, EntityAnimal animal) {
+        world.setBlockToAir(i, j, k);
+        Block blockBelow = blocksList[world.getBlockId(i, j - 1, k)];
+        if (blockBelow != null) blockBelow.OnVegetationAboveGrazed(world, i, j - 1, k, animal);
+    }
+
     public void OnVegetationAboveGrazed(World world, int i, int j, int k, EntityAnimal animal) {}
 
-    // --- BTW-added: Neighbor disruption ---
+    public void NotifyNeighborsBlockDisrupted(World world, int i, int j, int k) {
+        for (int iFacing = 0; iFacing <= 5; iFacing++) {
+            FCUtilsBlockPos pos = new FCUtilsBlockPos(i, j, k, iFacing);
+            Block block = blocksList[world.getBlockId(pos.i, pos.j, pos.k)];
+            if (block != null) block.OnNeighborDisrupted(world, pos.i, pos.j, pos.k, GetOppositeFacing(iFacing));
+        }
+    }
 
-    public void NotifyNeighborsBlockDisrupted(World world, int i, int j, int k) {}
     public void OnNeighborDisrupted(World world, int i, int j, int k, int iToFacing) {}
-
-    // --- BTW-added: Food values ---
 
     public int GetHerbivoreItemFoodValue(int iItemDamage) { return herbivoreItemFoodValue; }
     public void SetHerbivoreItemFoodValue(int iFoodValue) { this.herbivoreItemFoodValue = iFoodValue; }
@@ -1224,11 +1236,9 @@ public abstract class Block {
     }
 
     public float getBlockBrightness(IBlockAccess blockAccess, int x, int y, int z) {
-        return 0;
+        return blockAccess.getLightBrightness(x, y, z);
     }
 
-    // 1.5.2 (FCMOD) Block.getSelectedBoundingBoxFromPool (vanilla/client Block.java:3769-3772): same per-position
-    // state bounds as the collision box (it read the shared fields too)
     public AxisAlignedBB getSelectedBoundingBoxFromPool(World world, int x, int y, int z) {
         return getStateBoundsInWorld(world, x, y, z);
     }
@@ -1280,17 +1290,24 @@ public abstract class Block {
     }
 
     public Icon GetHopperFilterIcon() {
-        return this.blockIcon;
+        return null;
     }
 
-    // --- Client-side: Block rendering methods (overridden by subclasses) ---
-
     public boolean RenderBlock(RenderBlocks renderBlocks, int i, int j, int k) {
-        if (renderBlocks.blockAccess != null) {
-            setBlockBoundsBasedOnState(renderBlocks.blockAccess, i, j, k);
-        }
         renderBlocks.setRenderBoundsFromBlock(this);
+        if (renderBlocks.blockAccess != null) {
+            renderBlocks.setRenderBounds(GetStateBoundsNoWrite(renderBlocks.blockAccess, i, j, k));
+        }
         return renderBlocks.renderBlockByRenderType(this, i, j, k);
+    }
+
+    public AxisAlignedBB GetStateBoundsNoWrite(IBlockAccess blockAccess, int x, int y, int z) {
+        if (OVERRIDES_STATE_BOUNDS.get(getClass())) {
+            AxisAlignedBB bounds = GetBlockBoundsFromPoolBasedOnState(blockAccess, x, y, z);
+            if (bounds != null) return bounds;
+        }
+        setBlockBoundsBasedOnState(blockAccess, x, y, z);
+        return GetFixedBlockBoundsFromPool();
     }
 
     public void RenderBlockAsItem(RenderBlocks renderBlocks, int iItemDamage, float fBrightness) {
@@ -1544,14 +1561,22 @@ public abstract class Block {
         }
     }
 
-    // --- BTW-added: Dirt dug ---
+    public void OnDirtDugWithImproperTool(World world, int i, int j, int k) {
+        for (int iFacing = 0; iFacing < 6; iFacing++) {
+            NotifyNeighborDirtDugWithImproperTool(world, i, j, k, iFacing);
+        }
+    }
 
-    public void OnDirtDugWithImproperTool(World world, int i, int j, int k) {}
     public void OnDirtSlabDugWithImproperTool(World world, int i, int j, int k, boolean bUpsideDown) {}
-    public void NotifyNeighborDirtDugWithImproperTool(World world, int i, int j, int k, int iToFacing) {}
-    public void OnNeighborDirtDugWithImproperTool(World world, int i, int j, int k, int iToFacing) {}
 
-    // --- BTW-added: Hard points ---
+    public void NotifyNeighborDirtDugWithImproperTool(World world, int i, int j, int k, int iToFacing) {
+        FCUtilsBlockPos pos = new FCUtilsBlockPos(i, j, k, iToFacing);
+        Block block = blocksList[world.getBlockId(pos.i, pos.j, pos.k)];
+        if (block != null) {
+            block.OnNeighborDirtDugWithImproperTool(world, pos.i, pos.j, pos.k, GetOppositeFacing(iToFacing));
+        }
+    }
+    public void OnNeighborDirtDugWithImproperTool(World world, int i, int j, int k, int iToFacing) {}
 
     public boolean HasSmallCenterHardPointToFacing(IBlockAccess blockAccess, int i, int j, int k, int iFacing, boolean bIgnoreTransparency) {
         return HasCenterHardPointToFacing(blockAccess, i, j, k, iFacing, bIgnoreTransparency);
@@ -1689,9 +1714,7 @@ public abstract class Block {
     public boolean GetCanBlockBeReplacedByFire(World world, int i, int j, int k) {
         return IsAirBlock();
     }
-    public boolean IsIncineratedInCrucible() { return false; }
-
-    // --- BTW-added: Pathing ---
+    public boolean IsIncineratedInCrucible() { return BlockFire.abilityToCatchFire[blockID] > 0; }
 
     public boolean CanPathThroughBlock(IBlockAccess blockAccess, int i, int j, int k, Entity entity, PathFinder pathFinder) {
         // FC's real default: delegates to getBlocksMovement which returns
@@ -1943,14 +1966,13 @@ public abstract class Block {
     public int GetResultingBlockMetadataOnPistonPack(ItemStack stack) { return 0; }
     public void OnBrokenByPistonPush(World world, int i, int j, int k, int iMetadata) {}
 
-    // --- BTW-added: Hopper filtering ---
-
     public boolean CanItemPassIfFilter(ItemStack filteredItem) { return true; }
-    public int GetFilterableProperties(ItemStack stack) { return 0; }
-    public void SetFilterableProperties(int iProperties) {}
-    public boolean CanTransformItemIfFilter(ItemStack filteredItem) { return false; }
 
-    // --- BTW-added: Falling block ---
+    public int m_iFilterablePropertiesBitfield = Item.m_iFilterable_SolidBlock;
+
+    public int GetFilterableProperties(ItemStack stack) { return m_iFilterablePropertiesBitfield; }
+    public void SetFilterableProperties(int iProperties) { m_iFilterablePropertiesBitfield = iProperties; }
+    public boolean CanTransformItemIfFilter(ItemStack filteredItem) { return false; }
 
     public boolean IsFallingBlock() { return false; }
 

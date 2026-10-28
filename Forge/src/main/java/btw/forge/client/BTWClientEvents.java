@@ -50,27 +50,45 @@ public class BTWClientEvents {
     private static final ResourceLocation PLACEHOLDER_ITEM_MODEL =
             new ResourceLocation(BTWForgeMod.MOD_ID, "item/btw_placeholder_item");
 
-    /**
-     * Registers the FCContainerScreen for the FC_CONTAINER menu type.
-     * This links the server-side FCContainerMenu to the client-side screen
-     * so that when a container is opened, the correct GUI appears.
-     */
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
             MenuScreens.register(BTWMenuTypes.FC_CONTAINER.get(), FCContainerScreen::new);
             LOGGER.info("BTW: Registered FCContainerScreen for FC container menus.");
 
-            // Initialize FC entity renderers (populates the renderer map
-            // from FC's ClientAddEntityRenderers registration)
             FCEntityRenderer.initFcRenderers();
 
-            // Register FC tile entity special renderers (lost from vanilla patch)
             registerFcTileEntityRenderers();
 
-            // Also register BlockEntityRenderer here (belt-and-suspenders with RegisterRenderers)
             registerBlockEntityRendererSafe();
+
+            Item compositeBow = btw.forge.ProxyRegistry.getModernItem(520);
+            if (compositeBow != null) {
+                net.minecraft.client.renderer.item.ItemProperties.register(compositeBow, new ResourceLocation("pull"),
+                        (stack, level, entity, seed) -> entity == null || entity.getUseItem() != stack ? 0.0F
+                                : (stack.getUseDuration() - entity.getUseItemRemainingTicks()) / 20.0F);
+                net.minecraft.client.renderer.item.ItemProperties.register(compositeBow, new ResourceLocation("pulling"),
+                        (stack, level, entity, seed) -> entity != null && entity.isUsingItem() && entity.getUseItem() == stack ? 1.0F : 0.0F);
+            }
         });
+    }
+
+    @Mod.EventBusSubscriber(modid = BTWForgeMod.MOD_ID, value = Dist.CLIENT)
+    public static final class BowFov {
+
+        private BowFov() {}
+
+        @SubscribeEvent
+        public static void onComputeFov(net.minecraftforge.client.event.ComputeFovModifierEvent event) {
+            var player = event.getPlayer();
+            if (!player.isUsingItem() || !(player.getUseItem().getItem() instanceof btw.forge.ProxyItem)
+                    || !(btw.forge.ProxyItem.fcItemFor(player.getUseItem().getItem()) instanceof btw.modern.ItemBow)) {
+                return;
+            }
+            float draw = player.getTicksUsingItem() / 20.0F;
+            draw = draw > 1.0F ? 1.0F : draw * draw;
+            event.setNewFovModifier(event.getNewFovModifier() * (1.0F - draw * 0.15F));
+        }
     }
 
     private static boolean beRendererRegistered = false;

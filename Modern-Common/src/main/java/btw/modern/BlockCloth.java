@@ -10,6 +10,11 @@ public class BlockCloth extends Block {
         super(id, Material.cloth);
     }
 
+    @Override
+    public int damageDropped(int metadata) {
+        return metadata;
+    }
+
     public static int getBlockFromDye(int dyeColor) {
         return ~dyeColor & 15;
     }

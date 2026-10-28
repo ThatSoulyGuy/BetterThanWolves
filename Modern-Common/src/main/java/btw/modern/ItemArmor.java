@@ -94,4 +94,19 @@ public class ItemArmor extends Item {
     }
 
     public EnumArmorMaterial getArmorMaterial() { return material; }
+
+    @Override
+    public int getItemEnchantability() {
+        return material != null ? material.getEnchantability() : 0;
+    }
+
+    @Override
+    public boolean IsEnchantmentApplicable(Enchantment enchantment) {
+        if (enchantment.type == EnumEnchantmentType.armor) return true;
+        if (enchantment.type == EnumEnchantmentType.armor_head) return armorType == 0;
+        if (enchantment.type == EnumEnchantmentType.armor_torso) return armorType == 1;
+        if (enchantment.type == EnumEnchantmentType.armor_legs) return armorType == 2;
+        if (enchantment.type == EnumEnchantmentType.armor_feet) return armorType == 3;
+        return super.IsEnchantmentApplicable(enchantment);
+    }
 }

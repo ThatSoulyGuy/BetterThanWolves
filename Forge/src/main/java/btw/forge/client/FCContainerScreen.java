@@ -21,7 +21,6 @@ import java.util.Map;
  */
 public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> {
 
-    /** GUI info: texture + dimensions per FC container type. */
     private record GuiInfo(ResourceLocation texture, int width, int height) {}
 
     private static final Map<String, GuiInfo> GUI_MAP = new HashMap<>();
@@ -29,17 +28,12 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
         GUI_MAP.put("FCContainerSoulforge", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguianvil.png"), 176, 184));
         GUI_MAP.put("FCContainerWorkbench", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/crafting.png"), 176, 166));
         GUI_MAP.put("FCContainerInfernalEnchanter", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguiinfernal.png"), 176, 210));
-        GUI_MAP.put("FCContainerHopper", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fchopper.png"), 176, 166));
-        GUI_MAP.put("FCContainerBlockDispenser", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguiblockdisp.png"), 176, 166));
-        GUI_MAP.put("FCContainerPulley", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguipulley.png"), 176, 166));
-        GUI_MAP.put("FCContainerCauldron", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fccauldron.png"), 176, 193));
-        GUI_MAP.put("FCContainerCrucible", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fccauldron.png"), 176, 193));
-        GUI_MAP.put("FCContainerMillStone", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fccauldron.png"), 176, 193));
-        GUI_MAP.put("FCContainerHamper", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguiinv4.png"), 176, 166));
-        GUI_MAP.put("FCContainerFurnaceBrick", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/furnace.png"), 176, 166));
-        GUI_MAP.put("FCContainerVanillaAnvil", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguianvilvanilla.png"), 176, 166));
+        GUI_MAP.put("FCContainerHopper", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fchopper.png"), 176, 193));
+        GUI_MAP.put("FCContainerBlockDispenser", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguiblockdisp.png"), 176, 182));
+        GUI_MAP.put("FCContainerPulley", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguipulley.png"), 176, 174));
+        GUI_MAP.put("FCContainerCookingVessel", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fccauldron.png"), 176, 193));
+        GUI_MAP.put("FCContainerHamper", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/fcguiinv4.png"), 176, 149));
         GUI_MAP.put("SimpleChestContainer", new GuiInfo(new ResourceLocation("textures/gui/container/generic_54.png"), 176, 222));
-        // Vanilla containers opened via displayGUI* — use bundled 1.5.2 textures
         GUI_MAP.put("ContainerFurnace", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/furnace.png"), 176, 166));
         GUI_MAP.put("ContainerMerchant", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/entity/fcguitrading.png"), 176, 239));
         GUI_MAP.put("ContainerBeacon", new GuiInfo(new ResourceLocation(BTWForgeMod.MOD_ID, "textures/gui/beacon.png"), 230, 219));
@@ -55,7 +49,6 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
     private static final GuiInfo FALLBACK = new GuiInfo(
             new ResourceLocation("textures/gui/container/generic_54.png"), 176, 166);
 
-    // Enchanter button constants (from FCClientGuiInfernalEnchanter)
     private static final int ENCHANT_BUTTONS_X = 60;
     private static final int ENCHANT_BUTTONS_Y = 17;
     private static final int ENCHANT_BUTTON_W = 108;
@@ -72,7 +65,6 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
         String type = menu.getContainerType();
         GuiInfo info = GUI_MAP.getOrDefault(type, FALLBACK);
 
-        // For chest containers, calculate height based on actual row count
         int rows = 0;
         if ("SimpleChestContainer".equals(type)) {
             rows = menu.getFcNumRows();
@@ -87,9 +79,11 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
         this.inventoryLabelY = this.imageHeight - 94;
         this.isEnchanter = "FCContainerInfernalEnchanter".equals(type);
         this.isMerchant = "ContainerMerchant".equals(type);
+        this.type = String.valueOf(type);
     }
 
     private final boolean isMerchant;
+    private final String type;
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -105,12 +99,9 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
         int y = (this.height - this.imageHeight) / 2;
 
         if (chestRows > 0 && chestRows < 6) {
-            // Chest GUI: blit in two parts from generic_54.png
-            // Top: header (17px) + chest rows
             int topHeight = 17 + chestRows * 18;
             graphics.blit(this.guiTexture, x, y, 0, 0, this.imageWidth, topHeight);
-            // Bottom: player inventory (96px) from the bottom of the texture
-            int playerInvTexY = 126; // where player inventory starts in generic_54.png
+            int playerInvTexY = 126;
             graphics.blit(this.guiTexture, x, y + topHeight, 0, playerInvTexY, this.imageWidth, 96);
         } else {
             graphics.blit(this.guiTexture, x, y, 0, 0, this.imageWidth, this.imageHeight);
@@ -122,13 +113,24 @@ public class FCContainerScreen extends AbstractContainerScreen<FCContainerMenu> 
         if (isMerchant) {
             renderMerchantTrades(graphics, x, y, mouseX, mouseY);
         }
+        int data = this.menu.getFcData(0);
+        switch (type) {
+            case "FCContainerBlockDispenser" ->
+                    graphics.blit(this.guiTexture, x + 51 + (data % 4) * 18, y + 15 + (data / 4) * 18, 176, 0, 20, 20);
+            case "FCContainerCookingVessel" -> {
+                if (data > 0) {
+                    int flame = data * 12 / 1000;
+                    graphics.blit(this.guiTexture, x + 81, y + 31 - flame, 176, 12 - flame, 14, flame + 2);
+                }
+            }
+            case "FCContainerHopper", "FCContainerPulley" -> {
+                if (data > 0) graphics.blit(this.guiTexture, x + 80, y + 18, 176, 0, 14, 14);
+            }
+            default -> {
+            }
+        }
     }
 
-    /**
-     * Renders trade display for the merchant GUI. Up to 8 trades shown in
-     * 2 columns, each with input item(s) + arrow + output item, matching
-     * FC's GuiMerchant layout exactly.
-     */
     private void renderMerchantTrades(GuiGraphics graphics, int guiX, int guiY,
                                        int mouseX, int mouseY) {
         var recipes = this.menu.getMerchantRecipes();

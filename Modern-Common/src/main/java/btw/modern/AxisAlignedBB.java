@@ -320,20 +320,13 @@ public class AxisAlignedBB extends FCUtilsPrimitiveGeometric {
         if (other.maxZ > this.maxZ) this.maxZ = other.maxZ;
     }
 
-    // ================================================================
-    // FCUtilsPrimitiveGeometric rendering — AxisAlignedBB acts as a box
-    // primitive in FC's model system. FCModelBlock.AddBox() adds AABBs
-    // to the primitives list, and the render methods iterate them.
-    // ================================================================
-
     @Override
     public void RenderAsItemBlock(RenderBlocks renderBlocks, Block block, int iItemDamage) {
         Tessellator t = Tessellator.instance;
 
         renderBlocks.setRenderBounds(minX, minY, minZ, maxX, maxY, maxZ);
 
-        // Use per-face icon lookup — block.getIcon(side, meta) returns
-        // the correct texture per face (e.g., log top vs bark side)
+        GL11.glTranslatef(-0.5F, -0.5F, -0.5F);
         t.startDrawingQuads();
         t.setNormal(0, -1, 0);
         renderBlocks.renderFaceYNeg(block, 0, 0, 0, renderBlocks.getBlockIconFromSideAndMetadata(block, 0, iItemDamage));
@@ -348,6 +341,7 @@ public class AxisAlignedBB extends FCUtilsPrimitiveGeometric {
         t.setNormal(1, 0, 0);
         renderBlocks.renderFaceXPos(block, 0, 0, 0, renderBlocks.getBlockIconFromSideAndMetadata(block, 5, iItemDamage));
         t.draw();
+        GL11.glTranslatef(0.5F, 0.5F, 0.5F);
     }
 
     @Override

@@ -420,7 +420,7 @@ public class Item {
     }
 
     public Icon GetHopperFilterIcon() {
-        return this.itemIcon;
+        return null;
     }
 
     public int getItemSpriteNumber() {

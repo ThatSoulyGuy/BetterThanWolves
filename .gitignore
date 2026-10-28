@@ -1,27 +1,32 @@
-# Build outputs
 build/
 out/
-
-# Gradle
 .gradle/
 !gradle/wrapper/gradle-wrapper.jar
-
-# Vanilla Minecraft source (user-provided, not redistributable)
 vanilla/
-
-# Extra libraries (user-provided)
+vanilla-current/
+vanilla-pristine/
 libs/*.jar
-
-# IDE
+run/
+logs/
+crash-reports/
+*.log
+*.hprof
+*.class
+*.orig
+*.rej
+__pycache__/
+error.txt
+options.cfg
 .idea/
 *.iml
 *.ipr
 *.iws
-
-# Runtime directories
-run/
-
-# OS files
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+*.launch
 .DS_Store
 Thumbs.db
 desktop.ini

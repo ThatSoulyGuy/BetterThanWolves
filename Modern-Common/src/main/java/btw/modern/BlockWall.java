@@ -9,4 +9,9 @@ public class BlockWall extends Block {
     public boolean canConnectWallTo(IBlockAccess blockAccess, int i, int j, int k) {
         return false;
     }
+
+    @Override
+    public int damageDropped(int metadata) {
+        return metadata;
+    }
 }

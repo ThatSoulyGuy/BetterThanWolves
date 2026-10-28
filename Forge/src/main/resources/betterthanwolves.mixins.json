@@ -61,7 +61,8 @@
   ],
   "client": [
     "EntityRendererNameTagMixin",
-    "client.ClientLevelMixin"
+    "client.ClientLevelMixin",
+    "client.FlintAndSteelItemMixin"
   ],
   "injectors": {
     "defaultRequire": 1

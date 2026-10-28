@@ -198,10 +198,6 @@ public class EntityProxyFactory {
         return proxy;
     }
 
-    /**
-     * Creates a real MC ItemEntity from an FC EntityItem.
-     * This produces a visible, pickupable item drop in the world.
-     */
     private static net.minecraft.world.entity.Entity createItemEntity(
             btw.modern.EntityItem fcItem, Level level) {
         btw.modern.ItemStack fcStack = fcItem.getEntityItem();
@@ -219,10 +215,9 @@ public class EntityProxyFactory {
 
         net.minecraft.world.entity.item.ItemEntity itemEntity =
                 new net.minecraft.world.entity.item.ItemEntity(
-                        level, fcItem.posX, fcItem.posY, fcItem.posZ, mcStack);
+                        level, fcItem.posX, fcItem.posY - fcItem.yOffset, fcItem.posZ, mcStack);
         itemEntity.setPickUpDelay(fcItem.delayBeforeCanPickup);
 
-        // Apply velocity if FC set any
         itemEntity.setDeltaMovement(fcItem.motionX, fcItem.motionY, fcItem.motionZ);
 
         LOGGER.debug("Created ItemEntity for FC item id={} count={} at ({},{},{})",

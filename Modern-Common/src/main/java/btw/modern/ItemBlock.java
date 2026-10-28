@@ -72,9 +72,18 @@ public class ItemBlock extends Item {
         return icon != null ? icon : super.getIconFromDamage(damage);
     }
 
-    // 1.5.2 ItemBlock.registerIcons (vanilla/client ItemBlock.java:229-237) registers the block's item icon name,
-    // if any. Port: Item.registerIcons still runs first, so itemIcon keeps the value it had before this override
-    // (Item.GetHopperFilterIcon and func_94597_g read it).
+    @Override
+    public Icon GetHopperFilterIcon() {
+        Block block = Block.blocksList[blockID];
+        return block != null ? block.GetHopperFilterIcon() : null;
+    }
+
+    @Override
+    public boolean IsIncineratedInCrucible() {
+        Block block = Block.blocksList[blockID];
+        return block != null && block.IsIncineratedInCrucible();
+    }
+
     @Override
     public void registerIcons(IconRegister register) {
         super.registerIcons(register);

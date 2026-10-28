@@ -25,6 +25,13 @@ import net.minecraftforge.common.TierSortingRegistry;
 import net.minecraftforge.common.ToolAction;
 import net.minecraftforge.common.ToolActions;
 
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.Multimap;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+
 import javax.annotation.Nullable;
 import java.util.Set;
 
@@ -905,16 +912,32 @@ public class ProxyItem extends Item implements LegacyProxyItem {
         return level;
     }
 
-    /**
-     * The FC tool's DIG actions: FCItemAxe (refined, battle) AXE_DIG; FCItemMattock PICKAXE_DIG and SHOVEL_DIG;
-     * FCItemPickaxe PICKAXE_DIG; FCItemShovel SHOVEL_DIG; FCItemHoe HOE_DIG. Dynamic Trees' damageAxe needs AXE_DIG
-     * (ItemUtils.java:63), and every ToolAction consumer now sees FC tools as tools.
-     */
-    // FCMOD-INTEGRATION(1.20.1): fc_tool_actions: FC tools predate ToolActions, so 1.20.1 and other mods saw them as plain items; they declare their family's DIG action
     @Override
     public boolean canPerformAction(ItemStack stack, ToolAction toolAction) {
         if (fcToolKind().digActions().contains(toolAction)) return true;
         return super.canPerformAction(stack, toolAction);
+    }
+
+    private volatile Multimap<Attribute, AttributeModifier> mainHandModifiers;
+
+    @Override
+    public Multimap<Attribute, AttributeModifier> getDefaultAttributeModifiers(EquipmentSlot slot) {
+        if (slot != EquipmentSlot.MAINHAND) return super.getDefaultAttributeModifiers(slot);
+        Multimap<Attribute, AttributeModifier> modifiers = mainHandModifiers;
+        if (modifiers == null) {
+            btw.modern.Item fcItem = fc();
+            if (fcItem == null) return super.getDefaultAttributeModifiers(slot);
+            int damage = fcItem.getDamageVsEntity(null);
+            modifiers = damage > 1
+                    ? ImmutableMultimap.of(
+                            Attributes.ATTACK_DAMAGE, new AttributeModifier(BASE_ATTACK_DAMAGE_UUID, "Weapon modifier",
+                                    damage - 1, AttributeModifier.Operation.ADDITION),
+                            Attributes.ATTACK_SPEED, new AttributeModifier(BASE_ATTACK_SPEED_UUID, "Weapon modifier",
+                                    0, AttributeModifier.Operation.ADDITION))
+                    : super.getDefaultAttributeModifiers(slot);
+            mainHandModifiers = modifiers;
+        }
+        return modifiers;
     }
 
     /**

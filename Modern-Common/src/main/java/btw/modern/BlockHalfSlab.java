@@ -21,10 +21,6 @@ public abstract class BlockHalfSlab extends Block {
         }
     }
 
-    // 1.5.2 BlockHalfSlab.isOpaqueCube / renderAsNormalBlock (vanilla/client BlockHalfSlab.java:97-100, 129-132): only
-    // a double slab is a normal cube. With the inherited true, World.isBlockNormalCube reported single slabs as solid,
-    // so a small FC mob standing on a bottom slab (babies, cave spiders, small slimes) had its eye "inside" an opaque
-    // block (Entity.isEntityInsideOpaqueBlock) and took an inWall hit every tick.
     @Override
     public boolean isOpaqueCube() {
         return this.isDoubleSlab;
@@ -35,10 +31,18 @@ public abstract class BlockHalfSlab extends Block {
         return this.isDoubleSlab;
     }
 
+    @Override
+    public int quantityDropped(java.util.Random random) {
+        return this.isDoubleSlab ? 2 : 1;
+    }
+
+    @Override
+    public int damageDropped(int metadata) {
+        return metadata & 7;
+    }
+
     public abstract String getFullSlabName(int metadata);
 
-    // 1.5.2 (FCMOD) BlockHalfSlab.GetBlockBoundsFromPoolBasedOnState (vanilla/client BlockHalfSlab.java:192-215).
-    // Block.getCollisionBoundingBoxFromPool / getSelectedBoundingBoxFromPool offset it per position.
     @Override
     public AxisAlignedBB GetBlockBoundsFromPoolBasedOnState(IBlockAccess blockAccess, int i, int j, int k) {
         AxisAlignedBB bounds;

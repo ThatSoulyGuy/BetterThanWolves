@@ -269,21 +269,7 @@ public class WorldBridge extends btw.modern.WorldServer {
         }
     }
 
-    /**
-     * Blocks whose 1.5.2 metadata is fully encoded by their MC state and which MC mutates without going
-     * through WorldBridge: FenceGateBlock.use toggles OPEN without calling super (BlockBehaviorMixin never
-     * sees it), and MC merges a placed slab into a DOUBLE one. A vanillaMetaOverrides entry FC wrote earlier
-     * would go stale, so these always derive (and never store an override). Trapdoors (MC toggles OPEN on use
-     * the same way) and stairs: every 1.5.2 meta bit round-trips through the derive/apply pair. So it does for
-     * the plants and fire whose ticks TickPolicy routes to FC: crops (AGE), nether wart, cactus, sugar cane, fire,
-     * farmland (MOISTURE), cocoa and vines, which 1.20.1 also changes itself (bone meal, its own survival ticks).
-     * Tripwire hooks: every 1.5.2 bit (direction, attached, powered) round-trips, and 1.20.1's tripwire ticks change
-     * ATTACHED and POWERED without passing through WorldBridge (placement_validity, the hook codec). getBlockMetadata
-     * never reads an entry for these either: one saved before its block joined this list is dropped on its next read.
-     */
     private static boolean isMetaFullyDerived(net.minecraft.world.level.block.Block block) {
-        // The FC plant twins' blocks never are (beetroots and the torchflower crop are CropBlocks): their FC stage /
-        // growth level does not fit the 1.20.1 state, so the overlay must keep it (TwinRegistry.deriveMeta).
         if (TwinRegistry.isTwinBlock(block)) return false;
         return block instanceof net.minecraft.world.level.block.FenceGateBlock
                 || block instanceof net.minecraft.world.level.block.SlabBlock
@@ -297,7 +283,43 @@ public class WorldBridge extends btw.modern.WorldServer {
                 || block instanceof net.minecraft.world.level.block.FarmBlock
                 || block instanceof net.minecraft.world.level.block.CocoaBlock
                 || block instanceof net.minecraft.world.level.block.VineBlock
-                || block instanceof net.minecraft.world.level.block.TripWireHookBlock;
+                || block instanceof net.minecraft.world.level.block.TripWireHookBlock
+                || block instanceof net.minecraft.world.level.block.LeverBlock
+                || block instanceof net.minecraft.world.level.block.ButtonBlock;
+    }
+
+    private static int faceAttachedToLegacyMeta(BlockState state) {
+        net.minecraft.core.Direction facing = state.getValue(
+                net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock.FACING);
+        boolean alongZ = facing.getAxis() == net.minecraft.core.Direction.Axis.Z;
+        int meta = switch (state.getValue(net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock.FACE)) {
+            case FLOOR -> alongZ ? 5 : 6;
+            case CEILING -> alongZ ? 7 : 0;
+            case WALL -> switch (facing) {
+                case EAST -> 1;
+                case WEST -> 2;
+                case SOUTH -> 3;
+                default -> 4;
+            };
+        };
+        return state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED) ? meta | 8 : meta;
+    }
+
+    private static BlockState legacyMetaToFaceAttached(BlockState state, int metadata) {
+        net.minecraft.world.level.block.state.properties.AttachFace face = switch (metadata & 7) {
+            case 5, 6 -> net.minecraft.world.level.block.state.properties.AttachFace.FLOOR;
+            case 0, 7 -> net.minecraft.world.level.block.state.properties.AttachFace.CEILING;
+            default -> net.minecraft.world.level.block.state.properties.AttachFace.WALL;
+        };
+        net.minecraft.core.Direction facing = switch (metadata & 7) {
+            case 1 -> net.minecraft.core.Direction.EAST;
+            case 0, 2, 6 -> net.minecraft.core.Direction.WEST;
+            case 3 -> net.minecraft.core.Direction.SOUTH;
+            default -> net.minecraft.core.Direction.NORTH;
+        };
+        return state.setValue(net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock.FACE, face)
+                .setValue(net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock.FACING, facing)
+                .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED, (metadata & 8) != 0);
     }
 
     /**
@@ -523,19 +545,15 @@ public class WorldBridge extends btw.modern.WorldServer {
             int species = Math.max(ProxyRegistry.getLegacyVariantMeta(block), 0);
             return state.getValue(net.minecraft.world.level.block.LeavesBlock.PERSISTENT) ? species | 4 : species;
         }
-        // Carved pumpkins (86) and jack o'lanterns (91): 1.5.2 meta = direction the face looks (0=S, 1=W, 2=N,
-        // 3=E: from the placer's yaw, vanilla/server BlockPumpkin.java:120-121; FCBlockJackOLantern keeps it in
-        // bits 0-1) = FACING.get2DDataValue. The jack o'lantern's player-placed bit 8 lives in the overlay.
         if (block instanceof net.minecraft.world.level.block.CarvedPumpkinBlock) {
             return state.getValue(net.minecraft.world.level.block.CarvedPumpkinBlock.FACING).get2DDataValue();
         }
 
-        // FCMOD-INTEGRATION(1.20.1): placement_validity: the tripwire hook codec (131)
-        // Tripwire hooks: 1.5.2 BlockTripWireSource meta = the direction the hook faces, away from its wall (0=S, 1=W,
-        // 2=N, 3=E: the clicked side, vanilla/server BlockTripWireSource.java:88-113) | 4 attached | 8 powered (:166-170)
-        // = FACING.get2DDataValue | ATTACHED | POWERED. Must precede the generic HORIZONTAL_FACING branch (2-5, attached
-        // and powered lost), whose values FCBlockTripWireSource's bounds read as the wrong wall (meta & 3, Server
-        // FCBlockTripWireSource.java:39-66: an east hook read as west). Reversed in applyFcMetadataToVanillaBlock.
+        if (block instanceof net.minecraft.world.level.block.LeverBlock
+                || block instanceof net.minecraft.world.level.block.ButtonBlock) {
+            return faceAttachedToLegacyMeta(state);
+        }
+
         if (block instanceof net.minecraft.world.level.block.TripWireHookBlock) {
             int meta = state.getValue(net.minecraft.world.level.block.TripWireHookBlock.FACING).get2DDataValue();
             if (state.getValue(net.minecraft.world.level.block.TripWireHookBlock.ATTACHED)) meta |= 4;
@@ -806,10 +824,11 @@ public class WorldBridge extends btw.modern.WorldServer {
                                     : net.minecraft.world.level.block.state.properties.Half.BOTTOM);
         }
 
-        // FCMOD-INTEGRATION(1.20.1): placement_validity: the tripwire hook codec (131)
-        // Tripwire hooks: reverse of deriveVanillaMetadata's 1.5.2 hook encoding (0=S, 1=W, 2=N, 3=E | 4 attached
-        // | 8 powered). The generic HORIZONTAL_FACING branch below read meta & 7 as a 3D facing: an FC hook facing south
-        // or west (0/1 = DOWN/UP) kept the default north, one facing east (3) came out south.
+        if (block instanceof net.minecraft.world.level.block.LeverBlock
+                || block instanceof net.minecraft.world.level.block.ButtonBlock) {
+            return legacyMetaToFaceAttached(current, metadata);
+        }
+
         if (block instanceof net.minecraft.world.level.block.TripWireHookBlock) {
             return current
                     .setValue(net.minecraft.world.level.block.TripWireHookBlock.FACING,
@@ -3225,24 +3244,21 @@ public class WorldBridge extends btw.modern.WorldServer {
         }
     }
 
-    /**
-     * Modern-Common World.UsesModernBlockLoot (vanilla_pair_drops, seam S2): true when the live block at (x, y, z) is a
-     * ruled bed or door ({@link VanillaPairDrops#isRuled}) whose legacy id is {@code blockID}. FC's drop entry points
-     * (Block.dropBlockAsItemWithChance: the saw; Block.DropItemsOnDestroyedByExplosion: FCExplosionMining) then drop
-     * that cell's 1.20.1 loot through {@link #DropModernBlockLoot}: one item per bed or door, the bed's colour kept.
-     * The caller removes the block, and 1.20.1 pops the partner with its own loot.
-     */
+    public static boolean isCollapsedFlower(BlockState state) {
+        return state.getBlock() != Blocks.POPPY && ProxyRegistry.getBlockId(state.getBlock()) == 38;
+    }
+
     @Override
     public boolean UsesModernBlockLoot(int x, int y, int z, int blockID) {
         ServerLevel live = level;
         if (live == null || blockID <= 0) return false;
         try {
             BlockPos pos = new BlockPos(x, y, z);
-            if (!live.isLoaded(pos)) return false;   // every FC drop asks: never load a chunk for it
+            if (!live.isLoaded(pos)) return false;
             BlockState state = live.getBlockState(pos);
-            return VanillaPairDrops.isRuled(state) && ProxyRegistry.getBlockId(state.getBlock()) == blockID;
+            return (VanillaPairDrops.isRuled(state) || isCollapsedFlower(state))
+                    && ProxyRegistry.getBlockId(state.getBlock()) == blockID;
         } catch (Throwable t) {
-            // Runs inside FC drops (the saw, the mining charge): never throw out of them; FC's own drop goes ahead.
             warnOncePerThrowSite("PAIR-LOOT", "the pair-drop check at " + x + "," + y + "," + z, t);
             return false;
         }

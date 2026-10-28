@@ -17,14 +17,20 @@ public class BlockFurnace extends BlockContainer {
     }
 
     @Override
+    public void breakBlock(World world, int x, int y, int z, int oldBlockID, int oldMetadata) {
+        if (!keepFurnaceInventory) dropInventory(world, x, y, z);
+        super.breakBlock(world, x, y, z, oldBlockID, oldMetadata);
+    }
+
+    @Override
     public void onBlockPlacedBy(World world, int x, int y, int z, EntityLiving placer, ItemStack stack) {
         int direction = MathHelper.floor_double((double)(placer.rotationYaw * 4.0F / 360.0F) + 0.5) & 3;
         int facing;
         switch (direction) {
-            case 0: facing = 2; break; // north
-            case 1: facing = 5; break; // east
-            case 2: facing = 3; break; // south
-            case 3: facing = 4; break; // west
+            case 0: facing = 2; break;
+            case 1: facing = 5; break;
+            case 2: facing = 3; break;
+            case 3: facing = 4; break;
             default: facing = 2;
         }
         world.setBlockMetadataWithNotify(x, y, z, facing);

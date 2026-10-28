@@ -1,4 +1,9 @@
 {
-  "parent": "minecraft:item/generated",
-  "textures": {"layer0": "betterthanwolves:item/fcitembowcomposite"}
+  "parent": "minecraft:item/bow",
+  "textures": {"layer0": "betterthanwolves:item/fcitembowcomposite"},
+  "overrides": [
+    {"predicate": {"pulling": 1}, "model": "betterthanwolves:item/fcitembowcomposite_pull_0"},
+    {"predicate": {"pulling": 1, "pull": 0.65}, "model": "betterthanwolves:item/fcitembowcomposite_pull_1"},
+    {"predicate": {"pulling": 1, "pull": 0.9}, "model": "betterthanwolves:item/fcitembowcomposite_pull_2"}
+  ]
 }

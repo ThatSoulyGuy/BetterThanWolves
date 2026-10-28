@@ -421,9 +421,8 @@ public class ProxyMob extends Mob
             float snapYaw = fcEntity.rotationYaw, snapPitch = fcEntity.rotationPitch;
             double snapMotX = fcEntity.motionX, snapMotY = fcEntity.motionY, snapMotZ = fcEntity.motionZ;
 
-            // D6: carry HP changes made since the last tick (another FC mob's melee during its
-            // update, MC-side heals) across before FC simulates.
             reconcileHealth();
+            FCPuppetSupport.dropProtectedPlayerTargets(fcEntity);
             try {
                 FCEnvHurtGuard.runOnUpdate(fcEntity, this);
                 PossessionDiagnostics.poll(this, fcEntity);

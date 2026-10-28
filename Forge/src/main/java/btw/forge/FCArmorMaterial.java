@@ -36,7 +36,6 @@ public class FCArmorMaterial implements ArmorMaterial {
         this.equipSound = equipSoundFor(fcArmor.getArmorMaterial());
     }
 
-    /** Maps the concrete FC armor class to its worn-armor texture base name. */
     private static String textureBaseFor(btw.modern.ItemArmor fcArmor) {
         switch (fcArmor.getClass().getSimpleName()) {
             case "FCItemArmorChain":   return "chain";
@@ -48,6 +47,7 @@ public class FCArmorMaterial implements ArmorMaterial {
             case "FCItemArmorGimp":    return "gimp";
             case "FCItemArmorTanned":  return "tanned";
             case "FCItemArmorWool":    return "wool";
+            case "FCItemArmorSpecial": return "special";
             case "FCItemArmorLeather":
             default:                   return "cloth";
         }
