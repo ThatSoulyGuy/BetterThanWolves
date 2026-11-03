@@ -34,7 +34,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code == Block.wood.blockID}, nine load-time patches keyed on id 165 or on wood types 5-8
  * ({@code btw.forge.mixin.fcext}, M1-M9) give log2 its wood type. No registry entry is added: 165 is below the
  * ProxyBlock range (175), the work stump already carries META 0-15 on block_1030, bark 5-8 rides item_22547, and FC
- * planks 5:5-8 are the 1.20.1 planks items (item level only).</p>
+ * planks 5:5-8 are the 1.20.1 planks items, and in the world the 1.20.1 planks blocks while their sub-blocks exist
+ * ({@link ModernWoodSubBlocks}).</p>
  *
  * <p><b>Rebalance:</b> each new wood takes its nearest FC relative's numbers by lore (maintainer ruling "post-1.5.2
  * plants take their nearest FC relative's rules"), see {@link #BARK_PER_LEATHER} and {@link #PLANKS_BURN_TIME}. The
@@ -142,6 +143,11 @@ public final class ModernWoods {
     /** FCItemBark name extension of wood type 5-8 ("acacia", "darkoak", "mangrove", "cherry"); null otherwise. */
     public static String barkName(int woodType) {
         return isWoodType(woodType) ? BARK_NAMES[woodType - FIRST_WOOD_TYPE] : null;
+    }
+
+    /** 1.20.1 texture name of wood type 5-8 ("acacia", "dark_oak", "mangrove", "cherry"); null otherwise. */
+    public static String textureName(int woodType) {
+        return isWoodType(woodType) ? TEXTURE_NAMES[woodType - FIRST_WOOD_TYPE] : null;
     }
 
     /** FC planks fuel of wood type 5-8 ({@link #PLANKS_BURN_TIME}); 0 otherwise. */
@@ -323,7 +329,8 @@ public final class ModernWoods {
     /**
      * Logs one {@code [SELF-AUDIT/wood]} summary, and a WARN per problem: log2's class and item, the block mappings
      * of the four logs, their wood and stripped forms and their planks (ProxyRegistry), the item mappings both ways
-     * (LegacyVariants), and the bark models and work-stump textures in the jar. Never throws.
+     * (LegacyVariants), and the bark models and work-stump textures in the jar; then the sub-blocks of wood types 5-8
+     * ({@link ModernWoodSubBlocks#audit}). Never throws.
      */
     public static void audit() {
         try {
@@ -331,6 +338,9 @@ public final class ModernWoods {
         } catch (Throwable t) {
             LOGGER.warn("[SELF-AUDIT/wood] the modern-woods audit failed", t);
         }
+        // FCMOD-INTEGRATION(1.20.1): modern_wood_subblocks: the sidings, mouldings, corners and decorative blocks of wood
+        // types 5-8 are audited with log2, so BridgeSelfAudit.runCommon needs no line of its own
+        ModernWoodSubBlocks.audit();
     }
 
     private static void auditUnchecked() {

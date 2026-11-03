@@ -191,4 +191,42 @@ public abstract class BlockFluid extends Block {
         velocity.yCoord += flow.yCoord;
         velocity.zCoord += flow.zCoord;
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockFluid's icon members (vanilla/client BlockFluid.java:21,
+    // :92-95, :637-652): still and flowing water or lava, and the static lookup RenderBlocks.renderBlockFluids reads.
+    // BlockFlowing and BlockStationary (8-11) inherit them.
+    private Icon[] fluidIcons;
+
+    // 1.5.2 BlockFluid.getIcon (vanilla/client BlockFluid.java:92-95); Block's icon until registerIcons runs (client
+    // only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.fluidIcons == null) {
+            return super.getIcon(side, metadata);
+        }
+        return side != 0 && side != 1 ? this.fluidIcons[1] : this.fluidIcons[0];
+    }
+
+    // 1.5.2 BlockFluid.registerIcons (vanilla/client BlockFluid.java:637-647)
+    @Override
+    public void registerIcons(IconRegister register) {
+        if (this.blockMaterial == Material.lava) {
+            this.fluidIcons = new Icon[] {register.registerIcon("lava"), register.registerIcon("lava_flow")};
+        } else {
+            this.fluidIcons = new Icon[] {register.registerIcon("water"), register.registerIcon("water_flow")};
+        }
+    }
+
+    // 1.5.2 BlockFluid.func_94424_b (vanilla/client BlockFluid.java:649-652): Block.waterMoving's or
+    // Block.lavaMoving's still or flowing icon by name (compared by value; 1.5.2's callers pass these literals).
+    public static Icon func_94424_b(String name) {
+        return "water".equals(name) ? fluidIcon(Block.waterMoving, 0)
+                : ("water_flow".equals(name) ? fluidIcon(Block.waterMoving, 1)
+                : ("lava".equals(name) ? fluidIcon(Block.lavaMoving, 0)
+                : ("lava_flow".equals(name) ? fluidIcon(Block.lavaMoving, 1) : null)));
+    }
+
+    private static Icon fluidIcon(BlockFluid fluid, int index) {
+        return fluid != null && fluid.fluidIcons != null ? fluid.fluidIcons[index] : null;
+    }
 }

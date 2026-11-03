@@ -41,9 +41,9 @@ import java.util.function.Predicate;
  *   <li><b>Dual-sourced.</b> FC's own paths (FC harvest through ServerPlayerGameModeMixin, FCBlockLeaves.updateTick
  *       decay, FC machines, the block dispenser) never roll a table: they run FCBlockLeaves on the 1.5.2 drop members
  *       of Modern-Common BlockLeaves. This rule covers the paths that roll a table: 1.20.1 player breaks
- *       (playerDestroy) and decay of leaves with no FC identity, every 1.20.1 explosion (WorldBridge.newExplosion
- *       calls level.explode, Explosion.java:255-266; FC's mining charge is FC's own path, FCExplosionMining.DestroyBlock
- *       to Block.DropItemsOnDestroyedByExplosion, a stub for leaves until CF2-DR5), stand-in machine drops
+ *       (playerDestroy) and decay of leaves with no FC identity, 1.20.1 explosions of leaves FC has no blast rule
+ *       for (FC's own leaves, legacy 18, follow FCBlockLeaves on every blast: BlastRules, fc_blast_rules; FC's mining
+ *       charge reaches FCBlockLeaves through Block.DropItemsOnDestroyedByExplosion), stand-in machine drops
  *       (ModernBlockStandIn.dropMcLoot) and foreign
  *       {@code destroyBlock(pos, true)}. getDrops is not bridged for vanilla-mapped FC blocks (BlockBehaviorMixin), and
  *       no FC path rolls a table, so nothing drops twice.</li>

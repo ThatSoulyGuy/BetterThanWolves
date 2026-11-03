@@ -1,0 +1,5 @@
+{
+  "replaces": "minecraft:gold_ingot_from_blasting_nether_gold_ore",
+  "action": "remove",
+  "reason": "Nether gold ore loses its gold ingot blasting (maintainer ruling 2026-10-22, STRATA OD3 (b)): it keeps 1.20.1's nugget drops, and a silk-touched one no longer skips BTW's nugget step"
+}

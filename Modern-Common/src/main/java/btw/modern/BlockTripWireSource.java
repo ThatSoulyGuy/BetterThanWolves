@@ -79,4 +79,11 @@ public class BlockTripWireSource extends Block {
 
         return direction;
     }
+
+    // 1.5.2 BlockTripWireSource.getRenderType (vanilla/client BlockTripWireSource.java:57-60).
+    // FCBlockTripWireSource (131) does not override it.
+    @Override
+    public int getRenderType() {
+        return 29;
+    }
 }

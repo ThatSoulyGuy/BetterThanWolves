@@ -134,6 +134,15 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     }
 
     /**
+     * The player's bridge as its last sync left it, for FC readers that walk every player each tick (WorldBridge's
+     * playerEntities view): ServerPlayerMixin.btw$tick syncs it every server tick. Creates and syncs a missing one.
+     */
+    static PlayerBridge current(Player player) {
+        PlayerBridge bridge = ((Holder) player).btw$getPlayerBridge();
+        return bridge != null ? bridge : getOrCreate(player);
+    }
+
+    /**
      * NEW, uncached bridge for read-only client-side FC queries (FCMiningSpeed dig prediction).
      * Bypasses {@link #getOrCreate(Player)}: MC Entity.equals/hashCode compare ids (Entity.java:341-351)
      * and the singleplayer LocalPlayer shares its ServerPlayer's id, so the old id-keyed cache
@@ -209,6 +218,10 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
         this.motionZ = realPlayer.getDeltaMovement().z;
         this.rotationYaw = realPlayer.getYRot();
         this.rotationPitch = realPlayer.getXRot();
+        // CF2-MX3: a rider's updateRidden adds the mount's turn since last tick (vanilla/client Entity.java:1800-1851); without
+        // the previous rotation a head crab spun 10 degrees a tick
+        this.prevRotationYaw = realPlayer.yRotO;
+        this.prevRotationPitch = realPlayer.xRotO;
         this.onGround = realPlayer.onGround();
         // FCMOD-INTEGRATION(1.20.1): placement_validity: the inWater FIELD, which FC reads directly: 4.B's mid-air
         // rule (Modern-Common EntityPlayer.canPlayerEdit; vanilla/server EntityPlayer.java:2037) lets a swimming player
@@ -225,6 +238,14 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
             this.worldObj = WorldBridge.getOrCreate(sl);
             // Keep difficulty setting current (FC checks it for food/starvation)
             this.worldObj.difficultySetting = sl.getDifficulty().getId();
+            // CF2-MX3: 1.5.2 World.updateEntityWithOptionalForce's mount cleanup (vanilla/server World.java:1972-1982), which no FC
+            // world update runs for the bridge: a head crab that died, left the world or let go stops riding the player, and with it
+            // the 4.B head-crab weight (EntityLiving.isWeighted)
+            btw.modern.Entity rider = this.riddenByEntity;
+            if (rider != null && (rider.ridingEntity != this || !FcRiding.isLive(rider, sl))) {
+                if (rider.ridingEntity == this) rider.ridingEntity = null;
+                this.riddenByEntity = null;
+            }
         }
     }
 
@@ -271,6 +292,67 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
             this.motionZ != realPlayer.getDeltaMovement().z) {
             realPlayer.setDeltaMovement(this.motionX, this.motionY, this.motionZ);
         }
+    }
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): head_crab: the end of 4.B's tentacle fling (FCEntitySquid.java:1192-1280). 1.5.2 sent the new
+     * velocity to the player through velocityChanged (setBeenAttacked, :1275; vanilla/server EntityTrackerEntry.java:287-290);
+     * here the next syncFromReal (:207-209) would overwrite the bridge's motion, so it is put on the real player with
+     * hurtMarked, which 1.20.1 sends as it sends knockback (ServerEntity.sendChanges). The disarm branch (a 4.B block,
+     * isBlocking) emptied the FC stack: the inventory is synced at once (INV-RESYNC writes it through while the real slot is
+     * unchanged), so the thrown copy and the emptied hand land in the same call.
+     */
+    @Override
+    public void OnFlungBySquidTentacle(btw.modern.Entity squid) {
+        super.OnFlungBySquidTentacle(squid);   // frozen EntityLiving: the hurt sound (vanilla/server EntityLiving.java:3458-3463)
+        if (realPlayer instanceof ServerPlayer) {
+            invBridge.sync();
+            leaveVehicleForFling();            // 4.B unseated the target before either branch (FCEntitySquid.java:1197-1201)
+            if (this.velocityChanged) landFcMotion();
+        }
+    }
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): head_crab: the same gap for 4.B's cow kick (Client FCEntityCow.java:541-553 ->
+     * Entity.OnKickedByCow -> FlingAwayFromEntity, vanilla/client Entity.java:2558-2601), which flings the bridge only. The
+     * fling starts from the real velocity after the kick's hit (1.20.1 knockback), as 4.B's started from the velocity its
+     * attackEntityFrom left.
+     */
+    @Override
+    public void OnKickedByCow(btw.modern.Entity cow) {
+        if (!(realPlayer instanceof ServerPlayer)) {
+            super.OnKickedByCow(cow);
+            return;
+        }
+        net.minecraft.world.phys.Vec3 v = realPlayer.getDeltaMovement();
+        this.motionX = v.x;
+        this.motionY = v.y;
+        this.motionZ = v.z;
+        super.OnKickedByCow(cow);
+        leaveVehicleForFling();
+        landFcMotion();
+    }
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): head_crab: 4.B unseats the target of an FC fling first (FCEntitySquid.java:1197-1201;
+     * Entity.FlingAwayFromEntity, vanilla/client Entity.java:2570-2573) through its ridingEntity, which the bridge never
+     * sets (the vehicle is 1.20.1's, see canPlayerEdit). The same on the real vehicle, so a tentacle or a cow's kick
+     * throws the player out of a boat, minecart or saddle, as FcRiding's head-crab rule does. Server only.
+     */
+    private void leaveVehicleForFling() {
+        if (realPlayer.isPassenger()) realPlayer.stopRiding();
+    }
+
+    /**
+     * Puts the bridge's motion on the real player and marks it for the motion packet (hurtMarked). Server only. A
+     * spectator is never moved: 1.20.1 pushes and knocks back no spectator, while FC's tentacle tip still finds its
+     * bridge (WorldBridge.getEntitiesWithinAABB).
+     */
+    private void landFcMotion() {
+        this.velocityChanged = false;
+        if (realPlayer.isSpectator()) return;
+        realPlayer.setDeltaMovement(this.motionX, this.motionY, this.motionZ);
+        realPlayer.hurtMarked = true;
     }
 
     // ================================================================
@@ -652,8 +734,9 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     public void addPotionEffect(btw.modern.PotionEffect effect) {
         MobEffect mobEffect = PotionMapping.getEffect(effect.getPotionID());
         if (mobEffect != null) {
+            // FCMOD-INTEGRATION(1.20.1): fc_beacon: FC's ambient flag reaches 1.20.1 (4.B: beacon, mill stone, starvation, near-death and gloom effects are ambient)
             realPlayer.addEffect(new net.minecraft.world.effect.MobEffectInstance(
-                    mobEffect, effect.getDuration(), effect.getAmplifier()));
+                    mobEffect, effect.getDuration(), effect.getAmplifier(), effect.getIsAmbient(), true));
         }
     }
 
@@ -709,64 +792,60 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
     // FC Spawn System — setSpawnChunk / getBedLocation / isSpawnForced
     // ================================================================
 
+    // FCMOD-INTEGRATION(1.20.1): hardcore_respawn: 4.B's spawnChunk is 1.20.1's respawn point; m_HardcoreSpawnChunk is only the hardcore home
+
     /**
-     * Sets the FC hardcore spawn chunk for this player.
-     * FC code calls this when a player activates a beacon for respawning.
-     * The coordinates are stored on the PlayerBridge and persisted via NBT.
-     * On respawn, the ServerPlayerMixin hooks on getRespawnPosition/
-     * getRespawnDimension read these values to override vanilla spawn.
+     * The respawn point FC itself set (FCBlockBeacon.onBlockActivated, Server FCBlockBeacon.java:93): 4.B's beacon bind,
+     * with its level. {@link HardcoreRespawn} validates a non-forced respawn point that equals it with 4.B's rules
+     * (vanilla/server EntityPlayer.java:2806-2969); any other point is 1.20.1's. Never the hardcore home
+     * ({@link #m_HardcoreSpawnChunk}). Copied by ServerPlayerMixin.btw$restoreFrom and saved as btwFcSpawnBind
+     * (HardcoreRespawn.readBind/writeBind). Server thread only.
      */
+    public net.minecraft.core.BlockPos fcBindPos;
+    public net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> fcBindDim;
+
+    /** 1.5.2 EntityPlayer.setSpawnChunk with two arguments resets the dimension to 0 (vanilla/server EntityPlayer.java:1624-1639). */
     @Override
     public void setSpawnChunk(btw.modern.ChunkCoordinates pos, boolean forced) {
-        this.m_HardcoreSpawnChunk = pos;
-        // Also push to vanilla spawn system so the MC respawn flow picks it up
-        if (realPlayer instanceof net.minecraft.server.level.ServerPlayer sp && pos != null) {
-            sp.setRespawnPosition(
-                    sp.level().dimension(),
-                    new net.minecraft.core.BlockPos(pos.posX, pos.posY, pos.posZ),
-                    0.0F, forced, false);
-        }
+        setSpawnChunk(pos, forced, 0);
     }
 
     /**
-     * Sets the FC hardcore spawn chunk with an explicit dimension.
-     * FC tracks dimension separately because beacon spawns can be
-     * cross-dimensional (e.g., a Nether beacon sets spawn in the Nether).
+     * 4.B's spawnChunk (vanilla/server EntityPlayer.java:2972-2987) is 1.20.1's respawn point: one slot, last write wins,
+     * in both games. FC's only caller is the beacon bind (non-forced, the beacon cell, the beacon's world), which is
+     * remembered as {@link #fcBindPos}/{@link #fcBindDim} when 1.20.1 accepted the point (PlayerSetSpawnEvent may veto it).
+     * The legacy dimension is resolved against the player's level ({@link HardcoreRespawn#levelForLegacyDim}). The
+     * hardcore home is never written here.
      */
     @Override
     public void setSpawnChunk(btw.modern.ChunkCoordinates pos, boolean forced, int dimensionId) {
-        this.m_HardcoreSpawnChunk = pos;
-        this.m_iSpawnDimension = dimensionId;
-        // Also push to vanilla spawn system
-        if (realPlayer instanceof net.minecraft.server.level.ServerPlayer sp && pos != null) {
-            net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dim = switch (dimensionId) {
-                case -1 -> net.minecraft.world.level.Level.NETHER;
-                case 1 -> net.minecraft.world.level.Level.END;
-                default -> net.minecraft.world.level.Level.OVERWORLD;
-            };
-            sp.setRespawnPosition(
-                    dim,
-                    new net.minecraft.core.BlockPos(pos.posX, pos.posY, pos.posZ),
-                    0.0F, forced, false);
+        this.m_iSpawnDimension = pos != null ? dimensionId : 0;                // fcSpawnDimension mirror (EP:2972-2987)
+        if (!(realPlayer instanceof ServerPlayer sp)) return;
+        if (pos == null) {
+            sp.setRespawnPosition(net.minecraft.world.level.Level.OVERWORLD, null, 0F, false, false);
+            fcBindPos = null;
+            fcBindDim = null;
+            return;
         }
+        net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dim = HardcoreRespawn.levelForLegacyDim(sp, dimensionId);
+        net.minecraft.core.BlockPos p = new net.minecraft.core.BlockPos(pos.posX, pos.posY, pos.posZ);
+        sp.setRespawnPosition(dim, p, 0F, forced, false);                      // PlayerSetSpawnEvent may veto it
+        boolean set = p.equals(sp.getRespawnPosition()) && dim.equals(sp.getRespawnDimension());
+        fcBindPos = set && !forced ? p : null;
+        fcBindDim = set && !forced ? dim : null;
     }
 
-    /**
-     * Returns the FC hardcore spawn chunk, or null if none is set.
-     * FC calls this during respawn validation.
-     */
+    /** 4.B's spawnChunk: 1.20.1's respawn point, or null. */
     @Override
     public btw.modern.ChunkCoordinates getBedLocation() {
-        return this.m_HardcoreSpawnChunk;
+        net.minecraft.core.BlockPos p = realPlayer instanceof ServerPlayer sp ? sp.getRespawnPosition() : null;
+        return p == null ? null : new btw.modern.ChunkCoordinates(p.getX(), p.getY(), p.getZ());
     }
 
-    /**
-     * Returns true if the FC spawn is set (FC spawns are always "forced"
-     * in that they don't depend on a bed being intact).
-     */
+    /** 4.B's spawnForced: 1.20.1's respawn point is forced (/spawnpoint). */
     @Override
     public boolean isSpawnForced() {
-        return this.m_HardcoreSpawnChunk != null;
+        return realPlayer instanceof ServerPlayer sp && sp.isRespawnForced();
     }
 
     // ================================================================
@@ -840,6 +919,53 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
             return this.capabilities != null && this.capabilities.allowEdit;
         }
         return super.canPlayerEdit(x, y, z, side, stack);
+    }
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): fc_entity_views: FC mounting this entity on a 1.20.1 vehicle it found (a view of
+     * VanillaEntityViews: the block dispenser's {@code riddenByEntity.mountEntity(cart)} before it takes a cart, Client
+     * FCBlockBlockDispenser.java:292-297) rides or leaves the vehicle itself: leaving it when already on it (4.B
+     * EntityPlayer.mountEntity's toggle), else mounting it. The view is never stored in ridingEntity (the vehicle is
+     * 1.20.1's; see PlayerBridge.canPlayerEdit). Any other mount is FC's own, unchanged.
+     */
+    @Override
+    public void mountEntity(btw.modern.Entity target) {
+        net.minecraft.world.entity.Entity vehicle = VanillaEntityViews.realOf(target);
+        if (vehicle == null) {
+            super.mountEntity(target);
+            return;
+        }
+        net.minecraft.world.entity.Entity self = realPlayer;
+        if (self == null) return;
+        if (self.getVehicle() == vehicle) {
+            self.stopRiding();
+        } else {
+            self.startRiding(vehicle);
+        }
+    }
+
+    /**
+     * CF2-MX3: 4.B's latch rule (Modern-Common EntityPlayer.GetCanBeHeadCrabbed) on the real player: only a player 1.20.1
+     * lets mobs target (FcTargetRule.isTargetable, the rule that drops a head crab every tick: an Invulnerable-tagged
+     * survival player would otherwise be latched and dropped each tick), and the riding clause asked of the real player,
+     * since the bridge's ridingEntity is never set (see canPlayerEdit). Server only: FC latches only there
+     * (FCEntitySquid.updateEntityActionState, Common :321-328).
+     */
+    @Override
+    public boolean GetCanBeHeadCrabbed(boolean bSquidInWater) {
+        ServerPlayer sp = getServerPlayer();
+        return sp != null && super.GetCanBeHeadCrabbed(bSquidInWater) && FcTargetRule.isTargetable(sp)
+                && !sp.isPassenger() && !sp.isVehicle();
+    }
+
+    /**
+     * CF2-MX3: where a head-crab squid sits (Entity.updateRiderPosition: posY + getMountedYOffset() + rider.getYOffset()).
+     * 4.B returned height * 0.025 from a client posY at eye level (vanilla/client EntityPlayer.java:3215-3219), so its squid
+     * sat on the eyes; the bridge's posY is the feet, and the server position is what clients draw.
+     */
+    @Override
+    public double getMountedYOffset() {
+        return realPlayer == null ? super.getMountedYOffset() : realPlayer.getEyeHeight() + this.height * 0.025D;
     }
 
     /**
@@ -953,6 +1079,30 @@ public class PlayerBridge extends btw.modern.EntityPlayerMP {
             // MC 1.20.1: startUsingItem triggers the use animation + timer
             sp.startUsingItem(net.minecraft.world.InteractionHand.MAIN_HAND);
         }
+    }
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): head_crab: 4.B EntityPlayer.isBlocking (vanilla/client EntityPlayer.java:216-219) is "using
+     * an item whose use action is block". The bridge's own use fields are never cleared (Modern-Common EntityPlayer.java:61-66,
+     * :136-153: no clearItemInUse caller), so after one right-click with a BTW sword or refined tool the bridge "blocked"
+     * forever, and the squid's tentacle, the one FC reader (FCEntitySquid.java:1229-1259), would throw a copy of whatever the
+     * player holds. Asked of the real player: using, in the main hand (FC empties mainInventory[currentItem]), a BTW item with
+     * the block use action (ProxyItem.getUseAnimation, ProxyItem.java:564-574). A 1.20.1 shield is not 4.B blocking: FC's
+     * copy keeps only id, count, damage and enchantments. On yes the inventory view is re-synced first, so the stack FC
+     * empties is the one in the hand now.
+     */
+    @Override
+    public boolean isBlocking() {
+        if (!(realPlayer instanceof ServerPlayer sp) || !sp.isUsingItem()
+                || sp.getUsedItemHand() != net.minecraft.world.InteractionHand.MAIN_HAND) {
+            return false;
+        }
+        net.minecraft.world.item.ItemStack use = sp.getUseItem();
+        if (!(use.getItem() instanceof ProxyItem) || use.getUseAnimation() != net.minecraft.world.item.UseAnim.BLOCK) {
+            return false;
+        }
+        invBridge.sync();
+        return true;
     }
 
     /**

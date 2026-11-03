@@ -5,6 +5,7 @@ import btw.forge.ProxyRegistry;
 import btw.forge.jei.categories.BulkRecipeCategory;
 import btw.forge.jei.categories.CampfireRecipeCategory;
 import btw.forge.jei.categories.SoulforgeRecipeCategory;
+import btw.forge.recipes.ModernLogChoppingRecipe;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.constants.RecipeTypes;
@@ -206,6 +207,16 @@ public class BTWJeiPlugin implements IModPlugin {
             if (!custom.isEmpty()) reg.addRecipes(RecipeTypes.CRAFTING, custom);
         } catch (Throwable e) {
             LOGGER.warn("FC custom crafting displays not registered: {}", e.toString());
+        }
+        try {
+            // FCMOD-INTEGRATION(1.20.1): bamboo_planks: the modern log chopping recipes are special recipes too (an
+            // FC axe and a bamboo block); show their planks and sticks, read from the client's synced recipes.
+            net.minecraft.client.multiplayer.ClientLevel level = net.minecraft.client.Minecraft.getInstance().level;
+            List<CraftingRecipe> chopping = level == null ? List.of()
+                    : ModernLogChoppingRecipe.jeiDisplays(level.getRecipeManager());
+            if (!chopping.isEmpty()) reg.addRecipes(RecipeTypes.CRAFTING, chopping);
+        } catch (Throwable e) {
+            LOGGER.warn("Modern log chopping displays not registered: {}", e.toString());
         }
         try {
             registerInfoPages(reg);

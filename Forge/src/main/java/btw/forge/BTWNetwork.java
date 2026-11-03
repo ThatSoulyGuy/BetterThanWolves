@@ -41,7 +41,8 @@ public class BTWNetwork {
     // "3": FCPayload added (FC login handshake payloads).
     // "4": FcAuxSfx added (1.5.2 Packet61 aux effects run by the client's FC handler).
     // "5": PenaltySync carries FC exhaustion; FoodTableSync added.
-    private static final String PROTOCOL_VERSION = "5";
+    // "6": strata and deepslate dig and walking-speed prediction (StrataRule); magnetic compass target packet (BEACON).
+    private static final String PROTOCOL_VERSION = "6";
 
     /** FCBetterThanWolves.fcCustomPacketChannelVersionCheck (Client FCBetterThanWolves.java:666). */
     public static final String FC_CHANNEL_VERSION_CHECK = "FC|VC";
@@ -136,6 +137,11 @@ public class BTWNetwork {
         // (stack sizes and food values of table foods). Id 6; server -> client only.
         CHANNEL.registerMessage(nextMessageId++, FoodTableSync.class,
                 FoodTableSync::encode, FoodTableSync::decode, FoodTableSync::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
+
+        // FCMOD-INTEGRATION(1.20.1): magnetic_compass: the player's strongest magnetic point (4.B EntityPlayerMP DataWatcher 22-24). Id 7; server -> client only.
+        CHANNEL.registerMessage(nextMessageId++, MagneticTargetSync.class,
+                MagneticTargetSync::encode, MagneticTargetSync::decode, MagneticTargetSync::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
 
         LOGGER.info("BTW network channel registered.");
@@ -661,6 +667,42 @@ public class BTWNetwork {
      * here btw.forge.client.LegacyClientSound.playAux, reached through DistExecutor so a dedicated server
      * never loads it. Registered PLAY_TO_CLIENT. Sent by {@link #sendFcAuxSfx}.
      */
+    /** The player's compass target (MagneticField); null = no point (4.B's spin). Never throws. */
+    public static void sendMagneticTarget(ServerPlayer player, @javax.annotation.Nullable net.minecraft.core.GlobalPos target) {
+        if (CHANNEL == null || player == null) return;
+        try {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new MagneticTargetSync(target));
+        } catch (Throwable t) {
+            if (FCPuppetSupport.firstFailure("magneticTarget|" + t.getClass().getName())) {
+                LOGGER.warn("Sending the magnetic target failed: {}", t.toString());
+            }
+        }
+    }
+
+    // Packet: MagneticTargetSync (server -> client)
+    public static class MagneticTargetSync {
+        @javax.annotation.Nullable final net.minecraft.core.GlobalPos target;
+
+        public MagneticTargetSync(@javax.annotation.Nullable net.minecraft.core.GlobalPos target) { this.target = target; }
+
+        public static void encode(MagneticTargetSync msg, FriendlyByteBuf buf) {
+            buf.writeBoolean(msg.target != null);
+            if (msg.target != null) buf.writeGlobalPos(msg.target);
+        }
+
+        public static MagneticTargetSync decode(FriendlyByteBuf buf) {
+            return new MagneticTargetSync(buf.readBoolean() ? buf.readGlobalPos() : null);
+        }
+
+        public static void handle(MagneticTargetSync msg,
+                Supplier<net.minecraftforge.network.NetworkEvent.Context> ctxSupplier) {
+            net.minecraftforge.network.NetworkEvent.Context ctx = ctxSupplier.get();
+            ctx.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                    () -> () -> btw.forge.client.MagneticFieldClient.accept(msg.target)));
+            ctx.setPacketHandled(true);
+        }
+    }
+
     public static class FcAuxSfx {
         final int sfxId;
         final int x;

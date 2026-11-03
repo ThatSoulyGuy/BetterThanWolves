@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -363,47 +364,6 @@ public class ProxyBlock extends Block implements EntityBlock {
         } catch (RuntimeException ignored) {
             // display only: a failing read draws nothing
         }
-    }
-
-    /** Maps FC particle names to MC 1.20.1 ParticleOptions. */
-    public static net.minecraft.core.particles.ParticleOptions mapParticle(String name) {
-        if (name == null) return null;
-        if (name.equals("smoke")) return net.minecraft.core.particles.ParticleTypes.SMOKE;
-        if (name.equals("largesmoke")) return net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE;
-        if (name.equals("flame")) return net.minecraft.core.particles.ParticleTypes.FLAME;
-        if (name.equals("lava")) return net.minecraft.core.particles.ParticleTypes.LAVA;
-        if (name.equals("splash")) return net.minecraft.core.particles.ParticleTypes.SPLASH;
-        if (name.equals("bubble")) return net.minecraft.core.particles.ParticleTypes.BUBBLE;
-        if (name.equals("reddust")) return new net.minecraft.core.particles.DustParticleOptions(
-                new org.joml.Vector3f(1.0f, 0.0f, 0.0f), 1.0f);
-        if (name.equals("snowballpoof")) return net.minecraft.core.particles.ParticleTypes.ITEM_SNOWBALL;
-        if (name.equals("explode")) return net.minecraft.core.particles.ParticleTypes.EXPLOSION;
-        if (name.equals("largeexplode")) return net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER;
-        if (name.equals("townaura")) return net.minecraft.core.particles.ParticleTypes.MYCELIUM;
-        if (name.equals("crit")) return net.minecraft.core.particles.ParticleTypes.CRIT;
-        if (name.equals("magicCrit")) return net.minecraft.core.particles.ParticleTypes.ENCHANTED_HIT;
-        if (name.equals("happyVillager")) return net.minecraft.core.particles.ParticleTypes.HAPPY_VILLAGER;
-        if (name.equals("note")) return net.minecraft.core.particles.ParticleTypes.NOTE;
-        if (name.equals("portal")) return net.minecraft.core.particles.ParticleTypes.PORTAL;
-        if (name.equals("enchantmenttable")) return net.minecraft.core.particles.ParticleTypes.ENCHANT;
-        if (name.equals("witchMagic")) return net.minecraft.core.particles.ParticleTypes.WITCH;
-        if (name.equals("snowshovel")) return net.minecraft.core.particles.ParticleTypes.POOF;
-        if (name.equals("dripWater")) return net.minecraft.core.particles.ParticleTypes.DRIPPING_WATER;
-        if (name.equals("dripLava")) return net.minecraft.core.particles.ParticleTypes.DRIPPING_LAVA;
-        if (name.equals("suspended")) return net.minecraft.core.particles.ParticleTypes.UNDERWATER;
-        if (name.equals("heart")) return net.minecraft.core.particles.ParticleTypes.HEART;
-        // FC custom particles — map to closest vanilla equivalents
-        if (name.equals("fcwhitesmoke")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
-        if (name.equals("fcblacksmoke")) return net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE;
-        if (name.equals("fcsteam")) return net.minecraft.core.particles.ParticleTypes.CLOUD;
-        if (name.equals("angryVillager")) return net.minecraft.core.particles.ParticleTypes.ANGRY_VILLAGER;
-        if (name.startsWith("iconcrack_")) return net.minecraft.core.particles.ParticleTypes.ITEM_SNOWBALL;
-        if (name.startsWith("blockcrack_")) return net.minecraft.core.particles.ParticleTypes.POOF;
-        // FC custom particles
-        if (name.equals("fcwhitesmoke")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
-        if (name.equals("fccinders")) return net.minecraft.core.particles.ParticleTypes.FLAME;
-        if (name.equals("fcwhitecloud")) return net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE;
-        return null;
     }
 
     // --- neighborChanged ---
@@ -971,6 +931,8 @@ public class ProxyBlock extends Block implements EntityBlock {
 
     @Override
     public boolean canSurvive(BlockState state, net.minecraft.world.level.LevelReader level, BlockPos pos) {
+        // FCMOD-INTEGRATION(1.20.1): attach_support_rules: FC's own blocks in an attachment family (BTW's torches and ladders, ash, the soulforged plate) are refused where FC's canPlaceBlockAt, the test 4.B's ItemBlock asks, refuses (on both views, the client where the blocks it reads read alike); 1.20.1's BlockItem placement (a sneaking player, a clicked block without Stage 2) asks this, never FC's canPlaceBlockAt
+        if (FcAttachSupport.refuses(state, level, pos)) return false;
         // canBlockStay needs a btw.modern.World, but LevelReader is not always a ServerLevel.
         // For non-server contexts, default to true.
         if (level instanceof ServerLevel sl) {
@@ -981,28 +943,48 @@ public class ProxyBlock extends Block implements EntityBlock {
     }
 
     // --- getDrops ---
+    // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: 1.5.2 Block.dropBlockAsItemWithChance (vanilla/server Block.java:859-878) for the 1.20.1 paths that roll a BTW block's loot (pistons, foreign destroyBlock, /loot, a blast BlastRules does not own): each item rolls the chance (1 / radius with explosion parameters, after canDropFromExplosion) and keeps FC's damageDropped subtype
+    private static final java.util.Set<Integer> DROPS_FAILED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     @Override
     public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
+        return fcDrops(fc(), legacyId, state.getValue(META), builder);
+    }
+
+    /**
+     * FC's drops of FC block {@code fc} (legacy id {@code legacyId}) with metadata {@code meta} for 1.20.1's loot paths:
+     * the body of {@link #getDrops}, shared with the FC blocks registered as 1.20.1 block classes (FcDetectorRailBlock,
+     * FCMOD-INTEGRATION(1.20.1): fc_redstone). Never throws: a failure is logged once per id and drops nothing.
+     */
+    static List<ItemStack> fcDrops(btw.modern.Block fc, int legacyId, int meta, LootParams.Builder builder) {
         List<ItemStack> drops = new ArrayList<>();
-        int meta = state.getValue(META);
-        Random rand = new Random();
-        int droppedId = fc().idDropped(meta, rand, 0);
-        int quantity = fc().quantityDropped(rand);
-        int damage = fc().damageDropped(meta);
-        if (droppedId > 0 && quantity > 0) {
-            net.minecraft.world.item.Item modernItem = null;
-            // If the dropped ID is a block ID, look it up as a block item first
-            net.minecraft.world.level.block.Block droppedBlock = ProxyRegistry.getModernBlock(droppedId);
-            if (droppedBlock != null) {
-                modernItem = droppedBlock.asItem();
+        try {
+            float chance = 1.0F;
+            Float radius = builder.getOptionalParameter(LootContextParams.EXPLOSION_RADIUS);
+            if (radius != null) {
+                if (!fc.canDropFromExplosion(null)) return drops;   // every FC override ignores the argument
+                chance = 1.0F / radius;
             }
-            if (modernItem == null) {
-                modernItem = ProxyRegistry.getModernItem(droppedId);
+            Random rand = new Random();
+            int count = fc.quantityDroppedWithBonus(0, rand);
+            for (int n = 0; n < count; n++) {
+                if (rand.nextFloat() > chance) continue;
+                int id = fc.idDropped(meta, rand, 0);
+                if (id <= 0) continue;
+                ItemStack stack = ItemStackHelper.fcIdToMcStack(id, 1, fc.damageDropped(meta));
+                if (stack.isEmpty()) continue;
+                boolean merged = false;
+                for (ItemStack d : drops) {
+                    if (ItemStack.isSameItemSameTags(d, stack) && d.getCount() < d.getMaxStackSize()) {
+                        d.grow(1);
+                        merged = true;
+                        break;
+                    }
+                }
+                if (!merged) drops.add(stack);
             }
-            if (modernItem != null) {
-                drops.add(new ItemStack(modernItem, quantity));
-            }
+        } catch (Throwable t) {
+            if (DROPS_FAILED.add(legacyId)) LOGGER.warn("getDrops for BTW block {} failed: {}", legacyId, t.toString(), t);
         }
         return drops;
     }
@@ -1239,13 +1221,11 @@ public class ProxyBlock extends Block implements EntityBlock {
             public btw.modern.Material getBlockMaterial(int x, int y, int z) { return fc().blockMaterial; }
             public boolean isAirBlock(int x, int y, int z) { return level.getBlockState(new BlockPos(x, y, z)).isAir(); }
             public boolean isBlockNormalCube(int x, int y, int z) { return false; }
+            // FCMOD-INTEGRATION(1.20.1): fc_particles: FC's display-tick particles through the one shared table and 4.B's limit (a server level draws nothing; FcParticles.addLocal logs a failure once)
             public void spawnParticle(String name, double x, double y, double z, double vx, double vy, double vz) {
-                try {
-                    net.minecraft.core.particles.ParticleOptions particle = mapParticle(name);
-                    if (particle != null && level instanceof net.minecraft.world.level.Level lvl) {
-                        lvl.addParticle(particle, x, y, z, vx, vy, vz);
-                    }
-                } catch (Exception ignored) {}
+                if (level instanceof net.minecraft.world.level.Level lvl) {
+                    FcParticles.addLocal(lvl, name, x, y, z, vx, vy, vz);
+                }
             }
             public void playSoundEffect(double x, double y, double z, String sound, float vol, float pitch) {}
             public boolean canBlockSeeTheSky(int x, int y, int z) {
@@ -1644,38 +1624,18 @@ public class ProxyBlock extends Block implements EntityBlock {
     // ================================================================
 
     /**
-     * Wraps a vanilla MC entity as a btw.modern.Entity for FC callbacks.
-     * Returns a {@link PlayerBridge} for Player entities (richer state and
-     * correct EntityPlayer type), a {@link LivingEntityBridge} for non-player
-     * living entities, an {@link ItemEntityBridge} for dropped items, or an
-     * {@link EntityBridge} for other entities. Null for a dropped item without
-     * an FC view; callers then skip the FC callback.
+     * Wraps a vanilla MC entity as a btw.modern.Entity for FC callbacks: the one contact wrapper,
+     * {@link VanillaEntityViews#forContact} (FCMOD-INTEGRATION(1.20.1): fc_entity_views). A {@link PlayerBridge} for
+     * players (synced), a puppet's own FC object, an {@link ItemEntityBridge} for dropped items (1.5.2 EntityItem passes
+     * itself to the block, vanilla/server EntityItem.java:483-500, so `instanceof EntityItem` callbacks work:
+     * FCBlockHopper:162, FCBlockCampfire:442, FCBlockFarmlandBase:153, FCBlockPlanterBase:61, FCBlockNetherGrowth:276),
+     * a {@link LivingEntityBridge} for other living entities, and the class view of a minecart, boat, painting or orb
+     * (the BTW hopper and the arcane vessel swallow a 1.20.1 orb, Client FCBlockHopper.java:155-168) or the generic view
+     * of anything else. Null for an entity with no FC object to show (an item an FC block in an earlier cell of the same
+     * checkInsideBlocks pass consumed, a puppet without its FC entity); callers then skip the FC callback.
      */
     private static btw.modern.Entity wrapEntity(Entity entity) {
-        if (entity instanceof Player player) {
-            PlayerBridge pb = PlayerBridge.getOrCreate(player);
-            pb.syncFromReal();
-            return pb;
-        }
-        if (entity instanceof LivingEntity living) {
-            LivingEntityBridge lb = LivingEntityBridge.getOrCreate(living);
-            lb.syncFromReal();
-            return lb;
-        }
-        // MC ItemEntity -> its FC EntityItem view (design_items U3b): 1.5.2 EntityItem passes itself to the block
-        // (vanilla/server EntityItem.java:483-500), so `instanceof EntityItem` callbacks work (FCBlockHopper:162,
-        // FCBlockCampfire:442, FCBlockFarmlandBase:153, FCBlockPlanterBase:61, FCBlockNetherGrowth:276) and
-        // EntityItem.CanEntityTriggerTripwire() == false applies. In-place FC changes (bone meal stackSize--) are
-        // landed by the ItemEntityMixin getItem() hook / end-of-tick flush; setDead discards immediately.
-        // Never the generic EntityBridge: wrap() is null for an item an FC block in an earlier cell of the same
-        // checkInsideBlocks pass consumed, an empty one, or one that failed to sync, and as an EntityBridge it
-        // would answer CanEntityTriggerTripwire() == true and fail every `instanceof EntityItem` branch.
-        if (entity instanceof net.minecraft.world.entity.item.ItemEntity ie) {
-            return ItemEntityBridge.wrap(ie);
-        }
-        EntityBridge eb = EntityBridge.getOrCreate(entity);
-        eb.syncFromReal();
-        return eb;
+        return VanillaEntityViews.forContact(entity);
     }
 
     // ================================================================

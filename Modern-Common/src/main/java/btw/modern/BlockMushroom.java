@@ -14,6 +14,22 @@ public class BlockMushroom extends BlockFlower {
         super(id, Material.plants);
         // 1.5.2 BlockMushroom constructor (vanilla/server BlockMushroom.java:28)
         setTickRandomly(true);
+        this.mushroomIconName = iconName;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2's constructor keeps the icon name (field_94374_a,
+    // vanilla/client BlockMushroom.java:21-26) and registerIcons (:155-158) registers it: "mushroom_brown" (39) and
+    // "mushroom_red" (40), as BTWLifecycle replays FC's constructors. Block's default registered the unlocalized
+    // "mushroom", the red cap block. The name-less constructor keeps Block's default.
+    private String mushroomIconName;
+
+    @Override
+    public void registerIcons(IconRegister register) {
+        if (this.mushroomIconName == null) {
+            super.registerIcons(register);
+            return;
+        }
+        this.blockIcon = register.registerIcon(this.mushroomIconName);
     }
 
     /**

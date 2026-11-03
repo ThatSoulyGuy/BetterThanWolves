@@ -215,9 +215,9 @@ public class ProxyBlockEntity extends BlockEntity {
             public btw.modern.Material getBlockMaterial(int x, int y, int z) { return btw.modern.Material.air; }
             public boolean isAirBlock(int x, int y, int z) { return level.getBlockState(new net.minecraft.core.BlockPos(x,y,z)).isAir(); }
             public boolean isBlockNormalCube(int x, int y, int z) { return false; }
+            // FCMOD-INTEGRATION(1.20.1): fc_particles: FC tile entities' client-tick particles through the one shared table and 4.B's limit (FcParticles.addLocal logs a failure once)
             public void spawnParticle(String name, double x, double y, double z, double vx, double vy, double vz) {
-                net.minecraft.core.particles.ParticleOptions p = ProxyBlock.mapParticle(name);
-                if (p != null) level.addParticle(p, x, y, z, vx, vy, vz);
+                FcParticles.addLocal(level, name, x, y, z, vx, vy, vz);
             }
             public boolean setBlock(int x, int y, int z, int id, int meta, int flags) { return false; }
             public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {

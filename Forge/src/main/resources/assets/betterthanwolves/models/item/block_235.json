@@ -1,3 +1,6 @@
 {
-  "parent": "betterthanwolves:block/fcblockdetectorrailwood"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "betterthanwolves:block/fcblockdetectorrailwood"
+  }
 }

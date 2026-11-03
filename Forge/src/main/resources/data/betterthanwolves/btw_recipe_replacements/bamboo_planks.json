@@ -1,0 +1,5 @@
+{
+  "replaces": "minecraft:bamboo_planks",
+  "action": "remove",
+  "reason": "BTW plank rule (maintainer ruling 2026-10-21): bamboo planks come from BTW's saw and from an axe at the work stump (betterthanwolves:bamboo_chopping), never from the bamboo block alone"
+}

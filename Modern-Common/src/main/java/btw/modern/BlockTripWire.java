@@ -28,4 +28,16 @@ public class BlockTripWire extends Block {
     public boolean renderAsNormalBlock() {
         return false;
     }
+
+    // 1.5.2 BlockTripWire.getRenderBlockPass / getRenderType (vanilla/client BlockTripWire.java:67-78).
+    // FCBlockTripWire (132) overrides neither.
+    @Override
+    public int getRenderBlockPass() {
+        return 1;
+    }
+
+    @Override
+    public int getRenderType() {
+        return 30;
+    }
 }

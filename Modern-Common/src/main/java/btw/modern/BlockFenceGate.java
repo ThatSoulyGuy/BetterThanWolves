@@ -56,4 +56,22 @@ public class BlockFenceGate extends BlockDirectional {
         int dir = (MathHelper.floor_double((double)(placer.rotationYaw * 4.0F / 360.0F) + 0.5) & 3) % 4;
         world.setBlockMetadataWithNotify(x, y, z, dir);
     }
+
+    // 1.5.2 BlockFenceGate.getRenderType (vanilla/client BlockFenceGate.java:93-96). FCBlockFenceGate (107) does not
+    // override it.
+    @Override
+    public int getRenderType() {
+        return 21;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockFenceGate's icon members (vanilla/client
+    // BlockFenceGate.java:28-31, :183): the planks on every face, and no icon of its own. FCBlockFenceGate (107)
+    // inherits both; a held gate drew Block's default, the unlocalized "fenceGate", which names no texture.
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        return Block.planks.getBlockTextureFromSide(side);
+    }
+
+    @Override
+    public void registerIcons(IconRegister register) {}
 }

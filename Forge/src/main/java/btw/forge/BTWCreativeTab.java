@@ -101,7 +101,7 @@ public class BTWCreativeTab {
                         mcSub.setCount(1);   // creative tab contents must be single stacks (CreativeModeTab.java:370)
                         // listed in the Search tab (and so JEI) exactly as in this tab; hidden entries in neither
                         event.accept(mcSub, CreativeModeTab.TabVisibility.PARENT_AND_SEARCH_TABS);
-                        if (id < 4096 && ProxyRegistry.getProxy(id) != null) blockEntries++; else itemEntries++;
+                        if (isFcBlockId(id)) blockEntries++; else itemEntries++;
                     }
                 } catch (Throwable t) {
                     if (FC_FAILURES_LOGGED.add(id)) {
@@ -117,12 +117,20 @@ public class BTWCreativeTab {
     }
 
     /**
+     * True for an FC block id with a block of this mod: a ProxyBlock, or FCMOD-INTEGRATION(1.20.1): fc_redstone: an FC
+     * block registered as a 1.20.1 class (BTW's detector rails, FcDetectorRailBlock).
+     */
+    private static boolean isFcBlockId(int id) {
+        return id < 4096 && (ProxyRegistry.getProxy(id) != null || ProxyRegistry.getFcOwnBlock(id) != null);
+    }
+
+    /**
      * True for an Item.itemsList index whose item this mod registered for FC: the block item of an FC block
      * (a ProxyBlock id, 175-4095) or an FC standalone item (a ProxyItem / ProxyArmorItem, id 478 and up).
      * Vanilla-id items FC replaces (256-477, the records) keep their 1.20.1 items and tabs.
      */
     private static boolean isFcOwned(int id) {
-        if (id < 4096 && ProxyRegistry.getProxy(id) != null) return true;
+        if (isFcBlockId(id)) return true;
         return id >= FIRST_FC_ITEM_ID && ProxyRegistry.getModernItem(id) instanceof LegacyProxyItem;
     }
 }

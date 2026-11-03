@@ -270,8 +270,12 @@ public abstract class Block {
         return this;
     }
 
+    // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: 1.5.2 Block.setHardness (vanilla/server Block.java:575-585) raises the explosion resistance to at least hardness x 5, so getExplosionResistance (:389-391) answers at least the hardness; blocks that set only a hardness (dirt, grass, sand, gravel, water and lava at 100) resisted blasts and mining charges with 0
     public Block setHardness(float hardness) {
         this.blockHardness = hardness;
+        if (this.blockResistance < hardness * 5.0F) {
+            this.blockResistance = hardness * 5.0F;
+        }
         return this;
     }
 
@@ -344,10 +348,14 @@ public abstract class Block {
 
     // --- Static query methods ---
 
+    // 1.5.2 Block.isNormalCube (vanilla/client Block.java:541-551, FCMOD: power no longer matters): an opaque
+    // material rendered as a normal block. Not isOpaqueCube(): a mob spawner is a normal cube with an open render,
+    // glowstone, leaves and redstone lamps are opaque cubes of a translucent material.
     public static boolean isNormalCube(int blockID) {
-        if (blockID <= 0) return false; // air is never a normal cube
+        if (blockID <= 0 || blockID >= blocksList.length) return false; // air is never a normal cube
         Block block = blocksList[blockID];
-        return block != null && block.isOpaqueCube();
+        return block != null && block.blockMaterial != null && block.blockMaterial.isOpaque()
+                && block.renderAsNormalBlock();
     }
 
     // --- Instance query methods ---
@@ -677,6 +685,10 @@ public abstract class Block {
     }
 
     public void dropBlockAsItem_do(World world, int x, int y, int z, ItemStack stack) {
+        // FCMOD-INTEGRATION(1.20.1): collapsed_identity: an FC self-drop keeps the identity of the 1.20.1 block it comes from (World.ResolveModernSelfDrop): a broken oxeye daisy drops a daisy, not FC 38:0's poppy
+        if (!world.isRemote && stack != null && stack.stackSize > 0) {
+            stack = world.ResolveModernSelfDrop(x, y, z, blockID, stack);
+        }
         if (!world.isRemote && stack != null && stack.stackSize > 0) {
             if (world.getGameRules() != null
                     && !world.getGameRules().getGameRuleBooleanValue("doTileDrops")) {
@@ -1147,7 +1159,11 @@ public abstract class Block {
 
     // --- BTW-added: Normal cube and related ---
 
-    public boolean IsNormalCube(IBlockAccess blockAccess, int i, int j, int k) { return renderAsNormalBlock(); }
+    // 1.5.2 (FCMOD) Block.IsNormalCube (vanilla/client Block.java:1636-1639), the per-block answer FC's
+    // World.isBlockNormalCube asks for; FCBlockPlatform and FCBlockCompanionCube override it.
+    public boolean IsNormalCube(IBlockAccess blockAccess, int i, int j, int k) {
+        return blockMaterial != null && blockMaterial.isOpaque() && renderAsNormalBlock();
+    }
     public boolean IsAirBlock() { return false; }
     public boolean IsReplaceableVegetation(World world, int i, int j, int k) { return false; }
     public boolean IsGroundCover() { return false; }
@@ -1279,8 +1295,12 @@ public abstract class Block {
         return icon;
     }
 
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 (FCMOD) Block.GetHopperFilterIcon (vanilla/client
+    // Block.java:3791-3794) answers null: a block draws no hopper filter unless it overrides this, as every FC filter
+    // block does (the wicker pane, grate, slats, ladder, trapdoor, iron bars, soul sand). FCBlockHopper draws no
+    // filter box for null (Client FCBlockHopper.java:715-728).
     public Icon GetHopperFilterIcon() {
-        return this.blockIcon;
+        return null;
     }
 
     // --- Client-side: Block rendering methods (overridden by subclasses) ---
@@ -1308,13 +1328,31 @@ public abstract class Block {
     public void RenderBlockMovedByPiston(RenderBlocks renderBlocks, int i, int j, int k) {
     }
 
+    // 1.5.2 (FCMOD) Block.RenderBlockWithTexture (vanilla/client Block.java:3670-3693), verbatim. A block that is not
+    // drawn as a standard block runs its own RenderBlock with the texture as the override; a standard block draws its
+    // state bounds. Callers: FC's second-pass overlays (FCBlockUnfiredBrick.java:341, FCBlockSnowLoose.java:245,
+    // FCBlockSnowLooseSlab.java:279, FCBlockStoneRough.java:363) and the breaking crack (FCBakedModel.renderCrack, as
+    // 1.5.2 RenderGlobal.drawBlockDamageTexture did, RenderGlobal.java:1613). The port used to draw a standard block
+    // from the fields box for every block. The overlays come out the same either way, since RenderBlock has just set
+    // the fields to the state bounds (setBlockBoundsBasedOnState); the crack runs with no RenderBlock before it, so
+    // through the fields box it was a cube (the web's crossed planes, a ladder) where 1.5.2 drew the block's own shape.
     public boolean RenderBlockWithTexture(RenderBlocks renderBlocks, int i, int j, int k, Icon texture) {
-        // Render the block with an override texture (used for overlays like cook speckles)
+        boolean bReturnValue;
+
         renderBlocks.setOverrideBlockTexture(texture);
-        renderBlocks.setRenderBoundsFromBlock(this);
-        boolean result = renderBlocks.renderStandardBlock(this, i, j, k);
+
+        // this test is necessary due to optimizations in RenderStandardFullBlock() that
+        // assumes the texture isn't overriden
+        if (!renderAsNormalBlock()) {
+            bReturnValue = RenderBlock(renderBlocks, i, j, k);
+        } else {
+            renderBlocks.setRenderBounds(GetBlockBoundsFromPoolBasedOnState(renderBlocks.blockAccess, i, j, k));
+            bReturnValue = renderBlocks.renderStandardBlock(this, i, j, k);
+        }
+
         renderBlocks.clearOverrideBlockTexture();
-        return result;
+
+        return bReturnValue;
     }
 
     public void RenderCookingByKilnOverlay(RenderBlocks renderBlocks, int i, int j, int k, boolean bCooking) {
@@ -1324,8 +1362,8 @@ public abstract class Block {
     // '#'-shaped double-sided planes of wheat crops (FCBlockCrops.RenderCrops:311) and weeds
     // (FCBlockWeeds.RenderWeeds:184). Callers set brightness and colour first.
     // Capture-bridge adaptations: the quads are tagged with the icon's name explicitly (as
-    // GetIconByIndex does) and given an up normal (as RenderBlocks.renderCrossedSquares does) so
-    // the baked quads take no directional shade, like 1.5.2's unlit plant planes.
+    // GetIconByIndex does). The up normal is not these vertical planes' own, so FCBakedModel's
+    // fc_quad_normals rule bakes them unshaded and flat-lit, like 1.5.2's unlit plant planes.
     public void RenderCrossHatch(RenderBlocks renderer, int i, int j, int k, Icon icon,
                                  double dBorderWidth, double dVerticalOffset) {
         Tessellator tessellator = Tessellator.instance;
@@ -1398,8 +1436,15 @@ public abstract class Block {
         return true;
     }
 
+    // FCMOD-INTEGRATION(1.20.1): falling_blocks: 1.5.2's ShouldRenderWhileFalling (was: always true)
+    // 1.5.2 (FCMOD) Block.ShouldRenderWhileFalling (vanilla/client Block.java:3735-3744), client only: a falling block is
+    // not drawn while its own block id stands in the cell it occupies (its first ticks, before the client sees the source
+    // cell clear; a landing frame that has the block but not yet the removal). FCBlockSlabFalling overrides it.
     public boolean ShouldRenderWhileFalling(World world, EntityFallingSand entity) {
-        return true;
+        int i = MathHelper.floor_double(entity.posX);
+        int j = MathHelper.floor_double(entity.posY);
+        int k = MathHelper.floor_double(entity.posZ);
+        return world.getBlockId(i, j, k) != entity.blockID;
     }
 
     public AxisAlignedBB getSelectedBoundingBoxFromPool(World world, MovingObjectPosition rayTraceHit) {
@@ -1531,24 +1576,59 @@ public abstract class Block {
         }
     }
     public boolean DropComponentItemsOnBadBreak(World world, int i, int j, int k, int iMetadata, float fChanceOfDrop) { return false; }
-    // FCMOD-INTEGRATION(1.20.1): vanilla_pair_drops: 1.5.2's base body (vanilla/server Block.java:1730-1747) where the live 1.20.1 block owns the loot (FCExplosionMining.DestroyBlock on a bed or door); every other block keeps the empty stub until CF2-DR5 ports the body for all by dropping the UsesModernBlockLoot clause
+    // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: 1.5.2 Block.DropItemsOnDestroyedByExplosion (vanilla/server Block.java:1727-1748), base logic for every block (CF2-DR5): FCExplosionMining.DestroyBlock passes a null explosion, chance 1. A bed or door at its live cell still drops its own 1.20.1 loot through dropBlockAsItemWithChance (vanilla_pair_drops). A throw is logged once per class and the charge goes on with its other blocks
     public void DropItemsOnDestroyedByExplosion(World world, int i, int j, int k, Explosion explosion) {
-        if (world == null || world.isRemote || !world.UsesModernBlockLoot(i, j, k, blockID)
-                || !canDropFromExplosion(explosion)) {
+        if (world == null || world.isRemote || !canDropFromExplosion(explosion)) {
             return;
         }
-        float fChance = explosion != null ? 1F / explosion.explosionSize : 1F;   // null: the mining charge
-        int iMetadata = world.getBlockMetadata(i, j, k);
-        if (!DropComponentItemsOnBadBreak(world, i, j, k, iMetadata, fChance)) {
-            dropBlockAsItemWithChance(world, i, j, k, iMetadata, fChance, 0);
+        try {
+            float fChance = explosion != null ? 1F / explosion.explosionSize : 1F;   // null: the mining charge
+            int iMetadata = world.getBlockMetadata(i, j, k);
+            if (!DropComponentItemsOnBadBreak(world, i, j, k, iMetadata, fChance)) {
+                dropBlockAsItemWithChance(world, i, j, k, iMetadata, fChance, 0);
+            }
+        } catch (Throwable t) {
+            if (EXPLOSION_DROP_FAILURES.add(getClass())) {
+                org.apache.logging.log4j.LogManager.getLogger("BTW-Block").warn(
+                        "[BLAST] {}.DropItemsOnDestroyedByExplosion at {},{},{} threw; the block drops nothing"
+                                + " (further failures of this class suppressed)", getClass().getName(), i, j, k, t);
+            }
         }
     }
 
+    private static final java.util.Set<Class<?>> EXPLOSION_DROP_FAILURES =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     // --- BTW-added: Dirt dug ---
 
-    public void OnDirtDugWithImproperTool(World world, int i, int j, int k) {}
-    public void OnDirtSlabDugWithImproperTool(World world, int i, int j, int k, boolean bUpsideDown) {}
-    public void NotifyNeighborDirtDugWithImproperTool(World world, int i, int j, int k, int iToFacing) {}
+    // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: 1.5.2 Block.OnDirtDugWithImproperTool (vanilla/server Block.java:1753-1759), base logic: all six neighbours hear it (blasts and the bare-hand dig of dirt, grass and mycelium)
+    public void OnDirtDugWithImproperTool(World world, int i, int j, int k) {
+        for (int iTempFacing = 0; iTempFacing < 6; iTempFacing++) {
+            NotifyNeighborDirtDugWithImproperTool(world, i, j, k, iTempFacing);
+        }
+    }
+
+    // 1.5.2 :1761-1771: a slab skips the neighbour on its open side
+    public void OnDirtSlabDugWithImproperTool(World world, int i, int j, int k, boolean bUpsideDown) {
+        for (int iTempFacing = 0; iTempFacing < 6; iTempFacing++) {
+            if (!(bUpsideDown && iTempFacing == 0) && !(!bUpsideDown && iTempFacing == 1)) {
+                NotifyNeighborDirtDugWithImproperTool(world, i, j, k, iTempFacing);
+            }
+        }
+    }
+
+    // 1.5.2 :1773-1787
+    public void NotifyNeighborDirtDugWithImproperTool(World world, int i, int j, int k, int iToFacing) {
+        FCUtilsBlockPos neighborPos = new FCUtilsBlockPos(i, j, k, iToFacing);
+        int iTargetBlockID = world.getBlockId(neighborPos.i, neighborPos.j, neighborPos.k);
+        Block targetBlock = iTargetBlockID > 0 && iTargetBlockID < blocksList.length ? blocksList[iTargetBlockID] : null;
+        if (targetBlock != null) {
+            targetBlock.OnNeighborDirtDugWithImproperTool(world, neighborPos.i, neighborPos.j, neighborPos.k,
+                    GetOppositeFacing(iToFacing));
+        }
+    }
+
+    // 1.5.2 :1789-1792: the override point
     public void OnNeighborDirtDugWithImproperTool(World world, int i, int j, int k, int iToFacing) {}
 
     // --- BTW-added: Hard points ---
@@ -2205,8 +2285,10 @@ public abstract class Block {
      * Replicates FCBlockTorchBase's turntable methods for vanilla torch IDs (50, 75, 76).
      * Torch orientation: metadata & 7 → 1=east, 2=west, 3=south, 4=north, 5=floor.
      * Torch facing: 6 - orientation (facing is the direction the torch points, opposite of attachment).
+     * FCMOD-INTEGRATION(1.20.1): attach_support_rules: a 1.5.2 BlockTorch (placement rule, no collision box), as 4.B's
+     * redstone torches 75 and 76 are (vanilla/client Block.java:244-245)
      */
-    private static class ConcreteTorchBlock extends Block {
+    private static class ConcreteTorchBlock extends BlockTorch {
         ConcreteTorchBlock(int id, Material mat) { super(id, mat); }
         private static int getOrientation(int meta) { return meta & 7; }
         private static int setOrientation(int meta, int orient) { return (meta & ~7) | orient; }

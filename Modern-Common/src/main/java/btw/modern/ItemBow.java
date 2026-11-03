@@ -27,4 +27,25 @@ public class ItemBow extends Item {
     public EnumAction getItemUseAction(ItemStack stack) {
         return EnumAction.bow;
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 ItemBow's icon members (vanilla/client ItemBow.java:19-20,
+    // :140-157): the bow's own icon and the three pull stages. FCItemBow and FCItemCompositeBow inherit them.
+    public static final String[] bowPullIconNameArray = new String[] {"bow_pull_0", "bow_pull_1", "bow_pull_2"};
+    private Icon[] pullIcons;
+
+    @Override
+    public void registerIcons(IconRegister register) {
+        super.registerIcons(register);
+        Icon[] icons = new Icon[bowPullIconNameArray.length];
+        for (int i = 0; i < icons.length; ++i) {
+            icons[i] = register.registerIcon(bowPullIconNameArray[i]);
+        }
+        this.pullIcons = icons;
+    }
+
+    // 1.5.2 ItemBow.getItemIconForUseDuration (vanilla/client ItemBow.java:154-157); the bow's own icon until
+    // registerIcons runs (client only)
+    public Icon getItemIconForUseDuration(int stage) {
+        return this.pullIcons != null ? this.pullIcons[stage] : this.itemIcon;
+    }
 }

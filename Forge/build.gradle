@@ -2356,3 +2356,7 @@ processResources {
 // Modern woods (acacia, dark oak, mangrove, cherry as FC wood types 5-8): work-stump side textures derived from FC's own
 // art and the 1.20.1 logs, checked in, rewritten only when the bytes differ. Owned by the modern-woods workstream.
 apply from: 'gradle/modern-woods.gradle'
+
+// Legacy icon textures (1.5.2 icons 1.20.1 draws from several textures: redstoneDust_cross) composed from 1.20.1's own
+// textures, checked in, rewritten only when the pixels change. Owned by the FOUND-R3 TEXTURES unit.
+apply from: 'gradle/legacy-icon-textures.gradle'

@@ -21,4 +21,31 @@ public class BlockSapling extends BlockFlower {
     public int damageDropped(int metadata) {
         return metadata & 3;
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockSapling's icon members (vanilla/client BlockSapling.java:23-24,
+    // :53-57, :188-196): one sapling per species (meta & 3). FCBlockSapling (6, and the sapling twins) registers and
+    // answers its own staged icons (Client FCBlockSapling.java:242-259) without calling these, so nothing draws them.
+    private static final String[] field_94370_b = new String[] {"sapling", "sapling_spruce", "sapling_birch",
+            "sapling_jungle"};
+    private Icon[] saplingIcon;
+
+    // 1.5.2 BlockSapling.getIcon (vanilla/client BlockSapling.java:53-57); Block's icon until registerIcons runs
+    // (client only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.saplingIcon == null) {
+            return super.getIcon(side, metadata);
+        }
+        return this.saplingIcon[metadata & 3];
+    }
+
+    // 1.5.2 BlockSapling.registerIcons (vanilla/client BlockSapling.java:188-196)
+    @Override
+    public void registerIcons(IconRegister register) {
+        Icon[] icons = new Icon[field_94370_b.length];
+        for (int i = 0; i < icons.length; ++i) {
+            icons[i] = register.registerIcon(field_94370_b[i]);
+        }
+        this.saplingIcon = icons;
+    }
 }

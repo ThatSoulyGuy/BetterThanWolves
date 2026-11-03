@@ -15,7 +15,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.level.GameRules;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.village.VillagerTradesEvent;
@@ -159,8 +158,8 @@ public class FCGameplayBridge {
             if (!(entity.level() instanceof ServerLevel level)) return;
             if (entity.isBaby()) return;
             if (!level.getGameRules().getBoolean(GameRules.RULE_DOMOBLOOT)) return;
-            // 1.5.2: worldObj.getWorldInfo().getGameType() != CREATIVE -- the WORLD's game type.
-            if (level.getServer().getDefaultGameType() == GameType.CREATIVE) return;
+            // 1.5.2: worldObj.getWorldInfo().getGameType() != CREATIVE -- the WORLD's game type (WorldInfoBridge.isCreativeWorld).
+            if (WorldInfoBridge.isCreativeWorld(level.getServer())) return;
 
             int[] drop = fcScrollDropFor(entity);
             if (drop == null) return;

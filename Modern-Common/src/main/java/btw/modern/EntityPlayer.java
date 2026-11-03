@@ -622,6 +622,25 @@ public abstract class EntityPlayer extends EntityLiving {
         return className.contains("ArmorRefined") || className.contains("ArmorSoulforged");
     }
 
+    // 4.B EntityPlayer (vanilla/client EntityPlayer.java:3391-3407): an FC squid may head-crab a living player who can take
+    // damage and is neither riding nor ridden, keeps a living player as its target, and the soulforged plate helm stops its bite.
+    // Entity's defaults (vanilla/client Entity.java:2524-2556) refused all three for every player (triage CF2-MX3).
+    @Override
+    public boolean GetCanBeHeadCrabbed(boolean bSquidInWater) {
+        return isEntityAlive() && capabilities != null && !capabilities.disableDamage
+                && riddenByEntity == null && ridingEntity == null;
+    }
+
+    @Override
+    public boolean IsValidOngoingAttackTargetForSquid() {
+        return isEntityAlive();
+    }
+
+    @Override
+    public boolean IsImmuneToHeadCrabDamage() {
+        return IsWearingSoulforgedHelm();
+    }
+
     /**
      * Checks if the boots slot contains the soulforged plate boots.
      * TODO: Needs inventory bridge to access armorInventory[0]
@@ -869,24 +888,19 @@ public abstract class EntityPlayer extends EntityLiving {
 
     /**
      * Player can swim if not weighted by armor and health > 4.
-     * Uses isWeighted() which checks GetWornArmorWeight() >= 10.
+     * Uses isWeighted(): GetWornArmorWeight() >= 10, or a squid on the head.
      */
     public boolean CanSwim() {
         return !isWeighted() && health > 4;
     }
 
     /**
-     * Returns true if worn armor weight is >= 10 (too heavy to swim).
-     * Ported from EntityLiving in the FC-patched source.
+     * 4.B EntityLiving.isWeighted (vanilla/client EntityLiving.java:3577-3592): worn armour weight 10 or more, or a squid on
+     * the head (IsWeightedByHeadCrab -> Entity.HasHeadCrabbedSquid, Entity.java:2543-2546). CanSwim reads it, so a
+     * head-crabbed player cannot swim up (LivingEntityMixin.btw$gateSwimming). The head-crab clause was missing (CF2-MX3).
      */
     public boolean isWeighted() {
-        int iWeight = GetWornArmorWeight();
-
-        if (iWeight >= 10) {
-            return true;
-        }
-
-        return false;
+        return GetWornArmorWeight() >= 10 || IsWeightedByHeadCrab();
     }
 
     // =========================================================================

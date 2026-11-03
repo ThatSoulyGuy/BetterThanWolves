@@ -1,0 +1,7 @@
+{
+  "sources": [
+    { "type": "single", "resource": "minecraft:mob_effect/haste", "sprite": "betterthanwolves:fortune" },
+    { "type": "single", "resource": "minecraft:mob_effect/strength", "sprite": "betterthanwolves:looting" },
+    { "type": "single", "resource": "minecraft:mob_effect/night_vision", "sprite": "betterthanwolves:true_sight" }
+  ]
+}

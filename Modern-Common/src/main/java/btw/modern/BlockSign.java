@@ -29,4 +29,27 @@ public class BlockSign extends BlockContainer {
     public TileEntity createNewTileEntity(World world) {
         return null;
     }
+
+    // 1.5.2 BlockSign.getRenderType / getBlocksMovement (vanilla/client BlockSign.java:102-105, :115-118; misnamed,
+    // true = passable): a sign's cell is open to FC's path finder. FCBlockSign (63) and FCBlockSignWall (68) override
+    // neither.
+    @Override
+    public int getRenderType() {
+        return -1;
+    }
+
+    @Override
+    public boolean getBlocksMovement(IBlockAccess blockAccess, int x, int y, int z) {
+        return true;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockSign's icon members (vanilla/client BlockSign.java:39-42,
+    // :214): the planks on every face, and no icon of its own. FCBlockSign (63) and FCBlockSignWall (68) inherit them.
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        return Block.planks.getBlockTextureFromSide(side);
+    }
+
+    @Override
+    public void registerIcons(IconRegister register) {}
 }

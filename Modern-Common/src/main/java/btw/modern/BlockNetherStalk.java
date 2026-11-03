@@ -73,4 +73,29 @@ public class BlockNetherStalk extends BlockFlower {
     public int quantityDropped(Random rand) {
         return 0;
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockNetherStalk's icon members (vanilla/client
+    // BlockNetherStalk.java:21-22, :69-72, :136-144): three growth stages. FCBlockNetherStalk (115) inherits both.
+    private static final String[] STAGE_ICON_NAMES = new String[] {"netherStalk_0", "netherStalk_1", "netherStalk_2"};
+    private Icon[] iconArray;
+
+    // 1.5.2 BlockNetherStalk.getIcon (vanilla/client BlockNetherStalk.java:69-72); Block's icon until registerIcons
+    // runs (client only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.iconArray == null) {
+            return super.getIcon(side, metadata);
+        }
+        return metadata >= 3 ? this.iconArray[2] : (metadata > 0 ? this.iconArray[1] : this.iconArray[0]);
+    }
+
+    // 1.5.2 BlockNetherStalk.registerIcons (vanilla/client BlockNetherStalk.java:136-144)
+    @Override
+    public void registerIcons(IconRegister register) {
+        Icon[] icons = new Icon[STAGE_ICON_NAMES.length];
+        for (int i = 0; i < icons.length; ++i) {
+            icons[i] = register.registerIcon(STAGE_ICON_NAMES[i]);
+        }
+        this.iconArray = icons;
+    }
 }

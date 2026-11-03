@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * What FC sees, through WorldBridge.getBlockId, for a colliding 1.20.1 block state with no usable 1.5.2 id
- * (deepslate, tuff, granite/diorite/andesite, calcite, dripstone, copper, mud, new woods, concrete, hay,
+ * (tuff, granite/diorite/andesite, calcite, dripstone, polished deepslate, copper, mud, concrete, hay,
  * terracotta, ...). In 1.5.2 every block in the world had a blocksList entry and World.getCollidingBoundingBoxes
  * collided with all of them (vanilla/client World.java:1601-1625). Only the world-read path uses this
  * (ProxyRegistry.getWorldBlockId): identity routing (getFcBlock / BlockBehaviorMixin / items) never returns a
@@ -35,9 +35,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>FC's fire and plant rules read two more properties through the id. Fire: FCBlockFire, which owns the FIRE tick,
  * reads only its own tables (BlockFire.abilityToCatchFire / chanceToEncourageFire, indexed by getBlockId), and FC lava
- * reads Material.getCanBurn (FCBlockLavaStationary.java:64-67). A colliding state that 1.20.1 fire burns (acacia, dark
- * oak, mangrove, cherry and bamboo planks, hay, carpets, scaffolding, beehives, ...) therefore reads as a flammable
- * stand-in carrying its 1.20.1 odds, so it keeps burning and feeding fire as it does today, and a 1.20.1 fire source
+ * reads Material.getCanBurn (FCBlockLavaStationary.java:64-67). A colliding state that 1.20.1 fire burns (bamboo planks
+ * and blocks, hay, carpets, scaffolding, beehives, ...) therefore reads as a flammable stand-in carrying its 1.20.1
+ * odds, so it keeps burning and feeding fire as it does today (the acacia, dark oak, mangrove and cherry planks are FC
+ * planks 5:5-8, ModernWoodSubBlocks, and burn by FC's planks entries), and a 1.20.1 fire source
  * (magma block) keeps FC fire on it burning (DoesInfiniteBurnToFacing). Soil: modern soils answer
  * FC's soil hooks from their 1.20.1 tags (maintainer decision D3), so plants 1.20.1 world generation put on podzol,
  * moss, mud, rooted or coarse dirt and red sand survive FC's survival rules.</p>
@@ -45,6 +46,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Plants: a governed modded crop on BTW soil that takes it (btw.forge.farming.FcSoil.governsAt) reads as the plant
  * stand-in ({@link ModernPlantStandIn}, INTEGRATIONS #026), allocated with the plain stand-ins only when the pack has
  * a modded crop; every other non-colliding state still reads as air.</p>
+ *
+ * <p>Support relatives (FcAttachSupport.SUPPORT_RELATIVE, ruling 2026-10-31): a modern fence, wall or stained glass
+ * pane FC reads through a stand-in answers FC's support questions as its BTW relative (the oak fence, the cobblestone
+ * wall, the glass pane): the centre, small and large hard points, the ground-cover rest and its resting offset are
+ * handed to the relative's FC block on a WorldBridge read (CanSupportFallingBlocks follows the centre hard point). Every
+ * other method here (collision, pathing, fire odds, hardness, sounds, drops, the saw, mobility, the machine and soil
+ * hooks) and the stand-in id itself stay as they are.</p>
  */
 final class ModernBlockStandIn extends btw.modern.Block {
 
@@ -104,7 +112,7 @@ final class ModernBlockStandIn extends btw.modern.Block {
         this.m_bSolidCube = solidCube;
         // 1.5.2 opaque-cube table (vanilla/server Block.java:484): the Block constructor evaluated isOpaqueCube()
         // before m_bSolidCube was set, and stand-ins are created after BTWLifecycle filled the table. The solid
-        // stand-in (deepslate, tuff, ...) must stay opaque to FC's tree and huge mushroom generators.
+        // stand-in (tuff, calcite, ...) must stay opaque to FC's tree and huge mushroom generators.
         opaqueCubeLookup[id] = solidCube;
         // Stone defaults (vanilla/client Block.java:72). stepSound must be non-null: frozen
         // Entity.playStepSound dereferences GetStepSound(...) (Entity.java:1028).
@@ -245,6 +253,12 @@ final class ModernBlockStandIn extends btw.modern.Block {
     static boolean isFreeId(int id) {
         return btw.modern.Block.blocksList[id] == null && btw.modern.Item.itemsList[id] == null
                 && !ProxyRegistry.isLegacyIdMapped(id);
+    }
+
+    /** True for a legacy id FC reads as a stand-in (FcAttachSupport.supportRelative's test, the same on both sides). */
+    static boolean isStandIn(int id) {
+        return id > 0 && id < btw.modern.Block.blocksList.length
+                && btw.modern.Block.blocksList[id] instanceof ModernBlockStandIn;
     }
 
     // ---- flammable stand-ins
@@ -418,9 +432,14 @@ final class ModernBlockStandIn extends btw.modern.Block {
 
     // ---- hardpoints (collider only; the solid cube keeps the isBlockNormalCube default). FC facing 0..5 ==
     // MC Direction 3D data value (DOWN,UP,NORTH,SOUTH,WEST,EAST), cf. WorldBridge.directionToLegacyFacing.
+    // A support relative (a modern fence, wall or stained glass pane) answers with its BTW relative's FC block first.
     @Override
     public boolean HasLargeCenterHardPointToFacing(btw.modern.IBlockAccess access, int i, int j, int k,
                                                    int iFacing, boolean bIgnoreTransparency) {
+        btw.modern.Block relative = supportRelative(access, i, j, k);
+        if (relative != null) {
+            return relative.HasLargeCenterHardPointToFacing(access, i, j, k, iFacing, bIgnoreTransparency);
+        }
         if (m_bSolidCube) return super.HasLargeCenterHardPointToFacing(access, i, j, k, iFacing, bIgnoreTransparency);
         ServerLevel level = levelOf(access, null);
         if (level == null || iFacing < 0 || iFacing > 5) return false;
@@ -431,11 +450,53 @@ final class ModernBlockStandIn extends btw.modern.Block {
     @Override
     public boolean HasSmallCenterHardPointToFacing(btw.modern.IBlockAccess access, int i, int j, int k,
                                                    int iFacing, boolean bIgnoreTransparency) {
+        btw.modern.Block relative = supportRelative(access, i, j, k);
+        if (relative != null) {
+            return relative.HasSmallCenterHardPointToFacing(access, i, j, k, iFacing, bIgnoreTransparency);
+        }
         if (m_bSolidCube) return super.HasSmallCenterHardPointToFacing(access, i, j, k, iFacing, bIgnoreTransparency);
         ServerLevel level = levelOf(access, null);
         if (level == null || iFacing < 0 || iFacing > 5) return false;
         return net.minecraft.world.level.block.Block.canSupportCenter(
                 level, new BlockPos(i, j, k), Direction.from3DDataValue(iFacing));
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): support_relatives: a modern fence, wall or stained glass pane answers FC's support questions (hard points, ground cover resting on it and its offset) as its BTW relative, on WorldBridge reads; identity, drops, hooks, collision and rendering stay the stand-in's (FcAttachSupport.SUPPORT_RELATIVE)
+    @Override
+    public boolean HasCenterHardPointToFacing(btw.modern.IBlockAccess access, int i, int j, int k,
+                                              int iFacing, boolean bIgnoreTransparency) {
+        btw.modern.Block relative = supportRelative(access, i, j, k);
+        return relative != null ? relative.HasCenterHardPointToFacing(access, i, j, k, iFacing, bIgnoreTransparency)
+                : super.HasCenterHardPointToFacing(access, i, j, k, iFacing, bIgnoreTransparency);
+    }
+
+    @Override
+    public boolean CanGroundCoverRestOnBlock(btw.modern.World world, int i, int j, int k) {
+        btw.modern.Block relative = supportRelative(world, i, j, k);
+        return relative != null ? relative.CanGroundCoverRestOnBlock(world, i, j, k)
+                : super.CanGroundCoverRestOnBlock(world, i, j, k);
+    }
+
+    @Override
+    public float GroundCoverRestingOnVisualOffset(btw.modern.IBlockAccess access, int i, int j, int k) {
+        btw.modern.Block relative = supportRelative(access, i, j, k);
+        return relative != null ? relative.GroundCoverRestingOnVisualOffset(access, i, j, k)
+                : super.GroundCoverRestingOnVisualOffset(access, i, j, k);
+    }
+
+    /**
+     * The BTW relative's FC block for the live state at (i, j, k) of a WorldBridge read (FcAttachSupport.supportRelative),
+     * else null: any other access (PathFinder's ChunkCache, ProxyBlock's shape and display worlds, FCBakedModel's live
+     * access) keeps the stand-in's own answers. The solid stand-in answers null before any read: no fence, wall or
+     * pane state is a full solid cube, so it never stands in for a support relative, and its hard points (WorldBridge's
+     * solid top, falling blocks, attachments on the most common modern blocks) read no extra block state.
+     */
+    private btw.modern.Block supportRelative(Object access, int i, int j, int k) {
+        if (m_bSolidCube) return null;
+        ServerLevel level = levelOf(access, null);
+        if (level == null) return null;
+        BlockPos pos = new BlockPos(i, j, k);
+        return FcAttachSupport.supportRelative(level.getBlockState(pos), level, pos);
     }
 
     // ---- eternal fire: FCBlockFire, which owns the FIRE tick, keeps a fire alive over netherrack, End bedrock or a
@@ -485,7 +546,7 @@ final class ModernBlockStandIn extends btw.modern.Block {
     // ---- footsteps: frozen Entity.playStepSound plays GetStepSound(world, x, y, z).getStepSound() at
     // getVolume() * 0.15F, getPitch() (vanilla/client Entity.java:1016-1044), the formula 1.20.1
     // Entity.playStepSound applies to a SoundType. The constructor's stone made every FC puppet walking on
-    // deepslate, new woods, concrete, copper, mud, ... step on stone; the live block's own SoundType is
+    // tuff, polished deepslate, concrete, copper, mud, ... step on stone; the live block's own SoundType is
     // reported instead, as namespaced 1.20.1 ids that WorldBridge.resolveSoundEvent passes straight through.
     @Override
     public btw.modern.StepSound GetStepSound(btw.modern.World world, int i, int j, int k) {
@@ -545,7 +606,32 @@ final class ModernBlockStandIn extends btw.modern.Block {
     @Override
     public void DropItemsOnDestroyedByExplosion(btw.modern.World world, int i, int j, int k,
                                                 btw.modern.Explosion explosion) {
+        // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: a class-S log (stems, hyphae, other mods' logs; FCLogRules.isForeignLog) breaks under a mining charge into FCBlockLog's components (Server FCBlockLog.java:123-130): 6 sawdust and, while it has bark, its bark; every other stand-in drops its 1.20.1 loot
+        ServerLevel level = levelOf(world, null);
+        if (level != null) {
+            BlockPos pos = new BlockPos(i, j, k);
+            BlockState state = level.getBlockState(pos);
+            if (FCLogRules.isForeignLog(state)) {
+                float chance = explosion != null ? 1.0F / explosion.explosionSize : 1.0F;
+                popEach(world, level, pos, FCLogRules.sawdust(1), 6, chance);
+                if (FCLogRules.barked(level, pos, state)) {
+                    popEach(world, level, pos, FCLogRules.bark(FCLogRules.barkSpecies(state)), 1, chance);
+                }
+                return;
+            }
+        }
         dropMcLoot(world, i, j, k);
+    }
+
+    /** 1.5.2 Block.DropItemsIndividualy (vanilla/server Block.java:1703-1714): n single items, each at the chance. */
+    private static void popEach(btw.modern.World world, ServerLevel level, BlockPos pos,
+                                net.minecraft.world.item.ItemStack one, int n, float chance) {
+        if (one.isEmpty()) return;                                 // bark(-1): the stems
+        for (int c = 0; c < n; c++) {
+            if (world.rand.nextFloat() <= chance) {
+                net.minecraft.world.level.block.Block.popResource(level, pos, one.copy());
+            }
+        }
     }
 
     static void dropMcLoot(btw.modern.World world, int x, int y, int z) {

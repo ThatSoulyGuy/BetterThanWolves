@@ -1,14 +1,9 @@
 package btw.forge.mixin;
 
-import btw.forge.EntityBridge;
+import btw.forge.FcAttachSupport;
 import btw.forge.HookPolicy;
-import btw.forge.ItemEntityBridge;
 import btw.forge.PlayerBridge;
-import btw.forge.ProxyAnimal;
 import btw.forge.ProxyBlock;
-import btw.forge.ProxyEntity;
-import btw.forge.ProxyMob;
-import btw.forge.ProxyPathfinderMob;
 import btw.forge.ProxyRegistry;
 import btw.forge.WorldBridge;
 import net.minecraft.core.BlockPos;
@@ -17,7 +12,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -100,46 +94,15 @@ public abstract class BlockBehaviorMixin {
     }
 
     /**
-     * Wraps a Minecraft entity into an FC entity for use in FC block callbacks.
-     * Uses EntityBridge as a fallback for vanilla entities without dedicated proxies.
+     * Wraps a Minecraft entity into an FC entity for use in FC block callbacks (onEntityCollidedWithBlock): the one
+     * contact wrapper, {@link btw.forge.VanillaEntityViews#forContact} (FCMOD-INTEGRATION(1.20.1): fc_entity_views),
+     * shared with ProxyBlock and BlockMixin: a synced PlayerBridge, a puppet's own FC object, an item's FC EntityItem
+     * view (`instanceof EntityItem` callbacks: FCBlockCampfire:442, FCBlockFarmlandBase:153, FCBlockPlanterBase:61,
+     * FCBlockNetherGrowth:276), a LivingEntityBridge, or the class or generic view of any other 1.20.1 entity. Null when
+     * the entity has no FC object to show -- the caller skips the FC callback.
      */
     private btw.modern.Entity btw$wrapEntity(Entity entity) {
-        if (entity == null) return null;
-
-        // Player → PlayerBridge
-        if (entity instanceof net.minecraft.world.entity.player.Player player) {
-            PlayerBridge bridge = PlayerBridge.getOrCreate(player);
-            bridge.syncFromReal();
-            return bridge;
-        }
-        // ProxyMob → getFcEntity()
-        if (entity instanceof ProxyMob proxy) {
-            return proxy.getFcEntity();
-        }
-        // ProxyAnimal → getFcEntity()
-        if (entity instanceof ProxyAnimal proxy) {
-            return proxy.getFcEntity();
-        }
-        // ProxyPathfinderMob → getFcEntity()
-        if (entity instanceof ProxyPathfinderMob proxy) {
-            return proxy.getFcEntity();
-        }
-        // ProxyEntity → getFcEntity()
-        if (entity instanceof ProxyEntity proxy) {
-            return proxy.getFcEntity();
-        }
-        // ItemEntity → its FC EntityItem view (design_items U3b), so `instanceof EntityItem` callbacks work
-        // (FCBlockCampfire:442, FCBlockFarmlandBase:153, FCBlockPlanterBase:61, FCBlockNetherGrowth:276) and
-        // EntityItem.CanEntityTriggerTripwire() == false applies: 1.5.2 EntityItem passes itself to the block.
-        // Null (never the generic EntityBridge) when the item has no view: consumed by an FC block earlier in
-        // the same checkInsideBlocks pass, empty, or failed to sync -- the caller skips the FC callback.
-        if (entity instanceof ItemEntity item) {
-            return ItemEntityBridge.wrap(item);
-        }
-        // Vanilla entities without FC proxy → use generic EntityBridge
-        EntityBridge bridge = EntityBridge.getOrCreate(entity);
-        bridge.syncFromReal();
-        return bridge;
+        return btw.forge.VanillaEntityViews.forContact(entity);
     }
 
     // ================================================================
@@ -175,7 +138,18 @@ public abstract class BlockBehaviorMixin {
         // FCMOD-INTEGRATION(1.20.1): hook_ownership: FC runs only where the state's NEIGHBOR owner allows it (RULED(4) door, trapdoor and gate redstone, RULED(5) pair blocks), and an FC throw answers the 1.20.1 result
         if (!HookPolicy.notifyRuns(state, HookPolicy.NEIGHBOR)) return;
         btw.modern.Block fcBlock = btw$getFcBlock();
-        if (fcBlock == null) return;
+        if (fcBlock == null) {
+            // FCMOD-INTEGRATION(1.20.1): attach_support_rules: a 1.20.1 block that takes an FC attachment rule through
+            // FcAttachSupport's support twins (soul torch, soul wall torch, the modern pressure plates; rulings 2026-10-23,
+            // 2026-10-25, 2026-10-31) drops at any neighbour change on a support 4.B refuses, as
+            // FCBlockTorchBase.ValidateState drops the torch and FCBlockPressurePlate's neighbour check the plate; the pop
+            // is 1.20.1's own pop (Block.updateOrDestroy -> destroyBlock: break effect, its loot, flag 3)
+            if (level instanceof ServerLevel twinLevel && FcAttachSupport.isSupportTwin(state.getBlock())
+                    && twinLevel.getBlockState(pos) == state && FcAttachSupport.refuses(state, twinLevel, pos)) {
+                twinLevel.destroyBlock(pos, true);
+            }
+            return;
+        }
 
         if (level instanceof ServerLevel sl) {
             try {
@@ -233,7 +207,7 @@ public abstract class BlockBehaviorMixin {
         // FCBlockEnderChest.breakBlock cast (Client FCBlockBeacon.java:42, FCBlockEnderChest.java:104): the
         // ClassCastException left an orphan block entity, lost the drop and crashed explosions. BlockBehaviour's own
         // onRemove (block entity removal) runs either way.
-        if (HookPolicy.isTeGuarded(fcBlock)) return;
+        if (HookPolicy.isTeGuarded(self, fcBlock)) return;
 
         if (!state.is(newState.getBlock()) && level instanceof ServerLevel sl && !WorldBridge.isMetadataOnlyWrite(pos)) {
             try {
@@ -276,7 +250,7 @@ public abstract class BlockBehaviorMixin {
         // FCMOD-INTEGRATION(1.20.1): hook_ownership: the USE owner gates Stage 1 only (RULED(3) beds, the pending door / cake / workbench / pot rows, removed and block-entity blocks keep 1.20.1's activation); Stage 2, the held FC item, still runs, as 4.B ran it whatever the block did (vanilla/server ItemInWorldManager.java:376-407); an FC-owned USE (the anvils) ran at the forwarder (BlockStateHookMixin)
         // The block-entity guard (see btw$onRemove) also covers states without a cached owner: FC's activation of a
         // container block casts the 1.20.1 block entity (Client FCBlockEnderChest.java:39, FCBlockBeacon.java:69)
-        boolean stage1 = HookPolicy.notifyRuns(state, HookPolicy.USE) && !HookPolicy.isTeGuarded(fcBlock);
+        boolean stage1 = HookPolicy.notifyRuns(state, HookPolicy.USE) && !HookPolicy.isTeGuarded(state.getBlock(), fcBlock);
         // A twin has no Stage 2, so nothing is left to run
         if (!stage1 && twin) return;
 
@@ -303,7 +277,7 @@ public abstract class BlockBehaviorMixin {
     @Inject(method = "entityInside", at = @At("HEAD"), cancellable = true)
     private void btw$entityInside(BlockState state, Level level, BlockPos pos, Entity entity,
                                    CallbackInfo ci) {
-        // FCMOD-INTEGRATION(1.20.1): hook_ownership: owner-gated (the detector rail stays PENDING) and caught; a throw keeps the 1.20.1 body
+        // FCMOD-INTEGRATION(1.20.1): hook_ownership: owner-gated (detector rails: equivalent, FC's cart rule runs inside 1.20.1's own check, DetectorRailBlockMixin) and caught; a throw keeps the 1.20.1 body
         if (!HookPolicy.notifyRuns(state, HookPolicy.INSIDE)) return;
         btw.modern.Block fcBlock = btw$getFcBlock();
         if (fcBlock == null) return;

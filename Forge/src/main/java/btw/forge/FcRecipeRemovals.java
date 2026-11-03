@@ -58,7 +58,9 @@ import java.util.TreeSet;
  *       and FC's live furnace list: an input FC dropped, or now cooks into something else, is removed. Clay keeps its
  *       recipe (FC re-adds the same brick, FCRecipes.java:3028) and glass was never a 1.5.2 input. Every
  *       {@code minecraft:} SMELTING, BLASTING, SMOKING and CAMPFIRE_COOKING recipe whose ingredient maps to a removed
- *       input is removed.</li>
+ *       input is removed, and so is one whose ingredient FC's own furnace cooks into a different result than the
+ *       recipe's (raw iron counts as BTW's iron ore chunk, which FC cooks into a nugget, so 1.20.1's raw iron to iron
+ *       ingot goes). A recipe whose result has no legacy key is never compared on the second rule.</li>
  *   <li><b>Stays removed</b> (always on, by ruling): every recipe of any type and any namespace whose result is a
  *       {@link RemovedContent} item (T1, T2, T3) is removed; removals outside {@code minecraft} are logged at INFO.
  *       FC's own injected recipes are never removed (FC is the authority on what 4.B makes); one that produces a
@@ -415,32 +417,44 @@ final class FcRecipeRemovals {
 
         // ---- pass 3: cooking -------------------------------------------------------------------------
 
+        // FCMOD-INTEGRATION(1.20.1): raw_ore_chunks: a minecraft: cooking recipe goes when FC removed its 1.5.2 input or when FC's own furnace cooks that input into something else (raw iron, a BTW iron ore chunk, cooks to a nugget)
+        @SuppressWarnings("rawtypes")
         void removeCookingRecipes() {
             removedFurnaceInputs = removedFurnaceInputs();
-            if (removedFurnaceInputs.isEmpty()) return;
+            Map fcList = btw.modern.FurnaceRecipes.smelting().getSmeltingList();
             for (Recipe<?> r : all.values()) {
                 if (!COOKING_TYPES.contains(r.getType()) || !isMinecraft(r.getId()) || removed.contains(r.getId())) {
                     continue;
                 }
-                if (cooksRemovedInput(r) && removed.add(r.getId())) {
+                String why = disownedByFc(r, fcList);
+                if (why != null && removed.add(r.getId())) {
                     cookingRemoved++;
-                    LOGGER.debug("Removed cooking recipe {} (FC removed its 1.5.2 furnace input)", r.getId());
+                    LOGGER.debug("Removed cooking recipe {} ({})", r.getId(), why);
                 }
             }
         }
 
-        private boolean cooksRemovedInput(Recipe<?> r) {
+        /** Why 4.B's furnace disowns {@code r}, or null. A result with no legacy key is never compared (kept). */
+        @SuppressWarnings("rawtypes")
+        private String disownedByFc(Recipe<?> r, Map fcList) {
             try {
+                long resultKey = legacyKey(result(r).getItem());
                 for (Ingredient ing : r.getIngredients()) {
                     if (ing == null || ing.isEmpty()) continue;
                     for (long k : keysOf(ing)) {
-                        if (k >= 0 && removedFurnaceInputs.contains(idOf(k))) return true;
+                        if (k < 0) continue;
+                        int id = idOf(k);
+                        if (removedFurnaceInputs.contains(id)) return "FC removed its 1.5.2 furnace input " + id;
+                        if (resultKey >= 0 && fcList.get(id) instanceof btw.modern.ItemStack out
+                                && resultKey != key(out.itemID, out.getItemDamage())) {
+                            return "FC cooks " + id + " into " + out.itemID + ":" + out.getItemDamage();
+                        }
                     }
                 }
             } catch (Throwable ignored) {
                 // a recipe that cannot list its ingredients is left alone
             }
-            return false;
+            return null;
         }
 
         /** 1.5.2 vanilla furnace inputs that FC's live furnace list no longer cooks into the vanilla result. */
@@ -536,6 +550,7 @@ final class FcRecipeRemovals {
                     if (id > 0) {
                         k = key(id, 0);
                     } else if (item instanceof BlockItem bi) {
+                        // FCMOD-INTEGRATION(1.20.1): strata: world identity on purpose (not getBlockFormItemId): a deepslate ore item is that ore for 4.B's cooking rule
                         int blockId = ProxyRegistry.getBlockId(bi.getBlock());
                         if (blockId > 0) k = key(blockId, Math.max(0, ProxyRegistry.getLegacyVariantMeta(bi.getBlock())));
                     }

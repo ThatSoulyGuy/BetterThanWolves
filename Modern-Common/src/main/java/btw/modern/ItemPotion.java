@@ -94,4 +94,50 @@ public class ItemPotion extends Item {
         List effects = this.getEffects(stack);
         return effects != null && !effects.isEmpty();
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 ItemPotion's icon members (vanilla/client ItemPotion.java:29-31,
+    // :182-193, :391-401): the drinkable or splash bottle by damage, the contents overlay of the first pass, and the
+    // static lookup RenderSnowball reads for a thrown potion. FCItemPotion (373) inherits them; a held splash potion
+    // drew Item's default, the unlocalized "potion", the drinkable bottle.
+    private Icon splashIcon;
+    private Icon drinkableIcon;
+    private Icon contentsIcon;
+
+    // 1.5.2 ItemPotion.getIconFromDamage (vanilla/client ItemPotion.java:182-185); Item's icon until registerIcons
+    // runs (client only)
+    @Override
+    public Icon getIconFromDamage(int damage) {
+        if (this.splashIcon == null || this.drinkableIcon == null) {
+            return super.getIconFromDamage(damage);
+        }
+        return isSplash(damage) ? this.splashIcon : this.drinkableIcon;
+    }
+
+    // 1.5.2 ItemPotion.getIconFromDamageForRenderPass (vanilla/client ItemPotion.java:190-193); Item's answer while the
+    // contents icon is not registered (client only)
+    @Override
+    public Icon getIconFromDamageForRenderPass(int damage, int renderPass) {
+        return renderPass == 0 && this.contentsIcon != null ? this.contentsIcon
+                : super.getIconFromDamageForRenderPass(damage, renderPass);
+    }
+
+    // 1.5.2 ItemPotion.registerIcons (vanilla/client ItemPotion.java:391-396)
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.drinkableIcon = register.registerIcon("potion");
+        this.splashIcon = register.registerIcon("potion_splash");
+        this.contentsIcon = register.registerIcon("potion_contents");
+    }
+
+    // 1.5.2 ItemPotion.func_94589_d (vanilla/client ItemPotion.java:398-401): Item.potion's icons by name (compared by
+    // value; 1.5.2's callers pass these literals)
+    public static Icon func_94589_d(String name) {
+        ItemPotion potion = Item.potion;
+        if (potion == null) {
+            return null;
+        }
+        return "potion".equals(name) ? potion.drinkableIcon
+                : ("potion_splash".equals(name) ? potion.splashIcon
+                : ("potion_contents".equals(name) ? potion.contentsIcon : null));
+    }
 }

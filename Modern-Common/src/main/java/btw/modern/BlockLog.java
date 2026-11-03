@@ -13,6 +13,40 @@ public class BlockLog extends Block {
     public static final String[] woodType = new String[] {"oak", "spruce", "birch", "jungle"};
     public static int limitToValidMetadata(int metadata) { return metadata & 3; }
 
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockLog's icon members (vanilla/client BlockLog.java:24-26,
+    // :122-127, :169-178): the one log end on the axis faces and the species bark on the others. FCBlockLog (17)
+    // reads both through super (its trunk metas 12-15 answer their own); a carried or held log drew Block's default,
+    // the unlocalized "log", which names no texture. Log2 (165) is answered by FCBlockLogWoodMixin.
+    public static final String[] treeTextureTypes = new String[] {"tree_side", "tree_spruce", "tree_birch",
+            "tree_jungle"};
+    private Icon[] iconArray;
+    private Icon treeTopIcon;
+
+    // 1.5.2 BlockLog.getIcon (vanilla/client BlockLog.java:122-127); Block's icon until registerIcons runs (client
+    // only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.iconArray == null || this.treeTopIcon == null) {
+            return super.getIcon(side, metadata);
+        }
+        int axis = metadata & 12;
+        int species = metadata & 3;
+        return axis == 0 && (side == 1 || side == 0) ? this.treeTopIcon
+                : (axis == 4 && (side == 5 || side == 4) ? this.treeTopIcon
+                : (axis == 8 && (side == 2 || side == 3) ? this.treeTopIcon : this.iconArray[species]));
+    }
+
+    // 1.5.2 BlockLog.registerIcons (vanilla/client BlockLog.java:169-178)
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.treeTopIcon = register.registerIcon("tree_top");
+        Icon[] icons = new Icon[treeTextureTypes.length];
+        for (int i = 0; i < icons.length; ++i) {
+            icons[i] = register.registerIcon(treeTextureTypes[i]);
+        }
+        this.iconArray = icons;
+    }
+
     // Wood species lives in metadata bits 0-1 (orientation in 2-3). Without this the drop
     // stack carries damage 0, so a chopped spruce/birch/jungle log dropped as OAK. The bridge
     // (ItemStackHelper + ProxyRegistry variant table) turns this damage back into the right
@@ -88,5 +122,12 @@ public class BlockLog extends Block {
                 }
             }
         }
+    }
+
+    // 1.5.2 BlockLog.getRenderType (vanilla/client BlockLog.java:37-40). FCBlockLog (17, and log2 at 165) does not
+    // override it.
+    @Override
+    public int getRenderType() {
+        return 31;
     }
 }

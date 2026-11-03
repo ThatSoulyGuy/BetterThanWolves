@@ -195,9 +195,9 @@ public class Explosion {
                                     1.0F / this.explosionSize, 0);
                         }
 
-                        // Notify block of destruction, then remove it
-                        block.onBlockDestroyedByExplosion(worldObj, x, y, z, this);
+                        // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: 1.5.2 order (vanilla/server Explosion.java:246-247): remove the block, then its reaction
                         worldObj.setBlock(x, y, z, 0, 0, 3);
+                        block.onBlockDestroyedByExplosion(worldObj, x, y, z, this);
                     }
                 }
             }

@@ -79,6 +79,34 @@ public class EntityAITasks {
         }
     }
 
+    /**
+     * Resets every executing task that {@code drop} accepts (resetTask, then out of the executing list), as the full pass
+     * does for a task whose continueExecuting failed; the next full pass may select it again. Returns how many were reset.
+     * Port addition: btw.forge.FcTargetRule drops the tasks that still hold a player it removed as a target.
+     */
+    public int resetExecutingTasks(java.util.function.Predicate<EntityAIBase> drop) {
+        int n = 0;
+        Iterator<EntityAITaskEntry> it = executingTasks.iterator();
+        while (it.hasNext()) {
+            EntityAITaskEntry entry = it.next();
+            boolean match;
+            try {
+                match = drop.test(entry.action);
+            } catch (Throwable t) {
+                match = false;
+            }
+            if (!match) continue;
+            try {
+                entry.action.resetTask();
+            } catch (Throwable e) {
+                logTaskFailureOnce("resetTask", entry.action, e);
+            }
+            it.remove();
+            n++;
+        }
+        return n;
+    }
+
     private static final Set<String> LOGGED_TASK_FAILURES = new HashSet<>();
     private static final org.apache.logging.log4j.Logger AI_LOGGER =
         org.apache.logging.log4j.LogManager.getLogger("BTW-EntityAITasks");

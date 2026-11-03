@@ -127,6 +127,8 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
             Map<net.minecraft.world.entity.EntityType<?>, String> registered =
                     btw.forge.BTWEntityRegistration.getRegisteredFcEntities();
             int missing = 0;
+            int notBuilt = 0;
+            java.util.TreeSet<String> positional = new java.util.TreeSet<>();
             for (Map.Entry<net.minecraft.world.entity.EntityType<?>, String> e : registered.entrySet()) {
                 if (!hasRendererForFcClass(e.getValue())) {
                     LOGGER.warn("[SELF-AUDIT/renderer] {} ({}) has NO FC renderer -> renders as debug box",
@@ -134,11 +136,43 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
                             e.getValue());
                     missing++;
                 }
+                // FCMOD-INTEGRATION(1.20.1): fc_entity_construction: a renderer draws nothing the client cannot build (CF2-R1 passed this audit)
+                String why = clientBuildProblem(e.getValue());
+                if (why != null) {
+                    LOGGER.warn("[SELF-AUDIT/renderer] {} ({}) cannot be built on the client ({}) -> renders as debug box",
+                            net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(e.getKey()),
+                            e.getValue(), why);
+                    notBuilt++;
+                } else if (btw.forge.FcEntityFactory.kindOf(e.getValue()) == btw.forge.FcEntityFactory.Kind.POSITIONAL) {
+                    positional.add(e.getValue().substring(e.getValue().lastIndexOf('.') + 1));
+                }
             }
-            LOGGER.info("[SELF-AUDIT/renderer] {} registered FC entities, {} missing a renderer (0 expected).",
-                    registered.size(), missing);
+            LOGGER.info("[SELF-AUDIT/renderer] {} registered FC entities, {} missing a renderer (0 expected), {} not "
+                    + "constructible on the client (0 expected); built from their spawn state by a positional "
+                    + "constructor: {}", registered.size(), missing, notBuilt, positional);
         } catch (Throwable t) {
             LOGGER.warn("[SELF-AUDIT/renderer] audit failed: {}", t.toString());
+        }
+    }
+
+    /**
+     * Null when this FC class's proxy can build it on the client (FcEntityFactory; living proxies need WORLD or
+     * NO_ARG). A POSITIONAL class is also built once here, against a level-less client FC world, because that is
+     * the one construction path no earlier code exercised: its constructor must not need the world or real fields.
+     * WORLD and NO_ARG classes are only resolved (FC mob constructors build AI and DataWatcher state).
+     */
+    private static String clientBuildProblem(String fcClassName) {
+        btw.forge.FcEntityFactory f = btw.forge.FcEntityFactory.of(fcClassName);
+        if (!f.usable()) return f.failure();
+        if (f.kind() != btw.forge.FcEntityFactory.Kind.POSITIONAL) return null;
+        try {
+            if (btw.modern.EntityLiving.class.isAssignableFrom(Class.forName(fcClassName))) {
+                return "a living FC entity needs a (World) or no-argument constructor";
+            }
+            f.create(btw.forge.ProxyEntity.createDummyClientWorld(null), 0.0D, 0.0D, 0.0D);
+            return null;
+        } catch (Throwable t) {
+            return btw.forge.FcEntityFactory.rootCause(t).toString();
         }
     }
 
@@ -211,6 +245,9 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
         reg("btw.modern.EntityFishHook", new btw.modern.RenderFish());
         reg("btw.modern.EntitySnowball", new btw.modern.RenderSnowball(btw.modern.Item.snowball));
         reg("btw.modern.EntityEgg", new btw.modern.RenderSnowball(btw.modern.Item.egg));
+        // 1.5.2 RenderManager.java:103. The frozen EntityFallingSand is what Block.CreateFallingBlockEntity spawns
+        // (on the generic fc_entity type) when FCEntityFallingBlock cannot be built (Block.java:771-778).
+        reg("btw.modern.EntityFallingSand", new btw.modern.RenderFallingSand());
         // 1.5.2 RenderManager.java:65/:80. FC spawns these frozen vanilla mobs directly (the soul-urn
         // golem, FCEntityUrn.java:370; silverfish from FCBlockSilverfish/FCEntityCow/FCTileEntityBeacon)
         // as betterthanwolves:fc_iron_golem / fc_silverfish.
@@ -401,6 +438,10 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
 
         Matrix4f mat = poseStack.last().pose();
         Matrix3f normalMat = poseStack.last().normal();
+        // FCMOD-INTEGRATION(1.20.1): falling_blocks: a falling block is shaded as a placed block, as 1.5.2 (RenderFallingSand with
+        // GL_LIGHTING off, RenderStandardFallingBlock's 0.5/1/0.8/0.6 faces) and 1.20.1 (FallingBlockRenderer through the block
+        // model renderer) both draw it, not by the entity render type's diffuse light
+        boolean blockShaded = fcRenderer instanceof btw.modern.RenderFallingSand;
         for (Map.Entry<GroupKey, List<Resolved>> group : groups.entrySet()) {
             GroupKey key = group.getKey();
             switch (key.blend()) {
@@ -411,7 +452,7 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
                 // (held item, carried block, snowman pumpkin) get no overlay.
                 default -> emitEntity(bufferSource.getBuffer(renderTypeFor(key)), mat, normalMat, group.getValue(),
                         key.blend() == Blend.ADDITIVE, lightFor(key.lightmap(), packedLight),
-                        key.iconSource() ? OverlayTexture.NO_OVERLAY : overlay);
+                        key.iconSource() ? OverlayTexture.NO_OVERLAY : overlay, blockShaded);
             }
         }
     }
@@ -501,6 +542,16 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
     /** NEW_ENTITY-format batches (cutout, translucent, eyes, energy swirl). */
     static void emitEntity(VertexConsumer consumer, Matrix4f mat, Matrix3f normalMat, List<Resolved> quads,
                            boolean additive, int light, int overlay) {
+        emitEntity(consumer, mat, normalMat, quads, additive, light, overlay, false);
+    }
+
+    /**
+     * As above. blockShaded (falling blocks, CF2-R1): each vertex colour takes the block face shade of its normal
+     * (1.5.2 RenderBlocks and 1.20.1 Level.getShade: 0.5 down, 1.0 up, 0.8 north/south, 0.6 east/west) and is
+     * emitted with an up normal, whose entity diffuse factor is 1, so the quad is lit like a placed block.
+     */
+    static void emitEntity(VertexConsumer consumer, Matrix4f mat, Matrix3f normalMat, List<Resolved> quads,
+                           boolean additive, int light, int overlay, boolean blockShaded) {
         for (Resolved r : quads) {
             btw.modern.Tessellator.CapturedQuad q = r.quad();
             // eyes()/energySwirl() blend ONE/ONE; 1.5.2 SRC_ALPHA/ONE weighs the source by alpha.
@@ -510,6 +561,12 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
                 float red = v.r, green = v.g, blue = v.b, alpha = v.a;
                 if (premultiply) {
                     red *= alpha; green *= alpha; blue *= alpha;
+                }
+                float nx = v.nx, ny = v.ny, nz = v.nz;
+                if (blockShaded) {
+                    float shade = blockFaceShade(nx, ny, nz);
+                    red *= shade; green *= shade; blue *= shade;
+                    nx = 0.0F; ny = 1.0F; nz = 0.0F;
                 }
                 float u = (float) v.u, tv = (float) v.v;
                 if (r.sprite() != null) {
@@ -521,10 +578,17 @@ public class FCEntityRenderer extends EntityRenderer<Entity> {
                         .uv(u, tv)
                         .overlayCoords(overlay)
                         .uv2(light)
-                        .normal(normalMat, v.nx, v.ny, v.nz)
+                        .normal(normalMat, nx, ny, nz)
                         .endVertex();
             }
         }
+    }
+
+    /** 1.5.2's block face shade (RenderBlocks.RenderStandardFallingBlock, vanilla/client RenderBlocks.java:10570-10573) by normal. */
+    static float blockFaceShade(float nx, float ny, float nz) {
+        float ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+        if (ay >= ax && ay >= az) return ny < 0.0F ? 0.5F : 1.0F;
+        return az >= ax ? 0.8F : 0.6F;
     }
 
     /** RenderType.lightning() (POSITION_COLOR, SRC_ALPHA/ONE). */

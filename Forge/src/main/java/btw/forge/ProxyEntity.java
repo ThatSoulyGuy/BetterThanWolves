@@ -41,6 +41,28 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
     private btw.modern.Entity fcEntity;
     private String fcClassName = "";
 
+    /** CF2-R1: building the FC entity failed for this proxy; getFcEntity() does not retry it every frame. */
+    private boolean fcBuildFailed;
+    /** CF2-R1, client: built by its positional constructor from a spawn payload with no FC state (the server is
+     *  removing such a proxy at its first tick); never ticked and given no state. */
+    private boolean fcStateless;
+    /** CF2-R1, server: why a positional FC entity was not rebuilt from its save (for the one removal log line). */
+    private String fcMissingStateReason;
+    /** CF2-R1, client: FC's falling-block update threw here; the proxy falls back to the server's position. */
+    private boolean fcClientFallFailed;
+    /** CF2-R1, client: the size of the client's last non-zero fall step (blocks per tick). */
+    private double clientFallStep;
+    /** CF2-R1, client: the server's last motion for a client-simulated fall (kept aside; see lerpMotion). */
+    private net.minecraft.world.phys.Vec3 serverFallMotion;
+    /**
+     * CF2-R1, maintainer ruling OD1 (2026-10-22): true. A falling block saved mid-fall (a quit, or its area unloading)
+     * is rebuilt from its save (FCData) when it loads, keeps falling and lands by FC's rules, as vanilla 1.5.2
+     * (EntityFallingSand(World)) and 1.20.1 (FallingBlockEntity) keep it. BTW 4.B lost such a block: its EntityList
+     * built a loaded entity only through a (World) constructor, which FCEntityFallingBlock lacks (vanilla/server
+     * EntityList.java:120-136). false would bring back that loss (the first tick removes the proxy, one INFO line).
+     */
+    private static final boolean REBUILD_SAVED_POSITIONAL = true;
+
     public ProxyEntity(EntityType<?> type, Level level) {
         super(type, level);
     }
@@ -59,8 +81,8 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
     }
 
     public btw.modern.Entity getFcEntity() {
-        if (fcEntity == null) {
-            ensureFcEntity();
+        if (fcEntity == null && !fcBuildFailed) {
+            ensureFcEntity(false);
         }
         return fcEntity;
     }
@@ -73,38 +95,55 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
     }
 
     /**
-     * Creates the FC entity if missing — works on both client and server.
-     * On server: uses a real WorldBridge so FC logic functions.
-     * On client: uses a dummy world for rendering only.
+     * Creates the FC entity if missing, once (CF2-R1), by the constructor FcEntityFactory picks. On the server it
+     * gets the real WorldBridge so FC logic runs; on the client a read-only client FC world (rendering and the
+     * client-side fall). A POSITIONAL class (no (World) or no-argument constructor) gets the proxy's position and
+     * zeros; its real state comes from the spawn payload or the save. On the server such an entity exists only as
+     * FC spawned it (setFcEntity) or as it was saved (its FCData, ruling OD1: REBUILD_SAVED_POSITIONAL).
+     *
+     * @param withState the caller applies FC state right after this call (the spawn payload carried FC state, or
+     *                  the save has FCData that is to be rebuilt)
      */
-    private void ensureFcEntity() {
+    private void ensureFcEntity(boolean withState) {
         String className = getFcClassName();
         if (className == null || className.isEmpty()) return;
-        btw.modern.World world;
-        if (level().isClientSide) {
-            world = createDummyClientWorld(level());
-        } else if (level() instanceof ServerLevel sl) {
-            world = WorldBridge.getOrCreate(sl);
-        } else {
-            return;
-        }
         try {
-            Class<?> fcClass = Class.forName(className);
-            try {
-                var ctor = fcClass.getConstructor(btw.modern.World.class);
-                fcEntity = (btw.modern.Entity) ctor.newInstance(world);
-            } catch (NoSuchMethodException e) {
-                var ctor = fcClass.getDeclaredConstructor();
-                ctor.setAccessible(true);
-                fcEntity = (btw.modern.Entity) ctor.newInstance();
+            FcEntityFactory factory = FcEntityFactory.of(className);
+            if (!factory.usable()) {
+                fcBuildFailed = true;
+                if (FCPuppetSupport.firstFailure("create|" + className)) {
+                    LOGGER.warn("Could not create FC entity {}: {}", className, factory.failure());
+                }
+                return;
             }
-            if (fcEntity != null) {
-                fcEntity.worldObj = world;
-                syncToFc();
+            boolean positional = factory.kind() == FcEntityFactory.Kind.POSITIONAL;
+            btw.modern.World world;
+            btw.modern.World ctorWorld;
+            if (level().isClientSide) {
+                world = createDummyClientWorld(level());
+                ctorWorld = world;
+            } else if (level() instanceof ServerLevel sl) {
+                // FCMOD-INTEGRATION(1.20.1): fc_entity_construction: a positional FC entity is rebuilt on the server only from its saved state
+                if (positional && !withState) return;
+                world = WorldBridge.getOrCreate(sl);
+                // its constructor is spawn-time code (FCEntityLightningBolt strikes when !isRemote,
+                // FCEntityLightningBolt.java:45-71): a load builds it against a level-less isRemote world, then hands it
+                // the real one
+                ctorWorld = positional ? createDummyClientWorld(null) : world;
+            } else {
+                return;
             }
+            btw.modern.Entity fc = factory.create(ctorWorld, getX(), getY(), getZ());
+            fc.worldObj = world;
+            fcEntity = fc;
+            fcStateless = positional && !withState;
+            syncToFc();
         } catch (Throwable e) {
+            fcEntity = null;
+            fcBuildFailed = true;
+            Throwable root = FcEntityFactory.rootCause(e);
             if (FCPuppetSupport.firstFailure("create|" + className)) {
-                LOGGER.warn("Could not create FC entity {}: {}", className, e.getMessage(), e);
+                LOGGER.warn("Could not create FC entity {}: {}", className, root.toString(), root);
             }
         }
     }
@@ -300,14 +339,68 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
 
     private void syncFromFc() {
         if (fcEntity == null) return;
+        pullStateFromFc();
+        if (fcEntity.isDead) {
+            if (fcEntity instanceof btw.modern.EntityFallingSand && level() instanceof ServerLevel sl) {
+                // FCMOD-INTEGRATION(1.20.1): falling_blocks: send the cell FC just landed in (or crushed, combined, left empty) to the
+                // trackers before the removal, as 1.20.1 FallingBlockEntity.tick:154-156 does; the chunk's own broadcast comes a
+                // tick later, and the client would draw neither for that tick
+                sl.getChunkSource().broadcast(this, new net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket(sl,
+                        net.minecraft.core.BlockPos.containing(fcEntity.posX, fcEntity.posY, fcEntity.posZ)));
+            }
+            discard();
+        }
+    }
+
+    /** Position, rotation, motion and fall distance from the FC entity (the server writeback and the client fall). */
+    private void pullStateFromFc() {
         setPos(fcEntity.posX, fcEntity.posY, fcEntity.posZ);
         setYRot(fcEntity.rotationYaw);
         setXRot(fcEntity.rotationPitch);
         setDeltaMovement(fcEntity.motionX, fcEntity.motionY, fcEntity.motionZ);
         fallDistance = fcEntity.fallDistance;
-        if (fcEntity.isDead) {
-            discard();
+    }
+
+    /** Client: this proxy simulates FC's falling block itself (CF2-R1), as 1.5.2 and 1.20.1 do. */
+    private boolean simulatesFallOnClient() {
+        return level().isClientSide && fcEntity instanceof btw.modern.EntityFallingSand
+                && !fcStateless && !fcClientFallFailed;
+    }
+
+    /**
+     * Client: a server position that lies on the client's own fall, at most about a tick ahead or behind (|dx|, |dz|
+     * below 1e-3; |dy| within two of the client's last fall steps plus 0.05, which also covers the 1/4096 packet
+     * quantization and a client that already rests where the server is about to land).
+     */
+    private boolean fitsClientFall(double x, double y, double z) {
+        double band = 2.0D * Math.max(clientFallStep, Math.abs(getDeltaMovement().y)) + 0.05D;
+        return Math.abs(x - getX()) < 1.0E-3D && Math.abs(z - getZ()) < 1.0E-3D && Math.abs(y - getY()) <= band;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): falling_blocks: a server position update that fits the client's own fall is not applied (Entity.lerpTo
+    // snaps, and a snap a tick off the client's phase is a visible hitch); anything else (a crush, a teleport, a real divergence) is applied
+    @Override
+    public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps, boolean teleport) {
+        if (simulatesFallOnClient()) {
+            if (fitsClientFall(x, y, z)) return;
+            // a real correction: the server's position and the motion sent just before it (ServerEntity.sendChanges sends
+            // the motion packet first), so the client's fall goes on in the server's phase
+            super.lerpTo(x, y, z, yRot, xRot, steps, teleport);
+            if (serverFallMotion != null) setDeltaMovement(serverFallMotion);
+            return;
         }
+        super.lerpTo(x, y, z, yRot, xRot, steps, teleport);
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): falling_blocks: the server's motion for a client-simulated fall lags it by up to a step; keep the client's
+    @Override
+    public void lerpMotion(double x, double y, double z) {
+        if (simulatesFallOnClient() && Math.abs(x - getDeltaMovement().x) < 1.0E-3D
+                && Math.abs(z - getDeltaMovement().z) < 1.0E-3D) {
+            serverFallMotion = new net.minecraft.world.phys.Vec3(x, y, z);
+            return;
+        }
+        super.lerpMotion(x, y, z);
     }
 
     // ------------------------------------------------------------------
@@ -316,11 +409,18 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
 
     @Override
     public void tick() {
+        // FCMOD-INTEGRATION(1.20.1): fc_entity_construction: a positional FC entity without state has nothing to run (a /summon, a save without FCData, or unreadable FCData)
+        if (fcEntity == null && !level().isClientSide && needsSavedState()) {
+            removeStateless();
+            return;
+        }
         syncToFc();
-        if (fcEntity != null) {
+        boolean fallFailed = false;
+        if (fcEntity != null && !fcStateless) {
             try {
                 fcEntity.onUpdate();
             } catch (Throwable e) {
+                fallFailed = true;
                 // Throwable, not Exception: a NoSuchMethodError/NoClassDefFoundError
                 // from a bridge gap is an Error and would kill the server tick.
                 // Logged once per (class, exception): this runs every tick on both sides.
@@ -330,13 +430,12 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
                 }
             }
         }
-        // Position/rotation writeback is SERVER-ONLY. On the client the modern
-        // entity's position is driven by the server via the entity tracker + vanilla
-        // interpolation (lerp); writing the client-side FC re-simulation back with
-        // setPos/setYRot every tick fought that interpolation and caused rubber-banding
-        // when entities move or turn. onUpdate still runs client-side (above) so FC
-        // animation state (e.g. windmill/waterwheel rotation) keeps advancing; only the
-        // authoritative position/rotation stays server-driven. Mirrors the mob proxies.
+        // Position/rotation writeback is SERVER-ONLY, except for an FC falling block (below). On the client the
+        // modern entity's position is driven by the server via the entity tracker + vanilla interpolation (lerp);
+        // writing the client-side FC re-simulation back with setPos/setYRot every tick fought that interpolation
+        // and caused rubber-banding when entities move or turn. onUpdate still runs client-side (above) so FC
+        // animation state (e.g. windmill/waterwheel rotation) keeps advancing; only the authoritative
+        // position/rotation stays server-driven. Mirrors the mob proxies.
         if (!level().isClientSide) {
             syncFromFc();
             // Periodically broadcast FC entity state (NBT + DataWatcher) to
@@ -345,8 +444,38 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
             if (fcEntity != null && (tickCount % 10) == 0) {
                 BTWNetwork.broadcastFCEntityState(this, fcEntity);
             }
+        } else if (simulatesFallOnClient()) {
+            if (fallFailed) {
+                // the client cannot run FC's fall: back to the server's position updates (Entity.lerpTo), as before CF2-R1
+                fcClientFallFailed = true;
+            } else {
+                // FCMOD-INTEGRATION(1.20.1): falling_blocks: the client simulates the fall as 1.5.2 (NetClientHandler.java:290-296, FCEntityFallingBlock.onUpdate
+                // on both sides) and 1.20.1 (FallingBlockEntity.tick:115-119) do; lerpTo/lerpMotion keep it unless the server disagrees
+                double step = Math.abs(fcEntity.posY - getY());
+                if (step > 1.0E-4D) clientFallStep = step;
+                pullStateFromFc();
+                setOnGround(fcEntity.onGround);
+            }
         }
         super.tick();
+    }
+
+    /** Server: this proxy's FC class can be built only from saved state (FcEntityFactory POSITIONAL). */
+    private boolean needsSavedState() {
+        String cn = getFcClassName();
+        return cn != null && !cn.isEmpty() && FcEntityFactory.kindOf(cn) == FcEntityFactory.Kind.POSITIONAL;
+    }
+
+    /** Server: removes a positional FC entity that has no FC state to run, with one INFO line per (class, reason). */
+    private void removeStateless() {
+        String cn = getFcClassName();
+        String simple = cn.substring(cn.lastIndexOf('.') + 1);
+        String reason = fcMissingStateReason != null ? fcMissingStateReason
+                : "with no BTW state (a /summon or a save from an older build)";
+        if (FCPuppetSupport.firstFailure("stateless|" + reason + '|' + cn)) {
+            LOGGER.info("[FC-ENTITY] Removed a {} {}; further ones are not logged", simple, reason);
+        }
+        discard();
     }
 
     @Override
@@ -485,7 +614,8 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
     public void readSpawnData(net.minecraft.network.FriendlyByteBuf buf) {
         fcClassName = buf.readUtf();
         if (!fcClassName.isEmpty()) {
-            ensureFcEntity();
+            // CF2-R1: FCEntityStateCodec.writeState writes true first when the server's FC entity exists
+            ensureFcEntity(buf.isReadable() && buf.getBoolean(buf.readerIndex()));
         }
         FCEntityStateCodec.applyState(buf, fcEntity);
         if (level().isClientSide) {
@@ -527,7 +657,14 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
         if (tag.contains("FCClassName")) {
             fcClassName = tag.getString("FCClassName");
             if (fcEntity == null && !fcClassName.isEmpty()) {
-                ensureFcEntity();
+                // FCMOD-INTEGRATION(1.20.1): fc_entity_construction: a positional FC class is rebuilt from its saved state (FCData): a block saved mid-fall falls on (ruling OD1)
+                // and lands by FC's rules; without FCData it is not built, and its first tick removes it
+                boolean hasState = tag.contains("FCData");
+                if (hasState && !REBUILD_SAVED_POSITIONAL && !level().isClientSide
+                        && FcEntityFactory.kindOf(fcClassName) == FcEntityFactory.Kind.POSITIONAL) {
+                    fcMissingStateReason = "saved while falling (BTW 4.B's rule: REBUILD_SAVED_POSITIONAL is off)";
+                }
+                ensureFcEntity(REBUILD_SAVED_POSITIONAL && hasState);
             }
         }
         if (fcEntity != null && tag.contains("FCData")) {
@@ -543,6 +680,13 @@ public class ProxyEntity extends net.minecraft.world.entity.Entity
                 }
                 LOGGER.warn("Failed to read FC entity NBT data for {}: {}: {}",
                         fcClassName, root.getClass().getSimpleName(), root.getMessage());
+                // CF2-R1: a positional FC entity has no state but its save (FCEntityFallingBlock would run as block 0 and
+                // never land); drop it, the first tick removes the proxy
+                if (!level().isClientSide && FcEntityFactory.kindOf(fcClassName) == FcEntityFactory.Kind.POSITIONAL) {
+                    fcEntity = null;
+                    fcBuildFailed = true;
+                    fcMissingStateReason = "whose saved BTW state could not be read";
+                }
             }
         }
     }

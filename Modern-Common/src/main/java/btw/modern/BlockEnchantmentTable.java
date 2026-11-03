@@ -39,4 +39,28 @@ public class BlockEnchantmentTable extends BlockContainer {
             return true;
         }
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockEnchantmentTable's icon members (vanilla/client
+    // BlockEnchantmentTable.java:21-22, :87-90, :134-139): side, top and bottom. FCBlockEnchantmentTable (116)
+    // inherits both; a held table drew Block's default, the unlocalized "enchantmentTable", which names no texture.
+    private Icon enchantmentTopIcon;
+    private Icon enchantmentBottomIcon;
+
+    // 1.5.2 BlockEnchantmentTable.getIcon (vanilla/client BlockEnchantmentTable.java:87-90); Block's icon until
+    // registerIcons runs (client only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.enchantmentTopIcon == null || this.enchantmentBottomIcon == null) {
+            return super.getIcon(side, metadata);
+        }
+        return side == 0 ? this.enchantmentBottomIcon : (side == 1 ? this.enchantmentTopIcon : this.blockIcon);
+    }
+
+    // 1.5.2 BlockEnchantmentTable.registerIcons (vanilla/client BlockEnchantmentTable.java:134-139)
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.blockIcon = register.registerIcon("enchantment_side");
+        this.enchantmentTopIcon = register.registerIcon("enchantment_top");
+        this.enchantmentBottomIcon = register.registerIcon("enchantment_bottom");
+    }
 }

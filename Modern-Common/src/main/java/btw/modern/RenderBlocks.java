@@ -2507,7 +2507,7 @@ public class RenderBlocks {
         double maxV = icon != null ? icon.getMaxV() : 1;
         double d = 0.45D;
         // Diagonal plane 1: SW to NE
-        t.setNormal(0, 1, 0);
+        t.setNormal(0, 1, 0);   // not the planes' own normal: fc_quad_normals (FCBakedModel) bakes them unshaded, flat-lit
         t.addVertexWithUV(x + 0.5 - d, y + 0, z + 0.5 - d, minU, maxV);
         t.addVertexWithUV(x + 0.5 - d, y + 1, z + 0.5 - d, minU, minV);
         t.addVertexWithUV(x + 0.5 + d, y + 1, z + 0.5 + d, maxU, minV);
@@ -2542,7 +2542,7 @@ public class RenderBlocks {
         double minV = icon != null ? icon.getMinV() : 0;
         double maxV = icon != null ? icon.getMaxV() : 1;
         double o = 0.25; // offset from center
-        t.setNormal(0, 1, 0);
+        t.setNormal(0, 1, 0);   // not the planes' own normal: fc_quad_normals (FCBakedModel) bakes them unshaded, flat-lit
         // 4 planes in # pattern
         for (int dir = 0; dir < 2; dir++) {
             double px = dir == 0 ? x + o : x + 0.5;
@@ -2565,21 +2565,26 @@ public class RenderBlocks {
 
     // --- FC additions: standard full block rendering for falling/piston-moved blocks ---
 
+    // FCMOD-INTEGRATION(1.20.1): falling_blocks: 1.5.2's RenderStandardFallingBlock: the caller's bounds, its sides, its tint
+    /**
+     * 1.5.2 (FCMOD) RenderStandardFallingBlock (vanilla/client RenderBlocks.java:10563-10628): the six faces of the
+     * current render bounds (Block.RenderFallingBlock sets the fixed block bounds; FCBlockSlabFalling and
+     * FCBlockStairsFalling set their own), each only if ShouldSideBeRenderedOnFallingBlock allows it, tinted by
+     * colorMultiplier. Capture adaptations, as in renderStandardBlockWithColorMultiplier: no per-face shade in the
+     * colour (FCEntityRenderer shades a falling block's faces by their normals, the same 0.5/1/0.8/0.6) and no
+     * setBrightness (the entity emitter lights by the capture's GL lightmap or MC's packed light, not per vertex).
+     */
     public void RenderStandardFallingBlock(Block block, int x, int y, int z, int metadata) {
-        this.setRenderBounds(0.0D, 0.0D, 0.0D, 1.0D, 1.0D, 1.0D);
-        Icon icon;
-        icon = getBlockIconFromSideAndMetadata(block, 0, metadata);
-        renderFaceYNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 1, metadata);
-        renderFaceYPos(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 2, metadata);
-        renderFaceZNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 3, metadata);
-        renderFaceZPos(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 4, metadata);
-        renderFaceXNeg(block, x, y, z, icon);
-        icon = getBlockIconFromSideAndMetadata(block, 5, metadata);
-        renderFaceXPos(block, x, y, z, icon);
+        this.enableAO = false;
+        Tessellator t = Tessellator.instance;
+        int mul = block.colorMultiplier(this.blockAccess, x, y, z);
+        t.setColorOpaque_F((mul >> 16 & 255) / 255.0F, (mul >> 8 & 255) / 255.0F, (mul & 255) / 255.0F);
+        if (block.ShouldSideBeRenderedOnFallingBlock(0, metadata)) renderFaceYNeg(block, x, y, z, getBlockIconFromSideAndMetadata(block, 0, metadata));
+        if (block.ShouldSideBeRenderedOnFallingBlock(1, metadata)) renderFaceYPos(block, x, y, z, getBlockIconFromSideAndMetadata(block, 1, metadata));
+        if (block.ShouldSideBeRenderedOnFallingBlock(2, metadata)) renderFaceZNeg(block, x, y, z, getBlockIconFromSideAndMetadata(block, 2, metadata));
+        if (block.ShouldSideBeRenderedOnFallingBlock(3, metadata)) renderFaceZPos(block, x, y, z, getBlockIconFromSideAndMetadata(block, 3, metadata));
+        if (block.ShouldSideBeRenderedOnFallingBlock(4, metadata)) renderFaceXNeg(block, x, y, z, getBlockIconFromSideAndMetadata(block, 4, metadata));
+        if (block.ShouldSideBeRenderedOnFallingBlock(5, metadata)) renderFaceXPos(block, x, y, z, getBlockIconFromSideAndMetadata(block, 5, metadata));
     }
 
     /**

@@ -24,4 +24,28 @@ public class BlockEnderChest extends BlockContainer {
         }
         world.setBlockMetadataWithNotify(x, y, z, facing);
     }
+
+    // 1.5.2 BlockEnderChest.isOpaqueCube / renderAsNormalBlock / getRenderType (vanilla/client
+    // BlockEnderChest.java:32-51). FCBlockEnderChest (130) overrides none of them.
+    @Override
+    public boolean isOpaqueCube() {
+        return false;
+    }
+
+    @Override
+    public boolean renderAsNormalBlock() {
+        return false;
+    }
+
+    @Override
+    public int getRenderType() {
+        return 22;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockEnderChest.registerIcons (vanilla/client
+    // BlockEnderChest.java:177-180) registers "obsidian". FCBlockEnderChest (130) inherits it.
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.blockIcon = register.registerIcon("obsidian");
+    }
 }

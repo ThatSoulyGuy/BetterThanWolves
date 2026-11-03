@@ -82,10 +82,18 @@ public class TileEntity {
         return this.blockMetadata;
     }
 
+    // FCMOD-INTEGRATION(1.20.1): fc_redstone: 1.5.2 TileEntity.onInventoryChanged (vanilla/client TileEntity.java:177-189)
+    // also tells the comparators around the block (World.func_96440_m), so one reading a BTW container follows its
+    // contents at once
     public void onInventoryChanged() {
         if (this.worldObj != null) {
             this.blockMetadata = this.worldObj.getBlockMetadata(this.xCoord, this.yCoord, this.zCoord);
             this.worldObj.markBlockForUpdate(this.xCoord, this.yCoord, this.zCoord);
+
+            Block block = this.getBlockType();
+            if (block != null) {
+                this.worldObj.func_96440_m(this.xCoord, this.yCoord, this.zCoord, block.blockID);
+            }
         }
     }
 

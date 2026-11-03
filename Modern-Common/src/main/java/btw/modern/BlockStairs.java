@@ -75,11 +75,23 @@ public class BlockStairs extends Block {
         return this.modelBlock.getIcon(side, this.modelBlockMetadata);
     }
 
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockStairs.registerIcons (vanilla/client BlockStairs.java:639)
+    // registers nothing: getIcon answers the model block's icon. No block is a BlockStairs (FCBlockStairsBase extends
+    // Block), so nothing draws it.
+    @Override
+    public void registerIcons(IconRegister register) {}
+
     // --- Gameplay delegation to model block ---
 
     @Override
     public float getExplosionResistance(Entity entity) {
         return this.modelBlock.getExplosionResistance(entity);
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: 1.5.2 BlockStairs.onBlockDestroyedByExplosion (vanilla/server BlockStairs.java:476-479): the model block's reaction
+    @Override
+    public void onBlockDestroyedByExplosion(World world, int x, int y, int z, Explosion explosion) {
+        this.modelBlock.onBlockDestroyedByExplosion(world, x, y, z, explosion);
     }
 
     @Override

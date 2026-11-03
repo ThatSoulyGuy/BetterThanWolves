@@ -87,5 +87,8 @@
   "btw.compat.food.debug": "BTW food: %s/60, fat: %s, exh: %s/%s (%s)",
   "btw.compat.food.burning_fat": "burning fat",
   "btw.compat.food.burning_hunger": "hunger",
-  "btw.compat.harvestcraft.notice": "Better Than Wolves: grown, eaten and cooked by BTW rules"
+  "btw.compat.harvestcraft.notice": "Better Than Wolves: grown, eaten and cooked by BTW rules",
+  "effect.betterthanwolves.fortune": "Fortune",
+  "effect.betterthanwolves.looting": "Looting",
+  "effect.betterthanwolves.true_sight": "True Sight"
 }

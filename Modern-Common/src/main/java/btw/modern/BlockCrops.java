@@ -32,6 +32,34 @@ public class BlockCrops extends BlockFlower {
 
     // --- Render overrides ---
 
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockCrops' icon members (vanilla/client BlockCrops.java:21,
+    // :155-163, :250-258): crops_<stage>. FCBlockWheatLegacy (59) inherits both; BlockCarrot, BlockPotato and
+    // FCBlockHempCrop answer their own.
+    private Icon[] iconArray;
+
+    // 1.5.2 BlockCrops.getIcon (vanilla/client BlockCrops.java:155-163); Block's icon until registerIcons runs (client
+    // only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.iconArray == null) {
+            return super.getIcon(side, metadata);
+        }
+        if (metadata < 0 || metadata > 7) {
+            metadata = 7;
+        }
+        return this.iconArray[metadata];
+    }
+
+    // 1.5.2 BlockCrops.registerIcons (vanilla/client BlockCrops.java:250-258)
+    @Override
+    public void registerIcons(IconRegister register) {
+        Icon[] icons = new Icon[8];
+        for (int i = 0; i < icons.length; ++i) {
+            icons[i] = register.registerIcon("crops_" + i);
+        }
+        this.iconArray = icons;
+    }
+
     public int getRenderType() {
         return 6;
     }

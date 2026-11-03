@@ -1,0 +1,13 @@
+{
+  "type": "betterthanwolves:modern_log_chopping",
+  "log": {
+    "tag": "minecraft:bamboo_blocks"
+  },
+  "planks": "minecraft:bamboo_planks",
+  "chop_planks": 1,
+  "chop_sticks": 1,
+  "chop_sawdust": 1,
+  "chop_sticks_sawdust": 2,
+  "saw_planks": 2,
+  "saw_sawdust": 1
+}

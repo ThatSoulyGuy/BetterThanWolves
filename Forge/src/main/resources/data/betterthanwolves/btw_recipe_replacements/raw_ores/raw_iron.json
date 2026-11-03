@@ -1,0 +1,18 @@
+{
+  "replaces": "minecraft:raw_iron",
+  "action": "replace",
+  "reason": "Raw iron counts as BTW's iron ore chunk (maintainer ruling 2026-10-21): a block of raw iron unpacks into nine BTW iron ore chunks",
+  "recipe": {
+    "type": "minecraft:crafting_shapeless",
+    "category": "misc",
+    "ingredients": [
+      {
+        "item": "minecraft:raw_iron_block"
+      }
+    ],
+    "result": {
+      "item": "btw:fcItemChunkIronOre",
+      "count": 9
+    }
+  }
+}

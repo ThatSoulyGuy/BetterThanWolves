@@ -419,8 +419,11 @@ public class Item {
         return 0xFFFFFF;
     }
 
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 (FCMOD) Item.GetHopperFilterIcon (vanilla/client
+    // Item.java:1343-1346) answers null: an item that is no hopper filter draws no filter box (Client
+    // FCBlockHopper.java:715-728). The legacy filter items forward to their blocks, and ItemBlock to its block.
     public Icon GetHopperFilterIcon() {
-        return this.itemIcon;
+        return null;
     }
 
     public int getItemSpriteNumber() {
@@ -918,7 +921,8 @@ public class Item {
         emptyMap = new ConcreteItemEmptyMap(139); // 395
         goldenCarrot = new ItemFood(140, 1, 0F, false)                            // 396, Item.java:372
                 .SetNonBuoyant().SetFilterableProperties(m_iFilterable_Small);
-        skull = new Item(141);             // 397
+        // FCMOD-INTEGRATION(1.20.1): item_subtypes: 1.5.2 ItemSkull declares subtypes (vanilla/server ItemSkull.java:31-32), so skull types stack apart in BTW storage
+        skull = new Item(141).setHasSubtypes(true); // 397
         carrotOnAStick = new Item(142);    // 398
         netherStar = new Item(143);        // 399
         pumpkinPie = new ItemFood(144, 2, 2.5F, false).setAlwaysEdible();        // 400, Item.java:376

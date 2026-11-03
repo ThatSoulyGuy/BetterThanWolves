@@ -228,8 +228,10 @@ final class FcMetaOverlay extends SavedData {
             BlockPos pos = BlockPos.of(packed);
             BlockState state = chunk.getBlockState(pos);
             MetaOverride entry = e.getValue();
+            // FCMOD-INTEGRATION(1.20.1): strata: a strata cell's entry outlives a strata change (WorldBridge.getBlockMetadata reads it with the position's strata)
             if (entry.block() != state.getBlock()
-                    || WorldBridge.deriveVanillaMetadata(live, state, pos) != entry.derivedAtWrite()) {
+                    || (WorldBridge.deriveVanillaMetadata(live, state, pos) != entry.derivedAtWrite()
+                        && !StrataRule.isStrataBlock(state.getBlock()))) {
                 entries.remove(packed, entry);   // never a newer write
             }
         }

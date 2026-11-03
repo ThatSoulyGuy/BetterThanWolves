@@ -1,5 +1,7 @@
 package btw.forge.client;
 
+import btw.forge.FcAttachSupport;
+import btw.forge.FcParticles;
 import btw.forge.ProxyBlock;
 import btw.forge.ProxyBlockEntity;
 import btw.forge.ProxyRegistry;
@@ -7,8 +9,6 @@ import btw.forge.WorldBridge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleOptions;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.api.distmarker.Dist;
@@ -35,6 +35,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * locally (FC's client callbacks and aux handler are their only source -- the server never sends them);
  * render-range marks re-mesh the affected sections like 1.5.2 RenderGlobal.markBlockRangeForRenderUpdate.</p>
  *
+ * <p>Two views: {@link #forLevel} reads every block by its FC identity (FC's callbacks, the aux-FX handler, bone meal
+ * and weed prediction, FC-backed block entities); {@link #forSupport} is the view FC's attachment rules predict on
+ * (btw.forge.client.ClientAttachSupport), where a modern fence, wall or stained glass pane reads as its BTW relative's
+ * id, as the server's stand-in answers through that relative (btw.forge.FcAttachSupport.supportRelative).</p>
+ *
  * <p>Render (main) thread only.</p>
  */
 @OnlyIn(Dist.CLIENT)
@@ -48,11 +53,16 @@ public final class ClientFcWorld extends btw.modern.World {
      * left is not pinned by this static; the price is an occasional rebuild of this light wrapper.
      */
     private static WeakReference<ClientFcWorld> cached = new WeakReference<>(null);
+    /** As {@link #cached}, for the support view. */
+    private static WeakReference<ClientFcWorld> cachedSupport = new WeakReference<>(null);
 
     private final ClientLevel level;
+    /** The support view: a block without FC identity reads as its support relative's id (0 without one). */
+    private final boolean supportReads;
 
-    private ClientFcWorld(ClientLevel level) {
+    private ClientFcWorld(ClientLevel level, boolean supportReads) {
         this.level = level;
+        this.supportReads = supportReads;
         this.isRemote = true;
         this.rand = new java.util.Random();
         // 1.5.2 worlds always have a provider: frozen Entity.<init> reads provider.dimensionId
@@ -73,8 +83,26 @@ public final class ClientFcWorld extends btw.modern.World {
     public static ClientFcWorld forLevel(ClientLevel level) {
         ClientFcWorld world = cached.get();
         if (world == null || world.level != level) {
-            world = new ClientFcWorld(level);
+            world = new ClientFcWorld(level, false);
             cached = new WeakReference<>(world);
+        }
+        return world;
+    }
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): support_relatives. The support view of {@code level}, for FC's attachment rules only
+     * (btw.forge.client.ClientAttachSupport): a block without FC identity reads as its support relative's FC id
+     * (btw.forge.FcAttachSupport.supportRelativeId: a modern fence, wall or stained glass pane as the oak fence, the
+     * cobblestone wall or the glass pane), so FC's methods run on the relative's FC block with this world, as the
+     * server's stand-in runs them with WorldBridge; World.getSupportBlockId's default then gives the relative too. Every
+     * other client reader keeps {@link #forLevel}'s identity reads (FC's client beacon matches block ids, so a relative
+     * must not reach it). Main thread only.
+     */
+    public static ClientFcWorld forSupport(ClientLevel level) {
+        ClientFcWorld world = cachedSupport.get();
+        if (world == null || world.level != level) {
+            world = new ClientFcWorld(level, true);
+            cachedSupport = new WeakReference<>(world);
         }
         return world;
     }
@@ -85,7 +113,11 @@ public final class ClientFcWorld extends btw.modern.World {
 
     @Override
     public int getBlockId(int x, int y, int z) {
-        return ProxyRegistry.getBlockId(level.getBlockState(new BlockPos(x, y, z)).getBlock());
+        BlockPos pos = new BlockPos(x, y, z);
+        BlockState state = level.getBlockState(pos);
+        int id = ProxyRegistry.getBlockId(state.getBlock());
+        // FCMOD-INTEGRATION(1.20.1): support_relatives: the support view reads a modern fence, wall or stained glass pane as its BTW relative
+        return id != 0 || !supportReads ? id : FcAttachSupport.supportRelativeId(state, level, pos);
     }
 
     @Override
@@ -118,21 +150,44 @@ public final class ClientFcWorld extends btw.modern.World {
                 && block.renderAsNormalBlock();
     }
 
+    /**
+     * FCMOD-INTEGRATION(1.20.1): solid_top_surface. 4.B's World.doesBlockHaveSolidTopSurface (vanilla/client
+     * World.java:5190-5195), the rule WorldBridge answers on the server: the block's large centre hard point on
+     * top. The client then predicts FcAttachSupport's redstone torch answer as the server gives it: a top slab or an
+     * upside-down stair holds a standing redstone torch (this view used to answer the normal-cube test, which
+     * refused them); glowstone, ice, TNT, the redstone lamp and a closed upper trapdoor do not. A cell this view
+     * reads as air although 1.20.1 holds a block there (id 0: modern blocks, read by identity here, except a support
+     * relative on the support view) keeps 1.20.1's sturdy face, as the server's stand-ins answer it.
+     */
     @Override
     public boolean doesBlockHaveSolidTopSurface(int x, int y, int z) {
-        return isBlockNormalCube(x, y, z);
+        int id = getBlockId(x, y, z);
+        btw.modern.Block block = id > 0 && id < btw.modern.Block.blocksList.length ? btw.modern.Block.blocksList[id] : null;
+        if (block != null) return block.HasLargeCenterHardPointToFacing(this, x, y, z, 1);
+        BlockPos pos = new BlockPos(x, y, z);
+        return level.getBlockState(pos).isFaceSturdy(level, pos, net.minecraft.core.Direction.UP);
     }
 
     @Override
     public btw.modern.TileEntity getBlockTileEntity(int x, int y, int z) {
         net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(new BlockPos(x, y, z));
+        // FCMOD-INTEGRATION(1.20.1): fc_beacon: an FC-backed block entity hands FC its client tile entity
+        if (be instanceof btw.forge.FcBackedBlockEntity backed) {
+            return btw.forge.FcBackedBlockEntities.isBacked(be) ? backed.btw$fcTile() : null;
+        }
         return be instanceof ProxyBlockEntity pbe ? pbe.getFcTileEntity() : null;
     }
 
     @Override
     public boolean canBlockSeeTheSky(int x, int y, int z) {
-        return level.canSeeSky(new BlockPos(x, y, z));
+        return WorldBridge.fcCanSeeSky(level, x, y, z);   // FCMOD-INTEGRATION(1.20.1): sky_column: the server's rule (End, Nether: the sky-source column)
     }
+
+    // FCMOD-INTEGRATION(1.20.1): fc_beacon: 1.5.2 WorldClient answered the clock and the build range; FC's client beacon gates its power update on the clock (Common FCTileEntityBeacon.java:67) and its pyramid on the floor
+    @Override public long getTotalWorldTime() { return level.getGameTime(); }
+    @Override public long getWorldTime() { return level.getDayTime(); }
+    @Override public int getFcMinBuildHeight() { return level.getMinBuildHeight(); }
+    @Override public int getFcMaxBuildHeight() { return level.getMaxBuildHeight(); }
 
     @Override
     public boolean isRaining() {
@@ -252,72 +307,10 @@ public final class ClientFcWorld extends btw.modern.World {
     // Particles (1.5.2 RenderGlobal.spawnParticle)
     // ------------------------------------------------------------------
 
+    // FCMOD-INTEGRATION(1.20.1): fc_particles: FC's aux-FX and client-notification particles through the one shared table and 4.B's limit (FcParticles.addLocal logs a failure once)
     @Override
     public void spawnParticle(String name, double x, double y, double z, double vx, double vy, double vz) {
-        if (name == null || name.isEmpty()) return;
-        try {
-            if (name.equals("reddust")) {
-                // 1.5.2 EntityReddustFX: the velocity carries the colour, red 0 meaning 1.0 (as WorldBridge.spawnParticle).
-                float red = vx == 0.0D ? 1.0F : (float) vx;
-                level.addParticle(new net.minecraft.core.particles.DustParticleOptions(
-                        new org.joml.Vector3f(red, (float) vy, (float) vz), 1.0F), x, y, z, 0.0D, 0.0D, 0.0D);
-                return;
-            }
-            ParticleOptions options = particleFor(name);
-            if (options != null) level.addParticle(options, x, y, z, vx, vy, vz);
-        } catch (Throwable t) {
-            warnOnce("particle|" + name + "|" + t.getClass().getName(), "Client FC particle '" + name + "' failed", t);
-        }
-    }
-
-    /**
-     * A 1.5.2 particle name as the 1.20.1 particle the server side sends for it (the table in
-     * WorldBridge.resolveParticleOptions, which is private there), or null for names with no equivalent.
-     */
-    private static ParticleOptions particleFor(String name) {
-        if (name.startsWith("iconcrack_")) {   // iconcrack_<itemID>: item break particles
-            try {
-                net.minecraft.world.item.Item item =
-                        ProxyRegistry.getModernItem(Integer.parseInt(name.substring("iconcrack_".length())));
-                return item != null ? new net.minecraft.core.particles.ItemParticleOption(ParticleTypes.ITEM,
-                        new net.minecraft.world.item.ItemStack(item)) : null;
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
-        return switch (name) {
-            case "smoke" -> ParticleTypes.SMOKE;
-            case "largesmoke" -> ParticleTypes.LARGE_SMOKE;
-            case "largeexplode" -> ParticleTypes.EXPLOSION;
-            case "hugeexplosion" -> ParticleTypes.EXPLOSION_EMITTER;
-            case "explode" -> ParticleTypes.POOF;
-            case "flame" -> ParticleTypes.FLAME;
-            case "lava" -> ParticleTypes.LAVA;
-            case "note" -> ParticleTypes.NOTE;
-            case "portal" -> ParticleTypes.PORTAL;
-            case "enchantmenttable" -> ParticleTypes.ENCHANT;
-            case "townaura" -> ParticleTypes.MYCELIUM;
-            case "dripWater" -> ParticleTypes.DRIPPING_WATER;
-            case "dripLava" -> ParticleTypes.DRIPPING_LAVA;
-            case "bubble" -> ParticleTypes.BUBBLE;
-            case "splash" -> ParticleTypes.SPLASH;
-            case "snowshovel", "snowballpoof" -> ParticleTypes.ITEM_SNOWBALL;
-            case "slime" -> ParticleTypes.ITEM_SLIME;
-            case "heart" -> ParticleTypes.HEART;
-            case "angryVillager" -> ParticleTypes.ANGRY_VILLAGER;
-            case "happyVillager" -> ParticleTypes.HAPPY_VILLAGER;
-            case "witchMagic" -> ParticleTypes.WITCH;
-            case "mobSpell" -> ParticleTypes.ENTITY_EFFECT;
-            case "mobSpellAmbient" -> ParticleTypes.AMBIENT_ENTITY_EFFECT;
-            case "spell" -> ParticleTypes.EFFECT;
-            case "instantSpell" -> ParticleTypes.INSTANT_EFFECT;
-            case "crit" -> ParticleTypes.CRIT;
-            case "magicCrit" -> ParticleTypes.ENCHANTED_HIT;
-            case "fcwhitesmoke", "fcwhitecloud" -> ParticleTypes.CLOUD;
-            case "fcsmallflame" -> ParticleTypes.SMALL_FLAME;
-            case "fccinders" -> ParticleTypes.ASH;
-            default -> null;
-        };
+        FcParticles.addLocal(level, name, x, y, z, vx, vy, vz);
     }
 
     // ------------------------------------------------------------------

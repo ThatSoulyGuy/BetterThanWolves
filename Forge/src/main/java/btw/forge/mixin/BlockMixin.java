@@ -1,17 +1,12 @@
 package btw.forge.mixin;
 
-import btw.forge.EntityBridge;
 import btw.forge.HookPolicy;
-import btw.forge.ItemEntityBridge;
-import btw.forge.LivingEntityBridge;
-import btw.forge.PlayerBridge;
 import btw.forge.ProxyBlock;
 import btw.forge.ProxyRegistry;
 import btw.forge.WorldBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -40,8 +35,9 @@ import java.util.Random;
  * Entity.java:676, :1128, so there is no BlockStateBase forwarder): each runs FC only when the
  * cached owner of its state allows it (farmland FALL is ADAPTER(D9b): one trample roll on
  * 1.20.1's path, with FC's threshold, FarmBlockMixin). Every FC call is caught and logged once
- * per throw site; a throw answers the 1.20.1 result. getExplosionResistance keeps its lookup
- * until Phase 5 (explosions).
+ * per throw site; a throw answers the 1.20.1 result. getExplosionResistance is FC's position-less
+ * value (HookPolicy RESIST NOTIFY); explosions read FC's positional value where FC's class has one
+ * (ExplosionDamageCalculatorMixin, fc_blast_rules).
  */
 @Mixin(Block.class)
 public abstract class BlockMixin {
@@ -58,35 +54,13 @@ public abstract class BlockMixin {
     }
 
     /**
-     * Wraps a vanilla MC entity as a btw.modern.Entity for FC block callbacks:
-     * a {@link PlayerBridge} for players, a {@link LivingEntityBridge} for other
-     * living entities, an {@link ItemEntityBridge} for dropped items, or an
-     * {@link EntityBridge} otherwise. Mirrors {@code ProxyBlock.wrapEntity} so
-     * vanilla blocks with FC behavior pass real entities to callbacks like
-     * onEntityWalking / onFallenUpon.
+     * Wraps a vanilla MC entity as a btw.modern.Entity for FC block callbacks (onEntityWalking / onFallenUpon): the one
+     * contact wrapper, {@link btw.forge.VanillaEntityViews#forContact} (FCMOD-INTEGRATION(1.20.1): fc_entity_views),
+     * shared with ProxyBlock and BlockBehaviorMixin. Null when the entity has no FC object to show (an item without a
+     * view, a puppet without its FC entity) -- the caller skips the FC callback.
      */
     private btw.modern.Entity btw$wrapEntity(Entity entity) {
-        if (entity == null) return null;
-        if (entity instanceof Player player) {
-            PlayerBridge pb = PlayerBridge.getOrCreate(player);
-            pb.syncFromReal();
-            return pb;
-        }
-        if (entity instanceof LivingEntity living) {
-            LivingEntityBridge lb = LivingEntityBridge.getOrCreate(living);
-            lb.syncFromReal();
-            return lb;
-        }
-        // ItemEntity → its FC EntityItem view (design_items U3b): 1.5.2 EntityItem is passed to the block as
-        // itself (`instanceof EntityItem` callbacks, CanEntityTriggerTripwire() == false), and items no longer
-        // land in EntityBridge's cache. Null (never the generic EntityBridge) when the item has no view (removed,
-        // empty, failed to sync) -- the caller skips the FC callback.
-        if (entity instanceof ItemEntity item) {
-            return ItemEntityBridge.wrap(item);
-        }
-        EntityBridge eb = EntityBridge.getOrCreate(entity);
-        eb.syncFromReal();
-        return eb;
+        return btw.forge.VanillaEntityViews.forContact(entity);
     }
 
     // NOTE: playerDestroy is NOT intercepted here. FC's harvest pipeline runs
@@ -168,7 +142,7 @@ public abstract class BlockMixin {
         btw.modern.Block fcBlock = btw$getFcBlock();
         if (fcBlock == null) return;
 
-        // FCMOD-INTEGRATION(1.20.1): hook_ownership: caught (RESIST stays UNDECIDED until Phase 5); a throw answers 1.20.1's resistance
+        // FCMOD-INTEGRATION(1.20.1): hook_ownership: caught; the position-less value (explosion rays read the positional one where HookPolicy RESIST is FC, ExplosionDamageCalculatorMixin); a throw answers 1.20.1's resistance
         try {
             cir.setReturnValue(fcBlock.getExplosionResistance(null));
         } catch (Throwable t) {

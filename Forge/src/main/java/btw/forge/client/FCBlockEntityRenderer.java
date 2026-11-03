@@ -52,6 +52,8 @@ public class FCBlockEntityRenderer implements BlockEntityRenderer<ProxyBlockEnti
                        int packedLight, int packedOverlay) {
         btw.modern.TileEntity fcTe = blockEntity.getFcTileEntity();
         if (fcTe == null) return;
+        // FCMOD-INTEGRATION(1.20.1): fc_crack_4b: 4.B laid the breaking crack on the block's own RenderBlockWithTexture only, never on tile-entity geometry
+        bufferSource = FCBreakingCrack.withoutCrumbling(bufferSource);
 
         String className = fcTe.getClass().getSimpleName();
 
@@ -99,10 +101,7 @@ public class FCBlockEntityRenderer implements BlockEntityRenderer<ProxyBlockEnti
             renderBasketStorageStack(fcTe, blockEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
         }
 
-        // Emit cooking particles for crucible/cauldron when fire is below
-        if (className.contains("CookingVessel") || className.contains("Crucible") || className.contains("Cauldron")) {
-            emitCookingParticles(fcTe, blockEntity);
-        }
+        // FCMOD-INTEGRATION(1.20.1): fc_particles: no particles from the renderer; FC's own display ticks give a cooking vessel's and a campfire's 4.B smoke (FCBlockVessel / FCBlockCampfire.randomDisplayTick through FcParticles)
     }
 
     /** True for TEs whose FC TESR draws only the cook stack that render() draws natively. */
@@ -344,48 +343,6 @@ public class FCBlockEntityRenderer implements BlockEntityRenderer<ProxyBlockEnti
         }
     }
 
-    /** Emits steam/smoke particles from cooking vessels when they have fire below. */
-    private void emitCookingParticles(btw.modern.TileEntity fcTe, ProxyBlockEntity blockEntity) {
-        // Check m_iFireUnderType via reflection (0=none, 1=normal fire, 2=stoked)
-        int fireType = 0;
-        try {
-            var f = fcTe.getClass().getField("m_iFireUnderType");
-            fireType = f.getInt(fcTe);
-        } catch (Exception e) {
-            try {
-                var f = fcTe.getClass().getDeclaredField("m_iFireUnderType");
-                f.setAccessible(true);
-                fireType = f.getInt(fcTe);
-            } catch (Exception ignored) {}
-        }
-
-        if (fireType <= 0) return;
-
-        var level = Minecraft.getInstance().level;
-        if (level == null) return;
-
-        var pos = blockEntity.getBlockPos();
-        var rand = level.getRandom();
-
-        // Normal fire: gentle steam. Stoked fire: more intense
-        int chance = fireType == 2 ? 2 : 4;
-        if (rand.nextInt(chance) == 0) {
-            double px = pos.getX() + 0.2 + rand.nextFloat() * 0.6;
-            double py = pos.getY() + 0.9 + rand.nextFloat() * 0.2;
-            double pz = pos.getZ() + 0.2 + rand.nextFloat() * 0.6;
-
-            if (fireType == 2) {
-                // Stoked: larger smoke
-                level.addParticle(net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE,
-                        px, py, pz, 0, 0.05, 0);
-            } else {
-                // Normal: gentle steam
-                level.addParticle(net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE,
-                        px, py, pz, 0, 0.03, 0);
-            }
-        }
-    }
-
     private void renderCampfireCookItem(btw.modern.ItemStack fcCookStack,
                                          PoseStack poseStack, MultiBufferSource bufferSource,
                                          int packedLight, int packedOverlay,
@@ -418,26 +375,6 @@ public class FCBlockEntityRenderer implements BlockEntityRenderer<ProxyBlockEnti
                 packedLight, packedOverlay, poseStack, bufferSource,
                 Minecraft.getInstance().level, 0);
         poseStack.popPose();
-
-        // Spawn cooking particles only when the campfire is lit (fire level > 0).
-        // Unlit campfire = block 1013 (m_iFireLevel=0), lit = 1014/1015/1016.
-        boolean isLit = false;
-        if (blockEntity.getBlockState().getBlock() instanceof btw.forge.ProxyBlock pb) {
-            isLit = pb.getLegacyId() >= 1014 && pb.getLegacyId() <= 1016;
-        }
-        if (isLit && Minecraft.getInstance().level != null) {
-            var level = Minecraft.getInstance().level;
-            var pos = blockEntity.getBlockPos();
-            var rand = level.getRandom();
-            if (rand.nextInt(3) == 0) {
-                double px = pos.getX() + 0.375 + rand.nextFloat() * 0.25;
-                double py = pos.getY() + 0.75 + rand.nextFloat() * 0.1;
-                double pz = pos.getZ() + 0.375 + rand.nextFloat() * 0.25;
-                level.addParticle(
-                        net.minecraft.core.particles.ParticleTypes.CAMPFIRE_COSY_SMOKE,
-                        px, py, pz, 0, 0.02, 0);
-            }
-        }
     }
 
     private void renderFurnaceBrickCookItem(btw.modern.ItemStack fcCookStack,

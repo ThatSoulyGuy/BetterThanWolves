@@ -2,6 +2,8 @@ package btw.forge.mixin;
 
 import btw.forge.BoneMealPolicy;
 import btw.forge.ContainerBridge;
+import btw.forge.DigFace;
+import btw.forge.DigFaceAccess;
 import btw.forge.InventoryBridge;
 import btw.forge.ItemStackHelper;
 import btw.forge.LegacyProxyItem;
@@ -13,7 +15,9 @@ import btw.forge.ProxyRegistry;
 import btw.forge.WorldBridge;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerPlayerGameMode;
@@ -29,8 +33,10 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.ForgeHooks;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -97,10 +103,111 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 // FCMOD-INTEGRATION(1.20.1): fc_harvest_events: an FC harvest cancels vanilla destroyBlock, so it must post Forge's BreakEvent and honour onBlockStartBreak itself
 @Mixin(ServerPlayerGameMode.class)
-public abstract class ServerPlayerGameModeMixin {
+public abstract class ServerPlayerGameModeMixin implements DigFaceAccess {
 
     @Shadow protected ServerLevel level;
     @Shadow protected ServerPlayer player;
+    @Shadow private boolean hasDelayedDestroy;
+    @Shadow private BlockPos delayedDestroyPos;
+
+    // ================================================================
+    // The dig face (fc_dig_face): the face FC's harvest converts toward
+    // ================================================================
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): fc_dig_face
+     *
+     * <p><b>Feature:</b> 1.20.1's dig protocol, {@code handleBlockBreakAction} (ServerPlayerGameMode.java:126-215): every
+     * START_DESTROY_BLOCK and STOP_DESTROY_BLOCK packet carries the face the player is digging, and the block breaks
+     * inside that call ({@code destroyAndAck}: a creative or insta-mine START, :145, :165; a STOP with 0.7 of the
+     * progress, :188) or later, in {@code tick}'s delayed destroy (:87-97) that a STOP short of 0.7 schedules
+     * (:192-197).</p>
+     *
+     * <p><b>Conflict with FC:</b> FC's harvest takes that face ({@code tryHarvestBlock(i, j, k, iFromSide)}, Modern-Common
+     * ItemInWorldManager.java:35, :88) and every FC conversion ejects its items out of it
+     * ({@code FCUtilsItem.EjectStackFromBlockTowardsFacing}, Common FCUtilsItem.java:118-158: stone and rough stone
+     * under a pickaxe that cannot harvest them, the staged ores, a hoe on grass, chewed logs and their bark, the work
+     * stump). {@code destroyBlock(BlockPos)} carries no face, so the port passed 1 (UP) for every break: the items
+     * spawned inside the block above, and 1.20.1's push (ItemEntity.java:131-133, Entity.moveTowardsClosestSpace
+     * :2343) carried them through rock to a random open side, or up through the ceiling (triage CF2-DR2).</p>
+     *
+     * <p><b>Integration pattern:</b> D (FC-extend), 4.B parity: the face of the dig packet that breaks the block,
+     * recorded per position for the duration of that {@code handleBlockBreakAction} call, and the STOP packet's face
+     * kept for the delayed destroy, as 1.5.2's ItemInWorldManager kept {@code m_iHarvestingFromFacing} (vanilla/server
+     * ItemInWorldManager.java:44, :120, :155-188, :208-241). {@link DigFace#of} reads it; a break without a dig packet
+     * takes the look ray's face, then UP.</p>
+     *
+     * <p><b>Rebalance:</b> none.</p>
+     *
+     * <p><b>Injection strategy:</b> {@link Inject} at HEAD and RETURN of {@code handleBlockBreakAction} (record, then
+     * clear; a STOP that set {@code hasDelayedDestroy} in this call keeps its face for the delayed destroy) and around
+     * {@code tick}'s single {@code destroyBlock} call (INVOKE, and INVOKE shifted AFTER). None cancels, so Forge's
+     * LeftClickBlock event, vanilla's reach, height and spawn-protection checks and other mods' injects into these
+     * methods are untouched. The record is read by position only, so a {@code destroyBlock} of another cell nested in a
+     * BreakEvent handler (vein miners) never takes this dig's face. A LeftClickBlock or BreakEvent listener that calls
+     * {@code handleBlockBreakAction} again on the same game mode (nested) replaces the record and clears it at its
+     * RETURN, so the outer break takes the look ray's face: a safe fallback for a rare case. Per player, server thread
+     * only, never saved.</p>
+     *
+     * <p><b>Alternative considered and rejected:</b> the look ray alone ({@link btw.forge.FCLogRules#hitFace}'s old
+     * rule): the server's view of the player's rotation can lag the dig packet, and a delayed destroy finishes ticks
+     * after the player looked away. A field read by every {@code destroyBlock}: a direct caller (a deployer, a vein
+     * miner) would inherit a stale face from the player's last dig.</p>
+     */
+    // FCMOD-INTEGRATION(1.20.1): fc_dig_face: the dig packet's face, recorded for the cell it breaks while handleBlockBreakAction runs, and kept for tick()'s delayed destroy
+    @Unique private BlockPos btw$digPos;
+    @Unique private int btw$digFaceId = -1;
+    @Unique private int btw$delayedFaceId = -1;
+    @Unique private boolean btw$hadDelayedDestroy;
+
+    // FCMOD-INTEGRATION(1.20.1): fc_dig_face: a START or STOP packet names the face of the cell it digs (ABORT names none)
+    @Inject(method = "handleBlockBreakAction", at = @At("HEAD"))
+    private void btw$digBegin(BlockPos pos, ServerboundPlayerActionPacket.Action action, Direction face,
+                              int maxBuildHeight, int sequence, CallbackInfo ci) {
+        boolean dig = face != null && (action == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK
+                || action == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK);
+        this.btw$digPos = dig ? pos.immutable() : null;
+        this.btw$digFaceId = dig ? face.get3DDataValue() : -1;
+        this.btw$hadDelayedDestroy = this.hasDelayedDestroy;
+        // tick() drops a delayed destroy whose cell turned to air without calling destroyBlock: no face survives it
+        if (!this.hasDelayedDestroy) this.btw$delayedFaceId = -1;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): fc_dig_face: a STOP short of 0.7 schedules the destroy for tick(); 1.5.2 kept that STOP's face for it (m_iHarvestingFromFacing, vanilla/server ItemInWorldManager.java:236-240)
+    // Runs at every return: the LeftClickBlock cancel (:128-130), too far, too high, and the START and STOP branches.
+    @Inject(method = "handleBlockBreakAction", at = @At("RETURN"))
+    private void btw$digEnd(BlockPos pos, ServerboundPlayerActionPacket.Action action, Direction face,
+                            int maxBuildHeight, int sequence, CallbackInfo ci) {
+        if (action == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK && !this.btw$hadDelayedDestroy
+                && this.hasDelayedDestroy) {
+            this.btw$delayedFaceId = this.btw$digFaceId;
+        }
+        this.btw$digPos = null;
+        this.btw$digFaceId = -1;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): fc_dig_face: tick()'s delayed destroy (ServerPlayerGameMode.java:95) breaks with the face its STOP packet carried
+    @Inject(method = "tick", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock(Lnet/minecraft/core/BlockPos;)Z"))
+    private void btw$delayedDigBegin(CallbackInfo ci) {
+        this.btw$digPos = this.delayedDestroyPos;
+        this.btw$digFaceId = this.btw$delayedFaceId;
+    }
+
+    @Inject(method = "tick", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/server/level/ServerPlayerGameMode;destroyBlock(Lnet/minecraft/core/BlockPos;)Z",
+            shift = At.Shift.AFTER))
+    private void btw$delayedDigEnd(CallbackInfo ci) {
+        this.btw$digPos = null;
+        this.btw$digFaceId = -1;
+        this.btw$delayedFaceId = -1;
+    }
+
+    @Override
+    public int btw$digFace(BlockPos pos) {
+        BlockPos at = this.btw$digPos;
+        return at != null && at.equals(pos) ? this.btw$digFaceId : -1;
+    }
 
     // FCMOD-INTEGRATION(1.20.1): vanilla_pair_drops: FC's animals hear a player's removal of a bed or door that 1.20.1 breaks, as in FC's own harvest (Modern-Common ItemInWorldManager.java:142-146): after the removal, before the drops
     // Forge's private removeBlock (ServerPlayerGameMode.java:268-274) has one return; state and removed are its locals
@@ -123,6 +230,9 @@ public abstract class ServerPlayerGameModeMixin {
         // FCMOD-INTEGRATION(1.20.1): vanilla_pair_drops: a bed or door (one item, two cells) keeps 1.20.1's destroyBlock: its BreakEvent, playerWillDestroy (creative partner removal), loot and partner pop (maintainer ruling 2026-10-20; triage CF2-DR1, CF2-DR6)
         // No cancel: vanilla posts the BreakEvent itself (:229); btw$afterPairRemoved runs FC's animal panic.
         if (btw.forge.VanillaPairDrops.isRuled(state)) return;
+
+        // FCMOD-INTEGRATION(1.20.1): fc_dig_face: the face FC's conversions eject toward (DigFace: the dig packet's, else the look ray's, else up); read before the BreakEvent, whose handlers may break other cells
+        int fromSide = DigFace.of(player, pos).get3DDataValue();
 
         // FCMOD-INTEGRATION(1.20.1): fc_harvest_events: Forge's break contract in vanilla's order (destroyBlock:229-242) before the FC pipeline, so claim, protection and thirst handlers see FC harvests
         // onBlockBreakEvent pre-cancels spectators, adventure without CanDestroy and canAttackBlock=false (a creative
@@ -164,8 +274,10 @@ public abstract class ServerPlayerGameModeMixin {
         mgr.setGameType(btw.modern.EnumGameType.getByID(gameMode.getId()));
 
         boolean handled = true;
+        // FCMOD-INTEGRATION(1.20.1): collapsed_identity: FC's harvest removes the block before it drops it (Modern-Common ItemInWorldManager.tryHarvestBlock), so the self-drop reads the removed state from this per-thread record
+        Object harvestRecord = btw.forge.CollapsedIdentity.beginHarvest(level, pos, level.getBlockState(pos));
         try {
-            mgr.tryHarvestBlock(pos.getX(), pos.getY(), pos.getZ(), 1);
+            mgr.tryHarvestBlock(pos.getX(), pos.getY(), pos.getZ(), fromSide);
         } catch (Throwable t) {
             // Packet handler: PacketUtils rethrows, which crashes the integrated server. FC may already
             // have removed/converted the block, dropped items or worn the tool, so vanilla must not run
@@ -173,6 +285,8 @@ public abstract class ServerPlayerGameModeMixin {
             // changed; false makes destroyAndAck resend the block, undoing the client's predicted break.
             ProxyItem.logFcFailureOnce("tryHarvestBlock (legacy block id)", fcBlock.blockID, t);
             handled = level.getBlockState(pos) != state;
+        } finally {
+            btw.forge.CollapsedIdentity.endHarvest(harvestRecord);
         }
 
         // Sync FC item state (damage, stackSize) back to MC inventory.

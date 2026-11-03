@@ -2,6 +2,12 @@ package btw.modern;
 
 public abstract class BlockRedstoneLogic extends BlockDirectional {
 
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 declares the powered flag here (vanilla/client
+    // BlockRedstoneLogic.java:22, set by the constructor at :27), where getIcon and registerIcons read it; the
+    // repeater and comparator constructors set it. (It lived in BlockRedstoneRepeater; FCBlockRedstoneRepeater's read
+    // resolves through the superclass chain.)
+    public boolean isRepeaterPowered;
+
     protected BlockRedstoneLogic(int id, Material material) {
         super(id, material);
         // 1.5.2 BlockRedstoneLogic constructor (FCMOD, vanilla/client BlockRedstoneLogic.java:24-32): repeaters
@@ -21,6 +27,22 @@ public abstract class BlockRedstoneLogic extends BlockDirectional {
     @Override
     public boolean isOpaqueCube() {
         return false;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockRedstoneLogic's icon members (vanilla/client
+    // BlockRedstoneLogic.java:88-100): a redstone torch below, the repeater (lit or not) on top, stone slab sides.
+    // FCBlockRedstoneRepeater (93, 94) inherits both.
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        return side == 0 ? (this.isRepeaterPowered ? Block.torchRedstoneActive.getBlockTextureFromSide(side)
+                        : Block.torchRedstoneIdle.getBlockTextureFromSide(side))
+                : (side == 1 ? this.blockIcon : Block.stoneDoubleSlab.getBlockTextureFromSide(1));
+    }
+
+    // 1.5.2 BlockRedstoneLogic.registerIcons (vanilla/client BlockRedstoneLogic.java:97-100)
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.blockIcon = register.registerIcon(this.isRepeaterPowered ? "repeater_lit" : "repeater");
     }
 
     public abstract int func_94481_j_(int var1);

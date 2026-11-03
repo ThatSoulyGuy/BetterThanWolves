@@ -1,0 +1,18 @@
+{
+  "replaces": "minecraft:raw_gold",
+  "action": "replace",
+  "reason": "Raw gold counts as BTW's gold ore chunk (maintainer ruling 2026-10-21): a block of raw gold unpacks into nine BTW gold ore chunks",
+  "recipe": {
+    "type": "minecraft:crafting_shapeless",
+    "category": "misc",
+    "ingredients": [
+      {
+        "item": "minecraft:raw_gold_block"
+      }
+    ],
+    "result": {
+      "item": "btw:fcItemChunkGoldOre",
+      "count": 9
+    }
+  }
+}

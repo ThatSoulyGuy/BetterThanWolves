@@ -33,4 +33,34 @@ public class BlockPotato extends BlockCrops {
             }
         }
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockPotato's icon members (vanilla/client BlockPotato.java:19,
+    // :29-44, :82-90): four growth stages over the eight metas.
+    private Icon[] iconArray;
+
+    // 1.5.2 BlockPotato.getIcon (vanilla/client BlockPotato.java:29-44); Block's icon until registerIcons runs (client
+    // only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.iconArray == null) {
+            return super.getIcon(side, metadata);
+        }
+        if (metadata < 7) {
+            if (metadata == 6) {
+                metadata = 5;
+            }
+            return this.iconArray[metadata >> 1];
+        }
+        return this.iconArray[3];
+    }
+
+    // 1.5.2 BlockPotato.registerIcons (vanilla/client BlockPotato.java:82-90)
+    @Override
+    public void registerIcons(IconRegister register) {
+        Icon[] icons = new Icon[4];
+        for (int i = 0; i < icons.length; ++i) {
+            icons[i] = register.registerIcon("potatoes_" + i);
+        }
+        this.iconArray = icons;
+    }
 }

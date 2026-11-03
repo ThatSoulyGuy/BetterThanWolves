@@ -81,6 +81,9 @@ public class EntityBridge extends btw.modern.Entity {
         this.isDead = realEntity.isRemoved();
         this.width = realEntity.getBbWidth();
         this.height = realEntity.getBbHeight();
+        // FCMOD-INTEGRATION(1.20.1): fc_entity_views: the box from the entity (the frozen constructor's is empty)
+        net.minecraft.world.phys.AABB bb = realEntity.getBoundingBox();
+        this.boundingBox.setBounds(bb.minX, bb.minY, bb.minZ, bb.maxX, bb.maxY, bb.maxZ);
         this.isInWeb = false; // MC 1.20.1 handles this differently
         this.fire = realEntity.getRemainingFireTicks();
 
@@ -245,11 +248,34 @@ public class EntityBridge extends btw.modern.Entity {
      * here, e.g. FC cactus damage): MC's own hurt() with the mapped source (WorldBridge.toMcDamageSource), as
      * 1.5.2 damaged the entity through its own attackEntityFrom (EntityBoat, EntityMinecart, EntityLiving).
      * Returns hurt()'s result; server only, false on the client; never throws (DamageSourceMapping.hurtFromFc).
-     * FC projectiles reach non-living vanilla targets through WorldBridge's VanillaProjectileTarget instead.
+     * FC's queries and contact callbacks hand out VanillaEntityViews' views of non-living 1.20.1 entities instead.
      */
     @Override
     public boolean attackEntityFrom(btw.modern.DamageSource damageSource, int amount) {
         return DamageSourceMapping.hurtFromFc(real(), damageSource, amount);
+    }
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): fc_entity_views: FC mounting this entity on a 1.20.1 vehicle it found (a view of
+     * VanillaEntityViews: the block dispenser's {@code riddenByEntity.mountEntity(cart)} before it takes a cart, Client
+     * FCBlockBlockDispenser.java:292-297) rides or leaves the vehicle itself: leaving it when already on it (4.B
+     * EntityPlayer.mountEntity's toggle), else mounting it. The view is never stored in ridingEntity (the vehicle is
+     * 1.20.1's; see PlayerBridge.canPlayerEdit). Any other mount is FC's own, unchanged.
+     */
+    @Override
+    public void mountEntity(btw.modern.Entity target) {
+        net.minecraft.world.entity.Entity vehicle = VanillaEntityViews.realOf(target);
+        if (vehicle == null) {
+            super.mountEntity(target);
+            return;
+        }
+        net.minecraft.world.entity.Entity self = real();
+        if (self == null) return;
+        if (self.getVehicle() == vehicle) {
+            self.stopRiding();
+        } else {
+            self.startRiding(vehicle);
+        }
     }
 
     @Override

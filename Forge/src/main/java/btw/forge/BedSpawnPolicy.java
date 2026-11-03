@@ -20,19 +20,20 @@ import org.apache.logging.log4j.Logger;
  * (ServerLevel.java:278-289).</p>
  *
  * <p><b>Conflict with FC:</b> 4.B removed sleeping and bed spawns: FCBlockBed.onBlockActivated only prints a line
- * (Client FCBlockBed.java:32-40), and 4.B respawns at a bound beacon or else at a random hardcore spawn point (not
- * ported). The port's former veto, PlayerMixin.btw$disableBeds, declared the wrong return type on startSleepInBed
- * (Player.java:1306) and threw a ClassCastException at night, after every bed click had already set the spawn.</p>
+ * (Client FCBlockBed.java:32-40), and 4.B respawns at a bound beacon or else at a random hardcore spawn point
+ * ({@link HardcoreRespawn}, INTEGRATIONS #054). The port's former veto, PlayerMixin.btw$disableBeds, declared the
+ * wrong return type on startSleepInBed (Player.java:1306) and threw a ClassCastException at night, after every bed
+ * click had already set the spawn.</p>
  *
  * <p><b>Integration pattern:</b> C (rebalance, keep the feature), by ruling: beds keep 1.20.1 sleep (night skip,
  * action-bar messages, the Nether/End explosion), but a bed never sets the respawn point. HookPolicy rules bed USE
  * VANILLA (RULED(3)), so FCBlockBed's line never runs.</p>
  *
  * <p><b>Rebalance:</b> no spawn from any bed click, day or night; a respawn point set on a bed before this version is
- * used for one more respawn (PlayerList.java:434) and then dropped, because its carry-over onto the respawned player
- * (PlayerList.java:464) is a bed spawn too. {@code /spawnpoint} is forced (SetSpawnCommand.java:36); respawn anchors
- * (RespawnAnchorBlock.java:75) and the FC beacon bind (Server FCBlockBeacon.java:93, not forced) are not beds. All
- * three are untouched. FC hostiles keep a player awake (ServerPlayerMixin.btw$fcHostilesPreventRest).</p>
+ * ignored at the next respawn (HardcoreRespawn.begin, with {@link #isBed}) and dropped. {@code /spawnpoint} is forced
+ * (SetSpawnCommand.java:36); respawn anchors (RespawnAnchorBlock.java:75) and the FC beacon bind (Server
+ * FCBlockBeacon.java:93, not forced; validated by HardcoreRespawn) are not beds. All three are untouched. FC hostiles
+ * keep a player awake (ServerPlayerMixin.btw$fcHostilesPreventRest).</p>
  *
  * <p><b>Injection strategy:</b> no mixin. Forge's PlayerSetSpawnEvent (cancellable) fires at the head of
  * ServerPlayer.setRespawnPosition (ServerPlayer.java:1479), before the field writes and the "Respawn point set"
@@ -64,13 +65,18 @@ public final class BedSpawnPolicy {
             if (!(e.getEntity() instanceof ServerPlayer sp) || sp.getServer() == null) return;
             ServerLevel level = sp.getServer().getLevel(e.getSpawnLevel());
             if (level == null || !level.isLoaded(pos)) return;  // a bed click is loaded; never load a chunk here
-            BlockState s = level.getBlockState(pos);
-            if (s.is(BlockTags.BEDS) || s.isBed(level, pos, sp)) e.setCanceled(true); // IForgeBlockState.isBed
+            if (isBed(level.getBlockState(pos), level, pos, sp)) e.setCanceled(true);
         } catch (Throwable t) {
             if (!failureLogged) {
                 failureLogged = true;
                 LOGGER.warn("[beds_sleep_no_spawn] the bed spawn check failed (logged once); this spawn stands", t);
             }
         }
+    }
+
+    /** "A bed" for the beds ruling: {@code #minecraft:beds}, or a modded block reporting IForgeBlockState.isBed. Shared with
+     *  HardcoreRespawn.begin, which ignores a non-forced respawn point on a bed saved before this policy existed. */
+    static boolean isBed(BlockState s, ServerLevel level, BlockPos pos, ServerPlayer sp) {
+        return s.is(BlockTags.BEDS) || s.isBed(level, pos, sp);
     }
 }

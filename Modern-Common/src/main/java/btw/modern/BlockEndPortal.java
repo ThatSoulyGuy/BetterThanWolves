@@ -32,4 +32,18 @@ public class BlockEndPortal extends BlockContainer {
     public TileEntity createNewTileEntity(World world) {
         return null;
     }
+
+    // 1.5.2 BlockEndPortal.getRenderType (vanilla/client BlockEndPortal.java:118-121): drawn by its tile entity
+    // renderer only. FCBlockEndPortal (119) does not override it.
+    @Override
+    public int getRenderType() {
+        return -1;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockEndPortal.registerIcons (vanilla/client
+    // BlockEndPortal.java:149-152) registers "portal". FCBlockEndPortal (119) inherits it.
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.blockIcon = register.registerIcon("portal");
+    }
 }

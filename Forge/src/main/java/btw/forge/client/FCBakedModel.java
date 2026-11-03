@@ -5,13 +5,17 @@ import btw.forge.NamedIcon;
 import btw.forge.ProxyBlock;
 import btw.forge.ProxyBlockEntity;
 import btw.forge.ProxyRegistry;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.BlockElement;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.block.model.ItemTransforms;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.BlockModelRotation;
@@ -26,6 +30,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.client.model.data.ModelData;
 import net.minecraftforge.client.model.data.ModelProperty;
 import net.minecraftforge.client.model.geometry.UnbakedGeometryHelper;
@@ -98,6 +103,8 @@ public class FCBakedModel implements BakedModel {
      *  published, so any reader that saw staticQuadsByMeta != null sees the final mask. */
     private volatile int liveMetaMask;
     private volatile TextureAtlasSprite particleSprite;
+    /** Digging-particle sprite per meta (see {@link #particleIcon}); written before staticQuadsByMeta is published. */
+    private volatile TextureAtlasSprite[] particleByMeta;
     /** Whether icons have been registered for this block. */
     private volatile boolean iconsRegistered = false;
 
@@ -266,6 +273,16 @@ public class FCBakedModel implements BakedModel {
      * (renderBlockAllFaces, vanilla/client RenderBlocks.java:402-407, what 1.5.2 drew a piston-moved block with).
      */
     private Capture runFcRender(btw.modern.IBlockAccess access, int x, int y, int z, boolean renderAllFaces) {
+        return runFcRender(access, x, y, z, renderAllFaces, null);
+    }
+
+    /**
+     * {@code crackTexture}: when set, the block is drawn as 1.5.2 drew its breaking crack, RenderBlockWithTexture with
+     * that icon and nothing else (RenderGlobal.drawBlockDamageTexture, vanilla/client RenderGlobal.java:1608-1615: no
+     * second pass), instead of RenderBlock and RenderBlockSecondPass.
+     */
+    private Capture runFcRender(btw.modern.IBlockAccess access, int x, int y, int z, boolean renderAllFaces,
+                                @Nullable btw.modern.Icon crackTexture) {
         btw.modern.Block block = this.fcBlock;
         btw.modern.RenderBlocks renderer = new btw.modern.RenderBlocks();
         renderer.blockAccess = access;
@@ -289,9 +306,13 @@ public class FCBakedModel implements BakedModel {
             renderer.unlockBlockBounds();
             // FC shouldSideBeRendered overrides dereference it (e.g. FCBlockAestheticNonOpaque.java:742).
             block.m_currentBlockRenderer = renderer;
-            boolean firstPass = block.RenderBlock(renderer, x, y, z);
-            // Second pass: overlays (cook speckles, etc.), given the real first-pass result.
-            block.RenderBlockSecondPass(renderer, x, y, z, firstPass);
+            if (crackTexture != null) {
+                block.RenderBlockWithTexture(renderer, x, y, z, crackTexture);
+            } else {
+                boolean firstPass = block.RenderBlock(renderer, x, y, z);
+                // Second pass: overlays (cook speckles, etc.), given the real first-pass result.
+                block.RenderBlockSecondPass(renderer, x, y, z, firstPass);
+            }
         } catch (Throwable t) {
             failure = t;
         }
@@ -434,7 +455,7 @@ public class FCBakedModel implements BakedModel {
          * The id FC sees for this cell in the live world (WorldBridge.getBlockId), so FC geometry that
          * reads neighbours (fence/pane/wall arms, ground-cover rest offsets, side culling) draws what the
          * server-side shape and collision use: a 1.20.1 double slab reads as 43/125, a colliding
-         * modern-only state (deepslate, tuff, ...) as a ModernBlockStandIn and a water-filled unmapped
+         * modern-only state (tuff, calcite, ...) as a ModernBlockStandIn and a water-filled unmapped
          * plant as water, not air. Safe on the mesh thread: getWorldBlockId never throws, takes any
          * BlockGetter and only reads it (collision/occlusion shape of the snapshot state, and for a
          * non-dynamic block whose cached collision shape is empty its live shape at that position in the
@@ -510,6 +531,7 @@ public class FCBakedModel implements BakedModel {
         // — those are rendered by FCBlockEntityRenderer via the TESR capture pipeline.
         Map<Integer, List<BakedQuad>> result = new HashMap<>();
         int totalQuads = 0;
+        int planeNormalQuads = 0;
         int liveMask = 0;
         Set<String> allTexNames = new HashSet<>();
 
@@ -539,7 +561,7 @@ public class FCBakedModel implements BakedModel {
             List<btw.modern.Tessellator.CapturedQuad> captured = cap.quads;
             if (live && cap.failure == null) {
                 // The static quads of a live meta are drawn where no live capture runs (piston-moved block,
-                // breaking overlay, live-capture fallback). The first pass culled faces against StaticAccess's
+                // live-capture fallback, a failed crack capture). The first pass culled faces against StaticAccess's
                 // fake neighbours (the same block at y+-1), so take them from an all-faces pass, as 1.5.2 drew
                 // a moving block. A non-live meta read no neighbour: its first pass is its in-world geometry.
                 Capture all = runFcRender(new StaticAccess(block, meta, 0, 0, 0), 0, 0, 0, true);
@@ -556,9 +578,10 @@ public class FCBakedModel implements BakedModel {
                 List<BakedQuad> bakedQuads = new ArrayList<>();
                 for (btw.modern.Tessellator.CapturedQuad cq : captured) {
                     if (cq == null || cq.vertices == null) continue;
-                    BakedQuad bq = convertCapturedQuad(cq, fallbackTex);
+                    BakedQuad bq = convertCapturedQuad(cq, fallbackTex, true);
                     if (bq != null) {
                         bakedQuads.add(bq);
+                        if (!bq.isShade()) planeNormalQuads++;
                     }
                     if (cq.textureName != null) allTexNames.add(cq.textureName);
                 }
@@ -596,9 +619,10 @@ public class FCBakedModel implements BakedModel {
             }
         } catch (Exception ignored) {}
         this.particleSprite = lookupSprite(particleTexName);
+        this.particleByMeta = particleSpritesByMeta(block, this.particleSprite);
 
-        LOGGER.info("BTW: Block {} ({}) live-capture metas: 0x{}",
-                legacyBlockId, block.getClass().getSimpleName(), Integer.toHexString(liveMask));
+        LOGGER.info("BTW: Block {} ({}) live-capture metas: 0x{}, plane-normal quads: {}",
+                legacyBlockId, block.getClass().getSimpleName(), Integer.toHexString(liveMask), planeNormalQuads);
         this.liveMetaMask = liveMask;      // publish before the map: readers gate on staticQuadsByMeta != null
         this.staticQuadsByMeta = result;
     }
@@ -632,7 +656,7 @@ public class FCBakedModel implements BakedModel {
             List<BakedQuad> out = new ArrayList<>(cap.quads.size());
             for (btw.modern.Tessellator.CapturedQuad cq : cap.quads) {
                 if (cq == null || cq.vertices == null) continue;
-                BakedQuad bq = convertCapturedQuad(cq, fallbackTex);
+                BakedQuad bq = convertCapturedQuad(cq, fallbackTex, true);
                 if (bq != null) out.add(bq);
             }
             return out;
@@ -644,6 +668,100 @@ public class FCBakedModel implements BakedModel {
             }
             return null;
         }
+    }
+
+    // ================================================================
+    // Breaking crack: 4.B's, FC's RenderBlockWithTexture with the crack icon
+    // ================================================================
+
+    /**
+     * The icon FC's renderers lay the crack on with, 1.5.2's RenderGlobal.destroyBlockIcons[stage] (vanilla/client
+     * RenderGlobal.java:2428-2433). As a NamedIcon its UVs span 0..1, which is the whole of the stage's own 1.20.1
+     * crack texture (the crumbling buffer's RenderType.crumbling of block/destroy_stage_N, ModelBakery.DESTROY_TYPES),
+     * so the stage comes with the buffer.
+     */
+    private static final btw.modern.Icon CRACK_ICON = new NamedIcon("destroy");
+
+    /** One WARN per block id for a crack capture that threw (1.20.1's crack over the model quads is drawn instead). */
+    private static final Set<Integer> CRACK_FAIL_LOGGED = ConcurrentHashMap.newKeySet();
+
+    // FCMOD-INTEGRATION(1.20.1): fc_crack_4b: the breaking crack of a block FC draws is FC's own RenderBlockWithTexture with the crack icon, as 4.B drew it
+    /**
+     * Draws this block's breaking crack at {@code pos} as 4.B drew it, into 1.20.1's crumbling buffer for the stage.
+     *
+     * <p>1.5.2 RenderGlobal.drawBlockDamageTexture (vanilla/client RenderGlobal.java:1567-1624) re-drew every cracking
+     * block each frame through {@code block.RenderBlockWithTexture(renderBlocks, x, y, z, destroyBlockIcons[stage])}
+     * (:1613): the block's own geometry over the live world, every face that honours the override texture mapped onto
+     * the crack icon exactly as it maps the block's texture (the web's crossed planes edge to edge, a ladder corner to
+     * corner, each cube face in 1.5.2's own UV orientation). 1.20.1 instead projects a decal on the axis nearest each
+     * model quad's normal (SheetedDecalTextureGenerator.endVertex), which stretches the crack on a diagonal plane,
+     * crops it on an inset one and mirrors it on some faces, and lays it on the static quads only.
+     *
+     * <p>So the same FC call runs here, captured like a live chunk render (LiveAccess over the client level, under
+     * CAPTURE_LOCK), and every captured quad drawn with the crack icon goes straight into {@code crumbling}, the
+     * decal's own buffer: the position through the pose, the captured UV, white and full-bright (the crumbling shader
+     * multiplies only texture and colour; 1.5.2 drew the crack with the colour array off, RenderGlobal.java:1585). A
+     * quad an FC renderer drew with another icon carries no crack, as in 4.B (FCBlockCampfire.java:777 leaves its fire
+     * out under an override). The block's random offset is applied as ModelBlockRenderer.tesselateBlock applies it.
+     *
+     * <p>Returns false, so the caller draws 1.20.1's crack over the model quads instead, only when FC's render threw.
+     */
+    boolean renderCrack(BlockState state, BlockAndTintGetter level, BlockPos pos, PoseStack poseStack,
+                        VertexConsumer crumbling) {
+        if (fcBlock == null) return false;
+        ensureStaticQuadsBuilt();   // the block's icons are registered by its first capture
+        Capture cap;
+        synchronized (CAPTURE_LOCK) {
+            cap = runFcRender(new LiveAccess(level), pos.getX(), pos.getY(), pos.getZ(), false, CRACK_ICON);
+        }
+        if (cap.failure != null) {
+            if (CRACK_FAIL_LOGGED.add(legacyBlockId)) {
+                LOGGER.warn("BTW: crack RenderBlockWithTexture threw for block {} at {} -- drawing 1.20.1's crack: {}",
+                        legacyBlockId, pos, cap.failure.toString());
+            }
+            return false;
+        }
+        String crackName = CRACK_ICON.getIconName();
+        Vec3 offset = state.getOffset(level, pos);
+        poseStack.pushPose();
+        poseStack.translate(offset.x, offset.y, offset.z);
+        PoseStack.Pose pose = poseStack.last();
+        for (btw.modern.Tessellator.CapturedQuad cq : cap.quads) {
+            if (cq == null || !crackName.equals(cq.textureName)) continue;
+            btw.modern.Tessellator.CapturedVertex[] vs = cq.vertices;
+            if (vs[0] == null || vs[1] == null || vs[2] == null || vs[3] == null) continue;
+            float[] n = crackNormal(vs);
+            for (btw.modern.Tessellator.CapturedVertex v : vs) {
+                crumbling.vertex(pose.pose(), (float) v.x, (float) v.y, (float) v.z)
+                        .color(1.0F, 1.0F, 1.0F, 1.0F)
+                        .uv((float) v.u, (float) v.v)
+                        .overlayCoords(OverlayTexture.NO_OVERLAY)
+                        .uv2(LightTexture.FULL_BRIGHT)
+                        .normal(pose.normal(), n[0], n[1], n[2])
+                        .endVertex();
+            }
+        }
+        poseStack.popPose();
+        return true;
+    }
+
+    /** The quad's plane normal (diagonals' cross product, as planeNormalUnlessOwn), else vertex 0's normal, else up. */
+    private static float[] crackNormal(btw.modern.Tessellator.CapturedVertex[] vs) {
+        double ex = vs[2].x - vs[0].x, ey = vs[2].y - vs[0].y, ez = vs[2].z - vs[0].z;
+        double fx = vs[3].x - vs[1].x, fy = vs[3].y - vs[1].y, fz = vs[3].z - vs[1].z;
+        double gx = ey * fz - ez * fy, gy = ez * fx - ex * fz, gz = ex * fy - ey * fx;
+        double len = Math.sqrt(gx * gx + gy * gy + gz * gz);
+        if (len > 1.0E-9D) return new float[] {(float) (gx / len), (float) (gy / len), (float) (gz / len)};
+        float cl = (float) Math.sqrt(vs[0].nx * vs[0].nx + vs[0].ny * vs[0].ny + vs[0].nz * vs[0].nz);
+        return cl > 1.0E-6F ? new float[] {vs[0].nx / cl, vs[0].ny / cl, vs[0].nz / cl} : new float[] {0.0F, 1.0F, 0.0F};
+    }
+
+    /** The FCBakedModel behind a block-state model (itself, or the per-state view BTWClientEvents registers), or null. */
+    @Nullable
+    static FCBakedModel of(@Nullable BakedModel model) {
+        if (model instanceof FCBakedModel fc) return fc;
+        if (model instanceof StateView view) return view.fc();
+        return null;
     }
 
     // ================================================================
@@ -945,7 +1063,8 @@ public class FCBakedModel implements BakedModel {
         List<BakedQuad> out = new ArrayList<>(captured.size());
         for (btw.modern.Tessellator.CapturedQuad cq : captured) {
             if (cq == null || cq.vertices == null) continue;
-            BakedQuad bq = convertCapturedQuad(cq, fallbackTex);
+            // Item captures keep their normals: 1.5.2 lit items with them (GL lighting), see convertCapturedQuad.
+            BakedQuad bq = convertCapturedQuad(cq, fallbackTex, false);
             if (bq != null) out.add(bq);
         }
         return out;
@@ -1082,12 +1201,43 @@ public class FCBakedModel implements BakedModel {
     // Captured quad → BakedQuad conversion
     // ================================================================
 
+    // FCMOD-INTEGRATION(1.20.1): fc_quad_normals: a world quad whose tessellator normal is not its own takes its plane's normal, unshaded and flat-lit as 1.5.2 drew it
+    /**
+     * One captured FC quad as a BakedQuad.
+     *
+     * <p>{@code worldQuad}: a RenderBlock capture (static or live), as opposed to a RenderBlockAsItem capture.
+     * 1.5.2 meshed chunks without GL lighting, so a world quad's tessellator normal meant nothing there and is
+     * often left over: from the capture's default (runFcRender's setNormal(0, 1, 0)), from the previous face, or
+     * set to UP by a port renderer on vertical planes (renderCrossedSquares, renderBlockCrops, RenderCrossHatch).
+     * 1.20.1 reads it: the quad's direction picks its face shade and its ambient occlusion, and the packed normal
+     * picks the axis the breaking crack is projected on (SheetedDecalTextureGenerator.endVertex; the packed normal
+     * wins through IForgeVertexConsumer.applyBakedNormals). So a world quad keeps its tessellator normal only when
+     * that normal is its own (see {@link #planeNormalUnlessOwn}). Otherwise it is baked as 1.20.1 bakes its own
+     * cross, crop, ladder, vine and torch model faces (shade false, ambientocclusion false): the direction nearest
+     * its plane, the normal Forge packs for such a face (ForgeHooksClient.fillNormal: that direction's axis, or the
+     * exact plane normal under the calculateAllNormals client option), no face shade and no ambient occlusion.
+     * 1.5.2 drew those quads with FC's vertex colour and flat block light (renderCrossedSquares, vanilla/client
+     * RenderBlocks.java:3511-3550; FCUtilsPrimitiveQuad.RenderAsBlock; FCBlockLadderBase.RenderLadder). Every quad
+     * whose normal is its own (all the renderFace* and RenderFull*Face output) comes out byte for byte as before.
+     *
+     * <p>Item captures keep their normals: 1.5.2 lit items with GL lighting from exactly those normals.
+     */
     private static BakedQuad convertCapturedQuad(btw.modern.Tessellator.CapturedQuad cq,
-                                                  String fallbackTexture) {
+                                                  String fallbackTexture, boolean worldQuad) {
         if (cq.vertices[0] == null) return null;
 
         btw.modern.Tessellator.CapturedVertex v0 = cq.vertices[0];
         Direction dir = directionFromNormal(v0.nx, v0.ny, v0.nz);
+        double[] plane = worldQuad ? planeNormalUnlessOwn(cq) : null;
+        int planePacked = 0;
+        if (plane != null) {
+            dir = Direction.getNearest((float) plane[0], (float) plane[1], (float) plane[2]);
+            // As Forge packs a model face's normal (ForgeHooksClient.fillNormal, FaceBakery): the face direction's
+            // axis by default, the exact plane normal when the player turned calculateAllNormals on.
+            planePacked = net.minecraftforge.common.ForgeConfig.CLIENT.calculateAllNormals()
+                    ? packNormal(plane[0], plane[1], plane[2])
+                    : packNormal(dir.getStepX(), dir.getStepY(), dir.getStepZ());
+        }
 
         // Use the quad's texture name, or fall back to the block's icon
         String texName = cq.textureName;
@@ -1114,6 +1264,10 @@ public class FCBakedModel implements BakedModel {
             vertexData[base + 5] = Float.floatToRawIntBits(sprite.getV(v.v * 16));
             // Light: 0 = let MC compute from world lighting
             vertexData[base + 6] = 0;
+            if (plane != null) {
+                vertexData[base + 7] = planePacked;
+                continue;
+            }
             // Normal (packed signed bytes)
             int nx = ((byte)(v.nx * 127)) & 0xFF;
             int ny = ((byte)(v.ny * 127)) & 0xFF;
@@ -1121,7 +1275,50 @@ public class FCBakedModel implements BakedModel {
             vertexData[base + 7] = nx | (ny << 8) | (nz << 16);
         }
 
-        return new BakedQuad(vertexData, -1, dir, sprite, true);
+        // BakedQuad(vertices, tint, direction, sprite, shade, hasAmbientOcclusion): Forge's per-quad AO switch
+        // (ForgeHooksClient.calculateFaceWithoutAO) gives the quad flat light, from its own cell unless it lies on
+        // the cell face it points out of (ModelBlockRenderer.calculateShape).
+        return plane != null ? new BakedQuad(vertexData, -1, dir, sprite, false, false)
+                : new BakedQuad(vertexData, -1, dir, sprite, true);
+    }
+
+    /** A tessellator normal within this cosine (about 0.8 degrees) of the plane's normal is the quad's own. */
+    private static final double OWN_NORMAL_MIN_COS = 0.9999D;
+
+    /**
+     * The unit normal of the quad's plane, or null when the quad's tessellator normal (its first vertex's, as
+     * {@link #directionFromNormal} reads it) already is that normal, or the quad has no plane (zero area: the
+     * flat sides of a zero-thickness render box, a line). The plane normal is the cross product of the
+     * diagonals, (p2 - p0) x (p3 - p1), as ForgeHooksClient.fillNormal computes it for model faces; it points out
+     * of the front face, 1.5.2's counter-clockwise winding (the six renderFace* methods agree with the normals
+     * they set). A triangle captured as (p0, p1, p2, p2) gives (p2 - p0) x (p2 - p1), its own normal.
+     *
+     * <p>The test is geometric: a quad drawn with no normal of its own whose plane happens to face the inherited
+     * normal (a flat FC top drawn on runFcRender's UP) counts as its own and keeps shade and ambient occlusion;
+     * a face whose renderer set the right normal on a reversed winding counts as not its own.
+     */
+    private static double[] planeNormalUnlessOwn(btw.modern.Tessellator.CapturedQuad cq) {
+        btw.modern.Tessellator.CapturedVertex a = cq.vertices[0], b = cq.vertices[1], c = cq.vertices[2], d = cq.vertices[3];
+        if (a == null || b == null || c == null || d == null) return null;
+        double ex = c.x - a.x, ey = c.y - a.y, ez = c.z - a.z;
+        double fx = d.x - b.x, fy = d.y - b.y, fz = d.z - b.z;
+        double gx = ey * fz - ez * fy, gy = ez * fx - ex * fz, gz = ex * fy - ey * fx;
+        double len = Math.sqrt(gx * gx + gy * gy + gz * gz);
+        if (!(len > 1.0E-9D)) return null;    // no plane (also NaN): keep the captured normal
+        gx /= len;
+        gy /= len;
+        gz /= len;
+        double cl = Math.sqrt((double) a.nx * a.nx + (double) a.ny * a.ny + (double) a.nz * a.nz);
+        if (cl > 1.0E-6D && (gx * a.nx + gy * a.ny + gz * a.nz) / cl >= OWN_NORMAL_MIN_COS) return null;
+        return new double[] {gx, gy, gz};
+    }
+
+    /** A normal as BLOCK-format bytes, rounded as ForgeHooksClient.fillNormal packs them. */
+    private static int packNormal(double x, double y, double z) {
+        int nx = ((byte) Math.round(x * 127.0D)) & 0xFF;
+        int ny = ((byte) Math.round(y * 127.0D)) & 0xFF;
+        int nz = ((byte) Math.round(z * 127.0D)) & 0xFF;
+        return nx | (ny << 8) | (nz << 16);
     }
 
     private static Direction directionFromNormal(float nx, float ny, float nz) {
@@ -1186,7 +1383,7 @@ public class FCBakedModel implements BakedModel {
             }
         }
 
-        // The breaking overlay and position-independent metas: static per-meta cache.
+        // Position-independent metas (and 1.20.1's crack where renderCrack could not draw): static per-meta cache.
         return staticQuadsByMeta.getOrDefault(meta, Collections.emptyList());
     }
 
@@ -1325,6 +1522,62 @@ public class FCBakedModel implements BakedModel {
     public TextureAtlasSprite getParticleIcon() {
         ensureStaticQuadsBuilt();
         return particleSprite != null ? particleSprite : getMissingSprite();
+    }
+
+    /**
+     * The digging-particle sprite of one meta. 1.5.2's EntityDiggingFX took {@code block.getIcon(0, meta)}
+     * (vanilla/client EntityDiggingFX.java:25) for the hit, break and running particles (EffectRenderer.java:185,
+     * :237); a meta whose side-0 icon is missing or unresolvable falls back to {@link #getParticleIcon()}.
+     */
+    TextureAtlasSprite particleIcon(int meta) {
+        ensureStaticQuadsBuilt();
+        TextureAtlasSprite[] byMeta = particleByMeta;
+        TextureAtlasSprite sprite = byMeta != null ? byMeta[meta & 15] : null;
+        return sprite != null ? sprite : getParticleIcon();
+    }
+
+    /** {@link #particleIcon} for every meta; the caller holds CAPTURE_LOCK (FC Block instances keep scratch fields). */
+    private static TextureAtlasSprite[] particleSpritesByMeta(btw.modern.Block block, TextureAtlasSprite fallback) {
+        TextureAtlasSprite[] out = new TextureAtlasSprite[16];
+        for (int meta = 0; meta < 16; meta++) {
+            TextureAtlasSprite sprite = null;
+            try {
+                btw.modern.Icon icon = block.getIcon(0, meta);
+                if (icon != null && icon.getIconName() != null) {
+                    sprite = lookupSprite(icon.getIconName().toLowerCase(Locale.ROOT));
+                }
+            } catch (Throwable ignored) {}
+            if (sprite == null || sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
+                sprite = fallback;
+            }
+            out[meta] = sprite;
+        }
+        return out;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): fc_quad_normals: per-state view, 1.5.2's per-meta digging particle (getIcon(0, meta))
+    /**
+     * The model of one block state: this model, with that state's digging particles. BTWClientEvents registers it
+     * for every state; the block's item keeps this model itself (its overrides pick the item damage's model).
+     */
+    public BakedModel forState(BlockState state) {
+        return new StateView(this, metaOf(state));
+    }
+
+    /** Delegates everything to the shared FCBakedModel (Forge's BakedModelWrapper) except the particle sprite. */
+    private static final class StateView extends net.minecraftforge.client.model.BakedModelWrapper<FCBakedModel> {
+        private final int meta;
+
+        StateView(FCBakedModel model, int meta) {
+            super(model);
+            this.meta = meta;
+        }
+
+        @Override public TextureAtlasSprite getParticleIcon() { return originalModel.particleIcon(meta); }
+        @Override public TextureAtlasSprite getParticleIcon(ModelData data) { return originalModel.particleIcon(meta); }
+
+        /** The shared model (for {@link FCBakedModel#of}). */
+        FCBakedModel fc() { return originalModel; }
     }
 
     /** The {@code <block>#inventory} model is this one; its overrides pick the stack damage's item model. */
@@ -1541,6 +1794,69 @@ public class FCBakedModel implements BakedModel {
         VANILLA_TEXTURE_MAP.put("hopper_inside", "hopper_inside");
         VANILLA_TEXTURE_MAP.put("hopper_outside", "hopper_outside");
         VANILLA_TEXTURE_MAP.put("hopper_top", "hopper_top");
+        // FCMOD-INTEGRATION(1.20.1): legacy_icons: the 1.5.2 icon names that the Modern-Common base classes register
+        // again (their restored registerIcons) and that named no 1.20.1 texture. Each resolved to minecraft:missingno
+        // before, so no earlier draw changes. 1.5.2's redstoneDust_cross is no key: the build composes it from
+        // 1.20.1's own dust textures (Forge/gradle/legacy-icon-textures.gradle) as
+        // betterthanwolves:block/redstonedust_cross, which lookupSprite finds at its first step. BlockBed's bed_*
+        // faces stay unmapped: 1.20.1 draws beds from entity textures, outside the block atlas.
+        // Drawn by FC code (a block or item a mob holds, wears or carries, or a platform lifts):
+        VANILLA_TEXTURE_MAP.put("rail_turn", "rail_corner");
+        VANILLA_TEXTURE_MAP.put("pumpkin_face", "carved_pumpkin");
+        VANILLA_TEXTURE_MAP.put("stoneslab_top", "smooth_stone");
+        VANILLA_TEXTURE_MAP.put("stoneslab_side", "smooth_stone_slab_side");
+        VANILLA_TEXTURE_MAP.put("redstonelight", "redstone_lamp");
+        VANILLA_TEXTURE_MAP.put("redstonelight_lit", "redstone_lamp_on");
+        VANILLA_TEXTURE_MAP.put("enchantment_side", "enchanting_table_side");
+        VANILLA_TEXTURE_MAP.put("enchantment_top", "enchanting_table_top");
+        VANILLA_TEXTURE_MAP.put("enchantment_bottom", "enchanting_table_bottom");
+        VANILLA_TEXTURE_MAP.put("furnace_front_lit", "furnace_front_on");
+        VANILLA_TEXTURE_MAP.put("piston_inner_top", "piston_inner");
+        VANILLA_TEXTURE_MAP.put("stonemoss", "mossy_cobblestone");
+        VANILLA_TEXTURE_MAP.put("fenceiron", "iron_bars");
+        VANILLA_TEXTURE_MAP.put("detectorrail", "detector_rail");
+        VANILLA_TEXTURE_MAP.put("detectorrail_on", "detector_rail_on");
+        VANILLA_TEXTURE_MAP.put("anvil_base", "anvil");
+        // Registered by restored members that nothing FC draws asks for today:
+        VANILLA_TEXTURE_MAP.put("redstonedust_line", "redstone_dust_line0");
+        VANILLA_TEXTURE_MAP.put("redstonedust_cross_overlay", "redstone_dust_overlay");
+        VANILLA_TEXTURE_MAP.put("redstonedust_line_overlay", "redstone_dust_overlay");
+        VANILLA_TEXTURE_MAP.put("pumpkin_jack", "jack_o_lantern");
+        VANILLA_TEXTURE_MAP.put("carrots_0", "carrots_stage0");
+        VANILLA_TEXTURE_MAP.put("carrots_1", "carrots_stage1");
+        VANILLA_TEXTURE_MAP.put("carrots_2", "carrots_stage2");
+        VANILLA_TEXTURE_MAP.put("carrots_3", "carrots_stage3");
+        VANILLA_TEXTURE_MAP.put("potatoes_0", "potatoes_stage0");
+        VANILLA_TEXTURE_MAP.put("potatoes_1", "potatoes_stage1");
+        VANILLA_TEXTURE_MAP.put("potatoes_2", "potatoes_stage2");
+        VANILLA_TEXTURE_MAP.put("potatoes_3", "potatoes_stage3");
+        VANILLA_TEXTURE_MAP.put("crops_0", "wheat_stage0");
+        VANILLA_TEXTURE_MAP.put("crops_1", "wheat_stage1");
+        VANILLA_TEXTURE_MAP.put("crops_2", "wheat_stage2");
+        VANILLA_TEXTURE_MAP.put("crops_3", "wheat_stage3");
+        VANILLA_TEXTURE_MAP.put("crops_4", "wheat_stage4");
+        VANILLA_TEXTURE_MAP.put("crops_5", "wheat_stage5");
+        VANILLA_TEXTURE_MAP.put("crops_6", "wheat_stage6");
+        VANILLA_TEXTURE_MAP.put("crops_7", "wheat_stage7");
+        VANILLA_TEXTURE_MAP.put("cocoa_0", "cocoa_stage0");
+        VANILLA_TEXTURE_MAP.put("cocoa_1", "cocoa_stage1");
+        VANILLA_TEXTURE_MAP.put("cocoa_2", "cocoa_stage2");
+        VANILLA_TEXTURE_MAP.put("netherstalk_0", "nether_wart_stage0");
+        VANILLA_TEXTURE_MAP.put("netherstalk_1", "nether_wart_stage1");
+        VANILLA_TEXTURE_MAP.put("netherstalk_2", "nether_wart_stage2");
+        VANILLA_TEXTURE_MAP.put("stem_straight", "pumpkin_stem");
+        VANILLA_TEXTURE_MAP.put("stem_bent", "attached_pumpkin_stem");
+        VANILLA_TEXTURE_MAP.put("brewingstand_base", "brewing_stand_base");
+        VANILLA_TEXTURE_MAP.put("repeater_lit", "repeater_on");
+        VANILLA_TEXTURE_MAP.put("comparator_lit", "comparator_on");
+        VANILLA_TEXTURE_MAP.put("water", "water_still");
+        VANILLA_TEXTURE_MAP.put("lava", "lava_still");
+        VANILLA_TEXTURE_MAP.put("portal", "nether_portal");
+        VANILLA_TEXTURE_MAP.put("thinglass_top", "glass_pane_top");
+        VANILLA_TEXTURE_MAP.put("anvil_top_damaged_1", "chipped_anvil_top");
+        VANILLA_TEXTURE_MAP.put("anvil_top_damaged_2", "damaged_anvil_top");
+        VANILLA_TEXTURE_MAP.put("daylightdetector_top", "daylight_detector_top");
+        VANILLA_TEXTURE_MAP.put("daylightdetector_side", "daylight_detector_side");
     }
 
     /**

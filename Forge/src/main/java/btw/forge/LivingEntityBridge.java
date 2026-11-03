@@ -111,6 +111,11 @@ public class LivingEntityBridge extends btw.modern.EntityLiving {
         this.isDead = realEntity.isRemoved();
         this.width = realEntity.getBbWidth();
         this.height = realEntity.getBbHeight();
+        // FCMOD-INTEGRATION(1.20.1): fc_entity_views: the box from the entity, as every view's: FC's queries hand this bridge
+        // out (FCExplosionMining's getBlockDensity, FC projectiles' intercept, FCEntityCanvas' overlap test read it), and
+        // the frozen constructor's box is empty at the origin
+        net.minecraft.world.phys.AABB bb = realEntity.getBoundingBox();
+        this.boundingBox.setBounds(bb.minX, bb.minY, bb.minZ, bb.maxX, bb.maxY, bb.maxZ);
         this.isInWeb = false; // MC 1.20.1 handles this differently
         this.fire = realEntity.getRemainingFireTicks();
         this.health = (int) realEntity.getHealth();
@@ -287,7 +292,7 @@ public class LivingEntityBridge extends btw.modern.EntityLiving {
 
     /**
      * FC damage on a vanilla living entity -- an FC arrow / broadhead / thrown item / fireball hit
-     * (WorldBridge.wrapVanillaForFc), an FC block or item. MC's hurt() with the mapped source
+     * (WorldBridge's untyped query, VanillaEntityViews.of), an FC block or item. MC's hurt() with the mapped source
      * (WorldBridge.toMcDamageSource): a projectile credits its shooter, so the mob retaliates, the kill counts
      * for the player and the death message reads "shot by"; and hurt()'s own result is returned, so a hit
      * rejected during the invulnerability window, or an enderman dodging a projectile, ricochets the frozen
@@ -309,6 +314,29 @@ public class LivingEntityBridge extends btw.modern.EntityLiving {
         LivingEntity realEntity = real();
         if (realEntity != null) {
             realEntity.heal((float) amount);
+        }
+    }
+
+    /**
+     * FCMOD-INTEGRATION(1.20.1): fc_entity_views: FC mounting this entity on a 1.20.1 vehicle it found (a view of
+     * VanillaEntityViews: the block dispenser's {@code riddenByEntity.mountEntity(cart)} before it takes a cart, Client
+     * FCBlockBlockDispenser.java:292-297) rides or leaves the vehicle itself: leaving it when already on it (4.B
+     * EntityPlayer.mountEntity's toggle), else mounting it. The view is never stored in ridingEntity (the vehicle is
+     * 1.20.1's; see PlayerBridge.canPlayerEdit). Any other mount is FC's own, unchanged.
+     */
+    @Override
+    public void mountEntity(btw.modern.Entity target) {
+        net.minecraft.world.entity.Entity vehicle = VanillaEntityViews.realOf(target);
+        if (vehicle == null) {
+            super.mountEntity(target);
+            return;
+        }
+        net.minecraft.world.entity.Entity self = real();
+        if (self == null) return;
+        if (self.getVehicle() == vehicle) {
+            self.stopRiding();
+        } else {
+            self.startRiding(vehicle);
         }
     }
 

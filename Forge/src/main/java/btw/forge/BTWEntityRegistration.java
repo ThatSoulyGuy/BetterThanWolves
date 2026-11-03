@@ -180,7 +180,9 @@ public class BTWEntityRegistration {
         registered += registerPlainEntity("fc_soul_sand", "FCEntitySoulSand", MobCategory.MISC, 0.98F, 0.98F);
         registered += registerPlainEntity("fc_falling_block", "FCEntityFallingBlock", MobCategory.MISC, 0.98F, 0.98F);
         registered += registerPlainEntity("fc_wither_skull", "FCEntityWitherSkull", MobCategory.MISC, 0.3125F, 0.3125F);
-        registered += registerPlainEntity("fc_lightning_bolt", "FCEntityLightningBolt", MobCategory.MISC, 0.0F, 0.0F);
+        // FCMOD-INTEGRATION(1.20.1): fc_entity_construction: a weather effect is never saved (1.5.2 World.addWeatherEffect keeps it out of
+        // the chunks, vanilla/server World.java:1333-1337; 1.20.1 LIGHTNING_BOLT is noSave, EntityType.java:227), so no load rebuilds a bolt
+        registered += registerPlainEntity("fc_lightning_bolt", "FCEntityLightningBolt", MobCategory.MISC, 0.0F, 0.0F, false);
 
         // ============================================================
         // Frozen vanilla 1.5.2 entities spawned live by FC code through
@@ -402,16 +404,24 @@ public class BTWEntityRegistration {
     private static int registerPlainEntity(String id, String fcClassName,
                                             MobCategory category,
                                             float width, float height) {
+        return registerPlainEntity(id, fcClassName, category, width, height, true);
+    }
+
+    /** As above; saved = false registers the type noSave (CF2-R1: FCEntityLightningBolt). */
+    private static int registerPlainEntity(String id, String fcClassName,
+                                            MobCategory category,
+                                            float width, float height, boolean saved) {
         try {
             Class<?> fcClass = findFcClass(fcClassName);
             if (fcClass == null) return 0;
 
-            EntityType<ProxyEntity> type = EntityType.Builder
+            EntityType.Builder<ProxyEntity> builder = EntityType.Builder
                     .<ProxyEntity>of(ProxyEntity::new, category)
                     .sized(width, height)
                     .clientTrackingRange(10)
-                    .updateInterval(3)
-                    .build(BTWForgeMod.MOD_ID + ":" + id);
+                    .updateInterval(3);
+            if (!saved) builder = builder.noSave();
+            EntityType<ProxyEntity> type = builder.build(BTWForgeMod.MOD_ID + ":" + id);
 
             ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, id);
             if (currentEvent != null) {

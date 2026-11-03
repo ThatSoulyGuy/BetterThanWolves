@@ -27,4 +27,10 @@ public class BlockVine extends Block {
     public boolean renderAsNormalBlock() {
         return false;
     }
+
+    // 1.5.2 BlockVine.getRenderType (vanilla/client BlockVine.java:39-42). FCBlockVine (106) does not override it.
+    @Override
+    public int getRenderType() {
+        return 20;
+    }
 }

@@ -3,8 +3,10 @@ package btw.forge.client;
 import btw.forge.BTWForgeMod;
 import btw.forge.BTWMenuTypes;
 import btw.forge.FCContainerMenu;
+import btw.forge.FcBackedBlockEntities;
 import btw.forge.ProxyBlock;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.block.BlockModelShaper;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
@@ -70,6 +72,11 @@ public class BTWClientEvents {
 
             // Also register BlockEntityRenderer here (belt-and-suspenders with RegisterRenderers)
             registerBlockEntityRendererSafe();
+
+            // FCMOD-INTEGRATION(1.20.1): fc_beacon: an FC tile entity a 1.20.1 block entity carries reads the client level through ClientFcWorld (render thread)
+            FcBackedBlockEntities.setClientWorlds(l -> l instanceof ClientLevel cl ? ClientFcWorld.forLevel(cl) : null);
+            // FCMOD-INTEGRATION(1.20.1): magnetic_compass: the local player's compass points at the synced magnetic point (4.B), else 1.20.1's target
+            MagneticFieldClient.registerCompass();
         });
     }
 
@@ -138,6 +145,17 @@ public class BTWClientEvents {
             }
         }
         LOGGER.info("BTW: Registered {} FC tile entity special renderers.", count);
+    }
+
+    /**
+     * Client providers for the BTW particle types (btw.forge.FcParticleTypes), and 4.B's limit for the particles FC
+     * spawns on the client (btw.forge.client.particle.LegacyParticleLimiter). Fired once, from the Minecraft
+     * constructor (Minecraft.java:511-512), before any level loads.
+     */
+    // FCMOD-INTEGRATION(1.20.1): fc_particles: providers for FC's white smoke, white cloud, small flame and cinders and 1.5.2's snow-shovel puff; 4.B's particle limit for FC's client-side calls
+    @SubscribeEvent
+    public static void onRegisterParticleProviders(net.minecraftforge.client.event.RegisterParticleProvidersEvent event) {
+        btw.forge.client.particle.FcParticleProviders.register(event);
     }
 
     /**
@@ -263,9 +281,11 @@ public class BTWClientEvents {
 
             btw.modern.Block fcBlock = proxyBlock.getFcBlock();
             BakedModel modelToUse;
+            FCBakedModel fcModel = null;
             if (fcBlock != null) {
                 // Create a deferred-capture model — capture happens on render thread
-                modelToUse = FCBakedModel.deferred(fcBlock, proxyBlock.getLegacyId(), flatItemTemplate);
+                fcModel = FCBakedModel.deferred(fcBlock, proxyBlock.getLegacyId(), flatItemTemplate);
+                modelToUse = fcModel;
                 generatedFCModels++;
             } else {
                 modelToUse = blockPlaceholder;
@@ -273,7 +293,8 @@ public class BTWClientEvents {
 
             for (BlockState state : block.getStateDefinition().getPossibleStates()) {
                 ModelResourceLocation mrl = BlockModelShaper.stateToModelLocation(state);
-                models.put(mrl, modelToUse);
+                // FCMOD-INTEGRATION(1.20.1): fc_quad_normals: each state's view of the one model carries that meta's digging particle
+                models.put(mrl, fcModel != null ? fcModel.forState(state) : modelToUse);
                 injectedBlockStates++;
             }
 

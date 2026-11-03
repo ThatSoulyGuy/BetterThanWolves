@@ -1,17 +1,15 @@
 package btw.forge.mixin;
 
 import btw.forge.BTWNetwork;
+import btw.forge.HardcoreRespawn;
 import btw.forge.PlayerBridge;
 import btw.forge.ProxyMob;
-import btw.modern.ChunkCoordinates;
 import com.mojang.datafixers.util.Either;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Unit;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -169,6 +167,8 @@ public abstract class ServerPlayerMixin {
 
             btw.forge.ForgeNBTCompound fcTag = new btw.forge.ForgeNBTCompound(tag);
             pb.ReadModDataFromNBT(fcTag);
+            // FCMOD-INTEGRATION(1.20.1): hardcore_respawn: FC's beacon bind marker beside 1.20.1's own respawn point
+            HardcoreRespawn.readBind(tag, pb);
 
             // Also load FC food data
             if (tag.contains("foodLevel")) {
@@ -192,6 +192,7 @@ public abstract class ServerPlayerMixin {
 
             btw.forge.ForgeNBTCompound fcTag = new btw.forge.ForgeNBTCompound(tag);
             pb.WriteModDataToNBT(fcTag);
+            HardcoreRespawn.writeBind(tag, pb);
 
             // Also save FC food data
             pb.foodStats.writeNBT(fcTag);
@@ -208,6 +209,11 @@ public abstract class ServerPlayerMixin {
      * {@code self} gets its own bridge here and keeps it after setId -- the old id-keyed cache
      * returned the dead player's bridge for the rest of the session (triage HAI-1 / reentry M1,
      * incl. the End-exit credits respawn(player, true) variant).</p>
+     *
+     * <p>The copies below are the behaviour for a restoreFrom outside PlayerList.respawn (a mod's own respawn). Inside
+     * PlayerList.respawn, HardcoreRespawn.onRestore then gives the new player 4.B's fresh-player state (no hardcore home,
+     * time 0, bind cooldown 0, dimension-switch time 0; EntityPlayer.clonePlayer copies none of them) and places it
+     * (INTEGRATIONS #054).</p>
      */
     @Inject(method = "restoreFrom", at = @At("TAIL"))
     private void btw$restoreFrom(ServerPlayer oldPlayer, boolean keepEverything, CallbackInfo ci) {
@@ -222,6 +228,8 @@ public abstract class ServerPlayerMixin {
             newBridge.m_lTimeOfLastSpawnAssignment = oldBridge.m_lTimeOfLastSpawnAssignment;
             newBridge.m_lTimeOfLastDimensionSwitch = oldBridge.m_lTimeOfLastDimensionSwitch;
             newBridge.m_lRespawnAssignmentCooldownTimer = oldBridge.m_lRespawnAssignmentCooldownTimer;
+            newBridge.fcBindPos = oldBridge.fcBindPos;
+            newBridge.fcBindDim = oldBridge.fcBindDim;
 
             if (keepEverything) {
                 // Dimension transfer: preserve ALL state
@@ -252,73 +260,11 @@ public abstract class ServerPlayerMixin {
         } catch (Throwable t) {
             btw$logFailureOnce("restoreFrom", self, t);
         }
-    }
-
-    // =========================================================================
-    // FC Spawn System Hook
-    // =========================================================================
-
-    /**
-     * Intercepts {@link ServerPlayer#getRespawnPosition()} to return the FC
-     * hardcore spawn chunk coordinates instead of the vanilla spawn point,
-     * when the FC spawn system has assigned one.
-     *
-     * <p>FC replaces vanilla bed-based spawning with a beacon-based system.
-     * The spawn coordinates are stored in {@link PlayerBridge#m_HardcoreSpawnChunk}
-     * and persisted in NBT (fcHCSpawnX/Y/Z). When set, this hook returns
-     * those coordinates as the player's respawn position, overriding the
-     * vanilla bed/respawn anchor position.</p>
-     *
-     * <p>If no FC spawn is set, vanilla behavior is preserved (returns the
-     * original respawn position, which may be null for world spawn).</p>
-     */
-    @Inject(method = "getRespawnPosition", at = @At("HEAD"), cancellable = true)
-    private void btw$getRespawnPosition(CallbackInfoReturnable<BlockPos> cir) {
-        ServerPlayer self = (ServerPlayer) (Object) this;
-        PlayerBridge pb = PlayerBridge.getOrCreate(self);
-
-        ChunkCoordinates fcSpawn = pb.m_HardcoreSpawnChunk;
-        if (fcSpawn != null) {
-            cir.setReturnValue(new BlockPos(fcSpawn.posX, fcSpawn.posY, fcSpawn.posZ));
-        }
-        // Otherwise, fall through to vanilla behavior
-    }
-
-    /**
-     * Intercepts {@link ServerPlayer#getRespawnDimension()} to return the
-     * FC spawn dimension when an FC hardcore spawn is set.
-     *
-     * <p>FC tracks the spawn dimension separately in
-     * {@link PlayerBridge#m_iSpawnDimension}. The legacy dimension IDs
-     * (0 = overworld, -1 = nether, 1 = end) are mapped to MC 1.20.1
-     * {@link ResourceKey ResourceKey&lt;Level&gt;} values.</p>
-     */
-    @Inject(method = "getRespawnDimension", at = @At("HEAD"), cancellable = true)
-    private void btw$getRespawnDimension(CallbackInfoReturnable<ResourceKey<Level>> cir) {
-        ServerPlayer self = (ServerPlayer) (Object) this;
-        PlayerBridge pb = PlayerBridge.getOrCreate(self);
-
-        if (pb.m_HardcoreSpawnChunk != null) {
-            ResourceKey<Level> dim = legacyDimToResourceKey(pb.m_iSpawnDimension);
-            cir.setReturnValue(dim);
-        }
-        // Otherwise, fall through to vanilla behavior
-    }
-
-    /**
-     * Intercepts {@link ServerPlayer#isRespawnForced()} to return true
-     * when an FC hardcore spawn is set. FC spawn points are always "forced"
-     * (they do not require an intact bed/anchor at the spawn position;
-     * the beacon validation is handled separately by FC code).
-     */
-    @Inject(method = "isRespawnForced", at = @At("HEAD"), cancellable = true)
-    private void btw$isRespawnForced(CallbackInfoReturnable<Boolean> cir) {
-        ServerPlayer self = (ServerPlayer) (Object) this;
-        PlayerBridge pb = PlayerBridge.getOrCreate(self);
-
-        if (pb.m_HardcoreSpawnChunk != null) {
-            // FC spawn points are always forced (beacon validation is separate)
-            cir.setReturnValue(true);
+        // FCMOD-INTEGRATION(1.20.1): hardcore_respawn: 4.B's fresh player and placement, before the respawn packet (PlayerList.java:476-477)
+        try {
+            HardcoreRespawn.onRestore(self, oldPlayer, keepEverything);
+        } catch (Throwable t) {
+            btw$logFailureOnce("hardcore respawn", self, t);
         }
     }
 
@@ -357,23 +303,5 @@ public abstract class ServerPlayerMixin {
         } catch (Throwable t) {
             btw$logFailureOnce("sleep rest check", self, t);
         }
-    }
-
-    // =========================================================================
-    // Helper: legacy dimension ID -> MC 1.20.1 ResourceKey<Level>
-    // =========================================================================
-
-    /**
-     * Maps a legacy numeric dimension ID to an MC 1.20.1 dimension ResourceKey.
-     *
-     * @param legacyDim 0 = overworld, -1 = nether, 1 = end
-     * @return the corresponding {@link ResourceKey}, defaulting to overworld
-     */
-    private static ResourceKey<Level> legacyDimToResourceKey(int legacyDim) {
-        return switch (legacyDim) {
-            case -1 -> Level.NETHER;
-            case 1 -> Level.END;
-            default -> Level.OVERWORLD;
-        };
     }
 }

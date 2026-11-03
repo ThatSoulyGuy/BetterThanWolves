@@ -2,6 +2,7 @@ package btw.forge;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageSources;
@@ -24,6 +25,12 @@ public class DamageSourceMapping {
 
     /** Entity classes whose FC-damage hurt() already failed once (logged once per class). */
     private static final Set<String> HURT_FAILURES_LOGGED = ConcurrentHashMap.newKeySet();
+
+    /** Review M2: FC's armour-bypassing mob hit (data/betterthanwolves/damage_type/mob_attack_unblockable.json). */
+    static final ResourceKey<DamageType> MOB_ATTACK_UNBLOCKABLE = ResourceKey.create(Registries.DAMAGE_TYPE,
+            new ResourceLocation(BTWForgeMod.MOD_ID, "mob_attack_unblockable"));
+
+    private static volatile boolean unblockableMissingLogged;
 
     /**
      * Maps an FC DamageSource to the modern MC equivalent.
@@ -60,8 +67,13 @@ public class DamageSourceMapping {
         }
 
         return switch (type) {
-            case "mob" -> sources.mobAttack(mcAttacker instanceof net.minecraft.world.entity.LivingEntity le
-                    ? le : null);
+            // FCMOD-INTEGRATION(1.20.1): head_crab: a mob's hit FC flagged setDamageBypassesArmor (the squid head crab's bite, Common
+            // FCEntitySquid.java:944-948) skips armour, shields and the hunger cost, as 1.5.2's unblockable hits did
+            case "mob" -> {
+                net.minecraft.world.entity.LivingEntity le =
+                        mcAttacker instanceof net.minecraft.world.entity.LivingEntity l ? l : null;
+                yield fcSource.isUnblockable() ? unblockableMobAttack(level, le) : sources.mobAttack(le);
+            }
             case "player" -> sources.playerAttack(mcAttacker instanceof net.minecraft.world.entity.player.Player p
                     ? p : null);
             // Projectiles: DamageSources.arrow / fireball take an AbstractArrow / Fireball, which an FC projectile's
@@ -115,6 +127,33 @@ public class DamageSourceMapping {
                                                net.minecraft.world.entity.Entity causing) {
         return new DamageSource(
                 level.registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolderOrThrow(type), direct, causing);
+    }
+
+    /** {@link #MOB_ATTACK_UNBLOCKABLE} from {@code attacker}; mob_attack (logged once) if the type did not load. */
+    private static DamageSource unblockableMobAttack(ServerLevel level, net.minecraft.world.entity.LivingEntity attacker) {
+        return level.registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolder(MOB_ATTACK_UNBLOCKABLE)
+                .<DamageSource>map(h -> new DamageSource(h, attacker))
+                .orElseGet(() -> {
+                    if (!unblockableMissingLogged) {
+                        unblockableMissingLogged = true;
+                        LOGGER.warn("Damage type {} is missing; FC's armour-bypassing mob hits use mob_attack (logged once)",
+                                MOB_ATTACK_UNBLOCKABLE.location());
+                    }
+                    return level.damageSources().mobAttack(attacker);
+                });
+    }
+
+    /** BridgeSelfAudit.runServerStart: the BTW damage type loaded and bypasses armour. */
+    static void audit() {
+        net.minecraft.server.MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return;
+        var holder = server.registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).getHolder(MOB_ATTACK_UNBLOCKABLE);
+        if (holder.isPresent() && holder.get().is(net.minecraft.tags.DamageTypeTags.BYPASSES_ARMOR)) {
+            LOGGER.info("[SELF-AUDIT/damage] {} loaded, in minecraft:bypasses_armor", MOB_ATTACK_UNBLOCKABLE.location());
+        } else {
+            LOGGER.warn("[SELF-AUDIT/damage] {} {}: the squid head crab's bite is cut by armour", MOB_ATTACK_UNBLOCKABLE.location(),
+                    holder.isPresent() ? "is not in minecraft:bypasses_armor" : "did not load");
+        }
     }
 
     /**

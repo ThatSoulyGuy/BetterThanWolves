@@ -30,6 +30,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * level.dat: the antenna-tier-3 global ender inventory and the FC game-progress flags.
  * The overworld also keeps the headless-item-id table ({@link HeadlessItemIds}), loaded before
  * any chunk so FC NBT holding those ids resolves to the same items after a restart.
+ *
+ * Each dimension's file also carries what 1.5.2 SaveHandler kept per world beside the ender items
+ * (vanilla/server SaveHandler.java:426-488): the magnetic points and looting beacons (fc_beacon) and the
+ * hardcore spawn list "FCSpawnLocations" (hardcore_respawn; only the overworld's list ever has points).
  */
 public class FcWorldSavedData extends SavedData {
 
@@ -167,6 +171,23 @@ public class FcWorldSavedData extends SavedData {
                 bridge.villageCollectionObj.readFromNBT(new ForgeNBTCompound(tag.getCompound("FCVillages")));
             }
         });
+        // FCMOD-INTEGRATION(1.20.1): fc_beacon: 1.5.2 SaveHandler kept the magnetic points and looting beacons per world (vanilla/server SaveHandler.java:426-488)
+        guarded("load FCMagneticPoints", () -> {
+            if (tag.contains("FCMagneticPoints", 9)) {
+                bridge.GetMagneticPointList().loadFromNBT(new ForgeNBTCompound(tag).getTagList("FCMagneticPoints"));
+            }
+        });
+        guarded("load FCLootingBeacons", () -> {
+            if (tag.contains("FCLootingBeacons", 9)) {
+                bridge.GetLootingBeaconLocationList().loadFromNBT(new ForgeNBTCompound(tag).getTagList("FCLootingBeacons"));
+            }
+        });
+        // FCMOD-INTEGRATION(1.20.1): hardcore_respawn: 1.5.2 SaveHandler kept the spawn list per world (vanilla/server SaveHandler.java:456-461, :486-489); IPos/JPos(short)/KPos/SpawnTime per point (FCSpawnLocation.WriteToNBT)
+        guarded("load FCSpawnLocations", () -> {
+            if (tag.contains("FCSpawnLocations", 9)) {
+                bridge.GetSpawnLocationList().loadFromNBT(new ForgeNBTCompound(tag).getTagList("FCSpawnLocations"));
+            }
+        });
         return data;
     }
 
@@ -191,6 +212,14 @@ public class FcWorldSavedData extends SavedData {
             bridge.villageCollectionObj.writeToNBT(new ForgeNBTCompound(villageTag));
             tag.put("FCVillages", villageTag);
         });
+        // FCMOD-INTEGRATION(1.20.1): fc_beacon: the magnetic points and looting beacons (1.5.2 SaveHandler.java:426-488)
+        guarded("save FCMagneticPoints", () ->
+                new ForgeNBTCompound(tag).setTag("FCMagneticPoints", bridge.GetMagneticPointList().saveToNBT()));
+        guarded("save FCLootingBeacons", () ->
+                new ForgeNBTCompound(tag).setTag("FCLootingBeacons", bridge.GetLootingBeaconLocationList().saveToNBT()));
+        // FCMOD-INTEGRATION(1.20.1): hardcore_respawn: the spawn list (1.5.2 SaveHandler.java:456-461, :486-489)
+        guarded("save FCSpawnLocations", () ->
+                new ForgeNBTCompound(tag).setTag("FCSpawnLocations", bridge.GetSpawnLocationList().saveToNBT()));
         return tag;
     }
 

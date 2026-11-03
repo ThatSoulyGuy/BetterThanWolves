@@ -1,0 +1,127 @@
+// ============================================================
+// FCMOD-INTEGRATION(1.20.1): legacy_icon_textures: 1.5.2 block icons that 1.20.1 draws from several textures, composed
+// at build time from 1.20.1's own textures and checked in. Applied from Forge/build.gradle; owned by the FOUND-R3
+// TEXTURES unit (ruling 2026-10-25: a platform-lifted redstone wire draws 1.5.2's cross look, no 1.5.2 art shipped).
+//
+// 1.5.2 drew a lone or four-way redstone wire with one grey texture, redstoneDust_cross (BlockRedstoneWire.registerIcons,
+// vanilla/client BlockRedstoneWire.java:557-564, also its blockIcon). 1.20.1 draws the same picture from four model
+// parts (blockstates/redstone_wire.json). FC still asks for the 1.5.2 icon: a platform-lifted wire draws
+// getIcon(0, meta) (FCClientRenderBlockLiftedByPlatform.java:94). The icon is composed from 1.20.1's
+// redstone_dust_dot, _line0 and _line1 exactly as 1.20.1 lays out a four-way wire, in the multipart's order:
+//     dot                     redstone_dust_dot as is;
+//     north and south arms    redstone_dust_line0 as is (redstone_dust_side0 + side_alt0: its rows 0-7 and 8-15);
+//     east and west arms      redstone_dust_line1 turned by the blockstate's "y": 270 (side_alt1 + side1, no uvlock,
+//                             so the texture turns with the quad): out(x, z) = line1(15 - z, x);
+// each later opaque pixel over the earlier ones (where layers overlap they carry the same grey). Texture x runs east and
+// z south, as on 1.20.1's up faces and on the quad FC's lifted wire draws. The result is 1.5.2's redstoneDust_cross in
+// 255 of 256 pixels (1.20.1's line0 lacks one pixel of 1.5.2's south arm, at 6,13).
+// The sprite stays grey and untinted: FC tints it with its own vertex colour (setColorOpaque_F(0.4 * brightness, 0, 0)),
+// as 1.5.2 tinted its grey redstoneDust_cross. So every opaque input pixel must be grey and fully opaque, and
+// redstone_dust_overlay (drawn untinted on top by 1.20.1, as 1.5.2 drew redstoneDust_cross_overlay; FC's lifted wire
+// draws no overlay pass) must be clear. Anything else fails the build: the composition would no longer be 1.20.1's
+// picture.
+// The output is textures/block/redstonedust_cross.png, the lower-cased 1.5.2 icon name (btw.forge.NamedIcon), which
+// FCBakedModel.lookupSprite finds at its first step (betterthanwolves:block/<name>): no VANILLA_TEXTURE_MAP key.
+//
+// Input, read only: the 1.20.1 textures in ForgeGradle's client-extra jar (-PbtwClientExtraJar=<path> overrides), as
+// gradle/modern-woods.gradle reads them. A missing jar WARNs and skips: the output is checked in, so builds without the
+// cache keep working. The PNG is rewritten only when its pixels and its bytes differ, so a build with unchanged inputs
+// writes nothing (the dev-run rule: no file a running server reads is rewritten needlessly).
+// ============================================================
+
+tasks.register('composeLegacyIconTextures') {
+    description = "Composes 1.5.2's redstoneDust_cross icon from 1.20.1's own redstone dust textures"
+    group = 'btw'
+
+    def clientExtra = project.hasProperty('btwClientExtraJar')
+            ? project.file(project.property('btwClientExtraJar'))
+            : new File(project.gradle.gradleUserHomeDir,
+                    "caches/forge_gradle/minecraft_repo/versions/${project.property('portMcVersion')}/client-extra.jar")
+    def blockDst = project.file('src/main/resources/assets/betterthanwolves/textures/block')
+
+    // Always run: cheap, and the PNG is only rewritten when it changes
+    outputs.upToDateWhen { false }
+
+    doLast {
+        if (!clientExtra.isFile()) {
+            logger.warn("composeLegacyIconTextures: 1.20.1 client-extra jar not found at ${clientExtra} (run :Forge:runClient " +
+                    "once, or pass -PbtwClientExtraJar=<path>); the checked-in redstonedust_cross.png is kept")
+            return
+        }
+        javax.imageio.ImageIO.setUseCache(false)
+        String dir = 'assets/minecraft/textures/block/'
+        def out = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        new java.util.zip.ZipFile(clientExtra).withCloseable { mc ->
+            def readPng = { String name ->
+                def ze = mc.getEntry(dir + name + '.png')
+                if (ze == null) throw new GradleException("composeLegacyIconTextures: ${dir}${name}.png is missing from ${mc.name}")
+                java.awt.image.BufferedImage img = mc.getInputStream(ze).withCloseable { javax.imageio.ImageIO.read(it) }
+                if (img == null) throw new GradleException("composeLegacyIconTextures: ${dir}${name}.png in ${mc.name} is not a readable PNG")
+                if (img.width != 16 || img.height != 16) {
+                    throw new GradleException("composeLegacyIconTextures: ${name}.png is ${img.width}x${img.height}, expected 16x16")
+                }
+                return img
+            }
+            def overlay = readPng('redstone_dust_overlay')
+            for (int z = 0; z < 16; z++) {
+                for (int x = 0; x < 16; x++) {
+                    if ((overlay.getRGB(x, z) >>> 24) != 0) {
+                        throw new GradleException("composeLegacyIconTextures: redstone_dust_overlay pixel ${x},${z} is not clear; " +
+                                "the untinted overlay can no longer be left out of the composed cross")
+                    }
+                }
+            }
+            def dot = readPng('redstone_dust_dot')
+            def line0 = readPng('redstone_dust_line0')
+            def line1 = readPng('redstone_dust_line1')
+            // [layer, its pixel at (x, z)], in redstone_wire.json's multipart order
+            def layers = [
+                    ['redstone_dust_dot', { int x, int z -> dot.getRGB(x, z) }],
+                    ['redstone_dust_line0', { int x, int z -> line0.getRGB(x, z) }],
+                    ['redstone_dust_line1 turned y=270', { int x, int z -> line1.getRGB(15 - z, x) }],
+            ]
+            layers.each { List layer ->
+                String name = layer[0]
+                Closure pixel = layer[1]
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        int argb = pixel(x, z) as int
+                        int a = argb >>> 24
+                        if (a == 0) continue
+                        int r = (argb >> 16) & 0xFF
+                        int g = (argb >> 8) & 0xFF
+                        int b = argb & 0xFF
+                        if (a != 0xFF || r != g || g != b) {
+                            throw new GradleException("composeLegacyIconTextures: ${name} pixel ${x},${z} is not opaque grey " +
+                                    "(the sprite must stay untinted for FC's vertex colour)")
+                        }
+                        out.setRGB(x, z, argb)
+                    }
+                }
+            }
+        }
+        int written = 0
+        File dest = new File(blockDst, 'redstonedust_cross.png')
+        boolean samePixels = false
+        if (dest.isFile()) {
+            def old = javax.imageio.ImageIO.read(dest)
+            samePixels = old != null && old.width == 16 && old.height == 16 &&
+                    (0..<16).every { int y -> (0..<16).every { int x -> old.getRGB(x, y) == out.getRGB(x, y) } }
+        }
+        if (!samePixels) {
+            def bytes = new ByteArrayOutputStream()
+            javax.imageio.ImageIO.write(out, 'png', bytes)
+            byte[] png = bytes.toByteArray()
+            if (!dest.isFile() || !Arrays.equals(dest.bytes, png)) {
+                blockDst.mkdirs()
+                dest.bytes = png
+                written++
+            }
+        }
+        logger.lifecycle("composeLegacyIconTextures: 1 texture checked (${written} written)")
+    }
+}
+
+tasks.named('processResources').configure {
+    dependsOn 'composeLegacyIconTextures'
+}

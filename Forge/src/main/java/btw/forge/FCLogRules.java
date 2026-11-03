@@ -23,7 +23,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.ToolActions;
 import net.minecraftforge.event.ForgeEventFactory;
@@ -521,17 +520,14 @@ public final class FCLogRules {
 
     // ------------------------------------------------------------------ a chew in the world (server)
 
-    /** The face of {@code pos} the player is looking at, else UP: the side FC ejects a chew's items toward. */
+    /**
+     * The face the player breaks {@code pos} from: the side FC ejects a chew's items toward. {@link DigFace}'s rule,
+     * shared with FC's own harvest: the dig packet's face (kept for a break the server finishes later), else the face
+     * the player's look ray hits, else UP.
+     */
+    // FCMOD-INTEGRATION(1.20.1): fc_dig_face: the log rule and Dynamic Trees' chews eject toward the dug face, the rule FC's harvest uses
     public static Direction hitFace(ServerPlayer p, BlockPos pos) {
-        try {
-            HitResult h = p.pick(p.getBlockReach(), 1.0F, false);
-            if (h instanceof BlockHitResult bh && h.getType() == HitResult.Type.BLOCK && bh.getBlockPos().equals(pos)) {
-                return bh.getDirection();
-            }
-        } catch (Throwable t) {
-            failOnce("hitFace", t);
-        }
-        return Direction.UP;
+        return DigFace.of(p, pos);
     }
 
     /**

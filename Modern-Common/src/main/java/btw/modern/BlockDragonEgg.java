@@ -25,4 +25,21 @@ public class BlockDragonEgg extends Block {
     public int tickRate(World world) {
         return 5;
     }
+
+    // 1.5.2 BlockDragonEgg.isOpaqueCube / renderAsNormalBlock / getRenderType (vanilla/client
+    // BlockDragonEgg.java:155-166, :180-183). FCBlockDragonEgg (122) overrides none of them.
+    @Override
+    public boolean isOpaqueCube() {
+        return false;
+    }
+
+    @Override
+    public boolean renderAsNormalBlock() {
+        return false;
+    }
+
+    @Override
+    public int getRenderType() {
+        return 27;
+    }
 }

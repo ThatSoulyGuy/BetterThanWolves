@@ -46,7 +46,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>{@link Shaped}/{@link Shapeless}: FC shaped/shapeless recipes converted to MC
  *       recipes (vanilla serializers, so they sync, show in the recipe book and in JEI), with
  *       {@code getRemainingItems} following 1.5.2 SlotCrafting.onPickupFromSlot so tools such
- *       as shears/chisels/axes are damaged rather than consumed.</li>
+ *       as shears/chisels/axes are damaged rather than consumed. Their {@code matches} also asks
+ *       FC's own recipe on the FC reading of the grid, so a square grid matches them exactly as
+ *       FC's CraftingManager does (id and damage, 32767 = any).</li>
  *   <li>{@link Custom}: FC's code-driven IRecipe classes (FCRecipesLogChopping,
  *       FCRecipesKnitting, FCRecipesFishingRodBaiting) wrapped as a special recipe whose
  *       matches/assemble/remaining items delegate to the FC IRecipe through an
@@ -96,6 +98,13 @@ public final class FCCraftingRecipes {
             return super.assemble(inv, access);
         }
 
+        // FCMOD-INTEGRATION(1.20.1): recipes: an FC recipe matches the 2x2 grid as FC matches it (id and damage, 32767 = any),
+        // as 1.5.2's ContainerPlayer did through CraftingManager; the item-level test runs first
+        @Override
+        public boolean matches(CraftingContainer inv, Level level) {
+            return super.matches(inv, level) && fcMatches(fcRecipe, inv);
+        }
+
         @Override
         public NonNullList<ItemStack> getRemainingItems(CraftingContainer inv) {
             return fcRemainingItems(inv, fcOutput(fcRecipe, inv));
@@ -110,6 +119,12 @@ public final class FCCraftingRecipes {
                          btw.modern.ShapelessRecipes fcRecipe) {
             super(id, "", CraftingBookCategory.MISC, result, ingredients);
             this.fcRecipe = fcRecipe;
+        }
+
+        // FCMOD-INTEGRATION(1.20.1): recipes: an FC recipe matches the 2x2 grid as FC matches it (id and damage, 32767 = any)
+        @Override
+        public boolean matches(CraftingContainer inv, Level level) {
+            return super.matches(inv, level) && fcMatches(fcRecipe, inv);
         }
 
         @Override
@@ -293,6 +308,27 @@ public final class FCCraftingRecipes {
             String name = fcRecipe.getClass().getName();
             warnOnce("result:" + name, "FC recipe " + name + ".getCraftingResult failed", t);
             return null;
+        }
+    }
+
+    /**
+     * FC's own match on the grid (Modern-Common ShapedRecipes.java:66-70, ShapelessRecipes.java:63-64), asked after the
+     * item-level match, so every cell already holds an item of one of the recipe's own ingredients. FC's shaped matcher
+     * assumes a square grid (ShapedRecipes.matches: sqrt of the size); another shape keeps the item-level answer. A throw
+     * keeps the item-level answer too (the behaviour before this check), logged once per recipe class.
+     */
+    // FCMOD-INTEGRATION(1.20.1): recipes: the 2x2 grid (and any 1.20.1 crafting container) matches FC's recipes as the FC grids do
+    private static boolean fcMatches(btw.modern.IRecipe fcRecipe, CraftingContainer inv) {
+        if (inv.getWidth() != inv.getHeight()) return true;
+        try {
+            btw.modern.InventoryCrafting fcInv = toInventoryCrafting(inv);
+            synchronized (fcRecipe) {
+                return fcRecipe.matches(fcInv, null);       // FC's matchers ignore the world argument
+            }
+        } catch (Throwable t) {
+            String name = fcRecipe.getClass().getName();
+            warnOnce("fcmatch:" + name, "FC recipe " + name + ".matches failed; the grid matches it by item only", t);
+            return true;
         }
     }
 

@@ -5,12 +5,14 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.BambooStalkBlock;
+import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CactusBlock;
 import net.minecraft.world.level.block.ChorusFlowerBlock;
 import net.minecraft.world.level.block.CocoaBlock;
 import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.DetectorRailBlock;
 import net.minecraft.world.level.block.GrowingPlantHeadBlock;
 import net.minecraft.world.level.block.IceBlock;
 import net.minecraft.world.level.block.LeavesBlock;
@@ -87,9 +89,16 @@ import java.util.concurrent.ConcurrentHashMap;
  *       (Common FCBlockIce.java:53-60), which assumes 1.5.2 attenuation; on 1.20.1 light (ice getLightBlock 1)
  *       it would melt two levels early. 1.20.1 IceBlock.randomTick melts at neighbour light &gt;= 12, as 4.B
  *       does.</li>
- *   <li>DETECTOR_RAIL (28): random owner NONE until rail SHAPE+POWERED &lt;-&gt; metadata is mapped;
- *       FCBlockDetectorRail's re-check would write POWERED into the metadata side map only. Its scheduled
- *       owner is VANILLA by the override rule.</li>
+ *   <li>Detector rails (every DetectorRailBlock: DETECTOR_RAIL 28 and BTW's 235 and 236, FcDetectorRailBlock): random
+ *       owner NONE. 1.20.1's DetectorRailBlock presses and re-checks the rail (entityInside, its scheduled tick every
+ *       20 ticks), with FC's trigger rule as its cart filter (DetectorRailBlockMixin); FCBlockDetectorRail's random
+ *       re-check would only repeat it. Its scheduled owner is VANILLA by the override rule.</li>
+ *   <li>Pressure plates (every BasePressurePlateBlock: 70, 72): random owner NONE. FC's plate body
+ *       (Modern-Common BlockBasePressurePlate, the 1.5.2 mechanism) gives FCBlockPressurePlate a tick body, but
+ *       1.20.1's plate already re-checks a pressed plate on its scheduled tick (BasePressurePlateBlock.tick, every
+ *       getPressedTime), which FC's own presses schedule too; the scheduled owner is VANILLA by the override rule.
+ *       FC's body still runs from FC's own contact (FC mobs, Entity.doBlockCollisions). FC's soulforged plate 230
+ *       is a ProxyBlock and keeps FC's random tick.</li>
  *   <li>DEAD_BUSH (32): random owner NONE (maintainer decision D3). FCBlockDeadBush accepts only id 12 sand
  *       (Common FCBlockDeadBush.java:63-66) and its 4.B random tick is survival-only, so the gate would only
  *       delete 1.20.1 badlands bushes on red sand and terracotta.</li>
@@ -257,8 +266,12 @@ public final class TickPolicy {
         if (block instanceof IceBlock) {
             return new Decision(id, id, VANILLA, sched, null, "ice");
         }
-        if (block == Blocks.DETECTOR_RAIL) {
+        // FCMOD-INTEGRATION(1.20.1): fc_redstone: every detector rail (28, 235, 236) and the vanilla-id plates (70, 72)
+        if (block instanceof DetectorRailBlock) {
             return new Decision(id, id, NONE, sched, Boolean.FALSE, "detector-rail");
+        }
+        if (block instanceof BasePressurePlateBlock) {
+            return new Decision(id, id, NONE, sched, Boolean.FALSE, "pressure-plate");
         }
         if (block == Blocks.DEAD_BUSH) {
             return new Decision(id, id, NONE, sched, Boolean.FALSE, "dead-bush");

@@ -22,8 +22,10 @@ import java.util.List;
  * which {@link WorldBridge#setEntityState} broadcasts as a red flash. Mobs end up constantly
  * flashing red and slowly dying with nothing hitting them.</p>
  *
- * <p>The three puppet classes run their FC tick through {@link #runOnUpdate}. While an entity's
- * own {@code onUpdate()} executes it is marked on this thread; during that window the hurt flash is
+ * <p>The three puppet classes run their FC tick through {@link #runOnUpdate}, the puppet's 1.5.2
+ * world update step: the creative/spectator target rule first ({@link FcTargetRule}), then
+ * {@code updateRidden()} for a rider or {@code onUpdate()} ({@link FcRiding}). While that update
+ * executes the entity is marked on this thread; during that window the hurt flash is
  * suppressed, and afterwards the damage FC applied to itself <b>with {@code DamageSource.inWall}</b>
  * is undone. The source is read from FC's own record of the hit: 1.5.2
  * {@code EntityLiving.damageEntity} (vanilla/client EntityLiving.java:1277-1286) logs every
@@ -73,11 +75,14 @@ public final class FCEnvHurtGuard {
     public static btw.modern.Entity currentUpdating() { return UPDATING.get(); }
 
     /**
-     * Runs {@code fc.onUpdate()} with FC's spurious suffocation neutralised. {@code mcProxy} is
-     * the Forge entity puppeting {@code fc} (only used by the fallback probe when FC's combat log
-     * can't be read).
+     * Runs the puppet's FC update (the target rule, then {@code updateRidden()} or {@code onUpdate()})
+     * with FC's spurious suffocation neutralised. {@code mcProxy} is
+     * the Forge entity puppeting {@code fc} (its level for the riding rule, and the fallback probe
+     * when FC's combat log can't be read).
      */
     public static void runOnUpdate(btw.modern.EntityLiving fc, net.minecraft.world.entity.Entity mcProxy) {
+        // FCMOD-INTEGRATION(1.20.1): creative_targets: before the update reads a target, drop the players 1.20.1 refuses as enemies
+        FcTargetRule.sweep(fc);
         int hpBefore = fc.health;
         int hurtTimeBefore = fc.hurtTime;
         int resistBefore = fc.hurtResistantTime;
@@ -88,7 +93,8 @@ public final class FCEnvHurtGuard {
         sounds.clear();
         UPDATING.set(fc);
         try {
-            fc.onUpdate();
+            // CF2-MX3, STUB (bl): 1.5.2's per-entity world update, a rider runs updateRidden so its mount carries it
+            FcRiding.update(fc, mcProxy);
         } finally {
             UPDATING.remove();
             // Also when onUpdate threw: the inWall hit lands early in onEntityUpdate (:606-609),

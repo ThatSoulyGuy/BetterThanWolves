@@ -64,6 +64,34 @@ night and the newer woods' textures. Each stage builds and passes the link and b
 (the random growth tests within their expected spread). No release jar was booted for this work, and it
 is not committed. `INTEGRATIONS.md` entries #033 to #040 describe it.
 
+The work of 2026-10-21 to 2026-11-03 fixes the rest of that comment's findings and the bugs found with
+them. Rulings by the maintainer from 2026-10-21 to 2026-10-25 decided zombified villages without golems
+or sieges, 4.B's hardcore respawn (except in worlds created as creative), the beacon, the stone strata
+with deepslate as deep stone and raw ore as ore chunks, explosion drops, creative players, bamboo
+planks, the exact 4.B breaking crack, falling blocks saved in mid-air, and the torch, redstone, minecart
+and portal fixes. Rulings of 2026-10-31 and 2026-11-02 put snow, pressure plates and rails that
+Minecraft places under BTW's support rules too, and made Minecraft's newer pressure plates, fences,
+walls and stained glass panes follow their BTW relatives' support rules. It was proven as the work
+before it: every gap was first recorded by a scripted in-world test on the old code, and the same test
+ran on the new code. Development clients joined for the breaking crack, BTW's particles, torch and
+ladder placement, falling blocks, drops from a dug block, creative players and squids, the depth dig
+speed, the newer woods' blocks, the beacon, the respawn, the restored textures, a player on the
+soulforged steel plate and detector rail, and torches and plates placed on the newer fences, walls and
+stained glass panes. The work landed in ten stages. After each of the first nine, the build passed the
+link and bridge audits, and the regression tests of the earlier waves gave the same results apart from
+the intended changes (from the fifth stage on, only the tests each change could reach were rerun). The
+last stage (the texture, redstone, minecart and portal fixes) first failed on one rule: a redstone
+torch could still stand on top of glowstone or ice. Its fix (BTW 4.B's own solid top, see Changed) and
+the support rules of 2026-10-31 and 2026-11-02 joined that stage from 2026-10-31 to 2026-11-03. On
+2026-11-03 it builds and passes the link and bridge audits, and all of its tests pass: that day the
+redstone torch test passed its 24 checks, the torch and ladder placement test its 117, the new support
+tests their 106, 100 and 38 and their client test its 17, and the regression tests these changes could
+reach gave the same results; the stage's other tests, which these changes do not reach, passed on
+2026-10-28. A final run on 2026-11-03 of every round-3 test and every regression test, 74 server
+runs and 22 development-client runs on the finished build, matched each test's latest record; the plant
+growth tests, which count random growth, stayed within their expected ranges. No release jar was
+booted for this work, and it is not committed. `INTEGRATIONS.md` entries #041 to #062 describe it.
+
 ### Fixed
 
 Reported on CurseForge:
@@ -275,7 +303,8 @@ decide for every one of these blocks:
   Mycelium spreads onto loose dirt and dies in the dark.
 - **Brown mushrooms** spread in complete darkness (or on mycelium) and give off no light, as in BTW.
   Their faint 1.20.1 glow had kept them from ever spreading. Mushrooms on mycelium sometimes grow into
-  huge mushrooms (see Known issues for their textures).
+  huge mushrooms, whose blocks show their own cap, pores and stem since 2026-10-28 (see the texture fix
+  below).
 - **Leaves** decay the BTW way: only after a log or leaves near them are removed, and only when no log
   is within 4 blocks. They drop only saplings (1 in 20, jungle 1 in 40), never apples or sticks (in fact
   BTW's leaves dropped oak leaves until 2026-10-20; see the follow-ups below).
@@ -283,8 +312,9 @@ decide for every one of these blocks:
   logs do.
 - **Fire** burns by BTW's rules: logs smoulder instead of burning away, BTW's wicker and wooden blocks
   burn, and the fire on a lit hibachi keeps burning. Fire on magma blocks keeps burning, as in 1.20.1.
-  Blocks added after 1.5.2 that burn in 1.20.1 (acacia, cherry and bamboo wood, hay bales, ...) still
-  burn.
+  Blocks added after 1.5.2 that burn in 1.20.1 (bamboo wood, hay bales, ...) still burn. The logs of
+  acacia, dark oak, mangrove and cherry (since 2026-10-20) and their planks (since 2026-10-28) burn by
+  BTW's own fire rules, as oak does.
 - **Lava** follows BTW: it lights BTW campfires and unlit torches next to it, melts BTW snow and starts
   fires at BTW's rate (1.20.1's fire spread ran twice for every lava block it picked).
 - **Falling blocks.** Sand, gravel and the dragon egg no longer float on torches and other blocks they
@@ -381,9 +411,9 @@ test on the old code, and the test passes now; the HUD was checked with a develo
     (deepslate, tuff, copper ore, ...). They now do, on server and client (checked by code review only:
     the test player cannot carry a penalty).
   - BTW's pickaxes, axes, shovels, hoes and mattocks were not the right tool for blocks added after
-    1.5.2: a steel pickaxe on deepslate diamond ore, or a mattock on deepslate, dropped nothing. They
-    now dig those blocks at BTW's speed for the tool and get their drops (the diamond, the cobbled
-    deepslate).
+    1.5.2, such as tuff and copper ore, so those blocks dropped nothing. They now dig them at BTW's
+    speed for the tool and get their drops. Deepslate and the deepslate ores are BTW's stone and ores
+    since 2026-10-28 (see Changed), so a mattock on deepslate gets BTW's stone drops.
 - **Crafting** (#025).
   - BTW's workbench, work stump and soulforge knew only BTW's own recipes, and 499 of 1.20.1's 822
     crafting recipes need a 3x3 grid, so those recipes, and every 3x3 recipe of other mods, could not be
@@ -440,6 +470,72 @@ Reported on CurseForge (comment of 2026-10-19):
 - **Beds: no message at night, and every click set the spawn.** A bed click at night failed with an
   error in the log and showed nothing, and every bed click, day or night, set the spawn point. Beds now
   let you sleep but never set the spawn (see Changed) (CF2-U1).
+- **Falling blocks were orange outlines.** Sand, gravel, loose dirt, loose cobblestone, BTW's loose
+  slabs and stairs, loose snow, falling netherrack and the dragon egg were drawn as an orange outline
+  while they fell, and showed their texture only once they landed. They now fall as real blocks,
+  smoothly, as in 4.B. A falling slab, stair or dragon egg keeps its shape, a falling block is shaded
+  like the same block on the ground, and the landed block no longer blinks out for a moment. A block
+  that was still falling when the game saved came back as an orange outline frozen in mid-air for good,
+  and the block itself was lost. By the maintainer's ruling it now carries on falling and lands when the
+  area loads again (4.B lost it). Stuck outlines left by earlier versions are removed, and a block that
+  an earlier version saved mid-fall lands too (CF2-R1; #043).
+- **The breaking crack on BTW's spider webs.** It was smeared into streaks and stretched. By the
+  maintainer's ruling the crack on BTW blocks now looks exactly as in 4.B: on spider webs it covers each
+  web plane edge to edge, on ladders and the faces of BTW blocks it is no longer mirrored, and it no
+  longer appears on block parts 4.B never cracked, such as an open basket's lid or food cooking on a
+  campfire. The crack images stay Minecraft's, so resource packs still change them. Breaking or hitting
+  a damaged spider web, or any BTW block with several variants, gives off particles of that block's own
+  texture, and BTW's crossed plants, crops and ladders are lit flat, as in 4.B: smooth lighting no
+  longer darkens their corners (CF2-R3; #041).
+- **Loose snow smoked like a campfire.** Loose snow and loose snow slabs give off faint white wisps
+  again, as in 4.B, instead of large grey campfire smoke (CF2-R5b). The same fix covers BTW's other
+  particles (#042):
+  - campfires cooking food, kilns, cauldrons and crucibles on a fire, smouldering logs, mill stones and
+    clay bricks drying in the sun give off BTW's white smoke, which rises, instead of grey campfire
+    smoke or puffs that hung in place; cauldrons, crucibles and campfires no longer pour out an extra
+    stream of grey smoke that even Minimal could not hide;
+  - smoke, flames and other particles from BTW blocks show within 16 blocks and follow the Particles
+    setting, as in 4.B; only explosions and a bursting smouldering log's cinders show at every setting.
+    A gearbox or other device breaking from overload no longer shows its puff at Minimal;
+  - candles show their flame again; a smouldering log that bursts throws glowing cinders instead of grey
+    ash; a snow golem made with a soul urn appears in a fall of snow puffs; a powered detector block
+    shows its dim red dust instead of bright red dust drifting sideways.
+- **Items shot out of broken blocks in odd directions.** Stone and rough stone mined with a stone
+  pickaxe, BTW's ores mined in stages, logs chewed by hand, the work stump and grass dug with a hoe
+  dropped their items into the block above the one being mined. In a tunnel they shot sideways through
+  the rock or rose up through the ceiling and could be lost; on a tree trunk the bark came out of a
+  random side of the log above. They now come out of the side you dig, toward you, as in 4.B, also when
+  the server finishes the break a moment after your client. Every BTW drop also started up to an eighth
+  of a block too high, so about one block drop in seven began inside the block above and was pushed out
+  through the rock. BTW's drops now start inside the broken block, as in 4.B, and mob drops still land
+  on the ground (CF2-DR2; #044).
+- **Mobs targeted players in creative.** BTW mobs no longer chase or attack you after you switch to
+  creative or spectator mode. In creative, hitting a BTW mob, angering pigmen or endermen, startling a
+  wild wolf with a fire starter or feeding a wolf wolf meat no longer makes them go after you. Minecraft
+  1.20.1 works the same way; 4.B kept chasing a player who switched to creative. This follows a
+  maintainer ruling, which changes only the targeting (see Known issues) (CF2-M7; #046).
+- **Flowers turned into poppies.** Blue orchids, alliums, azure bluets, tulips, oxeye daisies,
+  cornflowers and lilies of the valley no longer turn into poppies. They stay themselves when you break
+  them, when they pop off because their soil was dug out or the light is too low, when you place them,
+  and in BTW's hoppers, baskets and other storage. The blue orchid, allium, azure bluet, tulip and oxeye
+  daisy dyes and the flower banner pattern can now be crafted at the BTW workbench, and the millstone
+  grinds only the poppy into red dye; the other flowers no longer count as poppies there (CF2-DR3,
+  CF2-P8c; #045).
+- **Deepslate and raw ores worked as in plain Minecraft.** They now follow 4.B's stone strata and ore
+  chunks (see Changed) (CF2-PR-DEEP, CF2-PR-ORE; #050).
+- **Creepers dropped full blocks.** A 4.B creeper drops full blocks too, but explosions now drop what
+  BTW drops: blasted stone gives loose cobblestone, a stone and a gravel pile; cobblestone gives loose
+  cobblestone; dirt, grass and mycelium give loose dirt and loosen the dirt around the hole. Chewed
+  logs, mouldings, sidings and corners break into sawdust, a mining charge caught in a blast goes off,
+  snow layers drop nothing, and BTW blocks keep their colour or type (CF2-DR4). Mining charges, which
+  dropped nothing from most blocks, drop the pieces of what they break: stone gives stones and gravel
+  piles; dirt, gravel and sand give piles; logs give sawdust and bark; crimson and warped stems give
+  sawdust, and other mods' logs give sawdust and, while barked, their bark (CF2-DR5; #049).
+- **Villagers were not zombified.** Villages are now zombified, as in 4.B (see Changed) (CF2-MU3; #048).
+  Curing a villager zombie with a soul urn works: a cured villager zombie that came from world
+  generation, a command or an earlier session turned into a new villager every tick and never went away.
+  Now it becomes one villager and the zombie is gone. A villager killed by a zombie now disappears when
+  its zombie appears, as in 4.B, instead of dying beside it.
 
 Follow-ups (2026-10-19 to 2026-10-21):
 
@@ -480,6 +576,150 @@ Follow-ups (2026-10-19 to 2026-10-21):
   per fall. Minecraft's own check, from 0.5 blocks, ran as well (#036).
 - **Tools BTW breaks** while mining a modern block, a bed or a door now tell other mods they broke
   (Forge's player-destroyed-item event).
+
+Found with that report (2026-10-21 to 2026-10-28):
+
+- **4.B's hardcore respawn was missing.** With beds no longer setting the spawn, every death brought you
+  back at the world spawn. The hardcore respawn is ported (see Changed) (CF2-U1-HS; #054).
+- **BTW squids and the mill stone never reached players.** BTW's own code did not see the players in a
+  world. BTW squids hunt players at night and in the dark again. They latch onto your head and ride
+  along until you kill them. While one is on your head it weighs you down like heavy armour and knocks
+  you out of boats and minecarts, and its bite goes through armour; only a soulforged steel helm keeps
+  it off. Their tentacles fling you, and knock a BTW sword or tool out of your hand if you are blocking
+  with it. Grinding netherrack in a mill stone makes the players near it nauseous again (CF2-MX1,
+  CF2-MX3; #047).
+- **Sneaking and invisibility** hide you from BTW mobs again, as in 4.B: sneaking cuts how far they
+  notice you by a fifth, and invisibility without armour almost completely. Mobs no longer go after a
+  player on the death screen (CF2-MX2; #046).
+- **Cows, squids and spider jockeys.** A BTW cow's kick flings you again, as in 4.B. A squid that
+  latches onto an animal or a villager now rides it instead of hanging in mid-air and biting it from
+  there, and lets go when it dies; an animal no longer stays "head-crabbed" (no milk, no eggs) after its
+  squid is gone. Skeletons that climb onto BTW spiders ride them as spider jockeys again (#047).
+- **Broken blocks lost their kind.** Broken coloured wool, sandstone, slabs (double slabs too), mossy
+  cobblestone walls, chiseled quartz, quartz pillars and mob heads drop their own kind instead of the
+  plain one (white wool, oak slab, smooth stone slab, skeleton skull, ...); a player head drops without
+  its owner. Wet sponges, stone slabs and smooth sandstone drop themselves, and a chipped or damaged
+  anvil mined with Silk Touch stays chipped or damaged. Infested blocks drop nothing when broken, as in
+  4.B and Minecraft; they dropped an infested stone block (#045).
+- **Stacking.** Coloured wool, spruce, birch, jungle and the four newer woods' planks and logs, typed
+  slabs, sandstone, stone bricks, walls, quartz, flowers and mob heads stack in BTW's hoppers, baskets
+  and chests, and one kind no longer merges into another there (a white wool used to turn into the
+  orange wool it joined) (#045).
+- **Explosions** (#049), besides the creeper drops above:
+  - digging dirt, grass or mycelium by hand loosens the dirt next to it, as in 4.B;
+  - mining charges no longer delete water and lava, and dirt, grass, sand and gravel resist explosions
+    as in 4.B, so craters in soil are no bigger than 4.B's;
+  - deeper stone and ores resist explosions as in 4.B (with the stone strata, see Changed);
+  - BTW blocks broken by pistons, other mods or the `/loot` command keep their colour or type.
+- **Beacons** (#053). Beacons whose pyramid goes below y=0 power up (deep caves, superflat worlds), and
+  a beacon moved with `/clone` or a structure block powers up at its new place. Right-clicking a
+  soulforged steel beacon binds you to it ("You have been bound to this beacon"), also when sneaking
+  with an empty hand. The beacon itself now works as in 4.B (see Changed).
+- **Nether quartz ore** mined with a pickaxe dropped the ore block instead of quartz (#050).
+- **The inventory crafting grid** now takes exactly what BTW 4.B takes for BTW's recipes: two spruce
+  sidings make spruce planks (not another wood's), three spruce mouldings make spruce stairs, and the
+  colour recipes need the white candle, wool, vase or wool slab (#025).
+
+Found while fixing it (2026-10-23 to 2026-11-03):
+
+The maintainer ruled on 2026-10-23 that bugs found during this work are proven and fixed with it.
+
+- **BTW blocks answer as in 4.B** (#040). Many blocks counted as solid full blocks to BTW's code where
+  4.B's did not:
+  - BTW grates, wicker panes and slats no longer collide as full cubes: you can walk past them as in
+    4.B, and they no longer join doors, beds or other kinds of pane. Their items are flat icons, as in
+    4.B;
+  - BTW mobs walk over pressure plates and past signs, and walls stop them properly;
+  - a BTW chest opens with glass on top of it;
+  - BTW torches and other BTW attachments hold only on solid blocks, as in 4.B: not on glowstone,
+    redstone lamps, doors, beds or BTW panes (see Changed for existing builds);
+  - glass no longer counts as a full block for BTW's placement, so a tripwire hook can no longer be hung
+    on glass, as in 4.B.
+- **Torches and ladders** (#055). Torches, soul torches and ladders can no longer be placed on
+  glowstone, redstone lamps, TNT, pistons, beacons, the tops of glass panes and iron bars, or the sides
+  of glass and ice, as in 4.B (soul torches take the torch's rule, by the maintainer's ruling). A soul
+  torch already standing on one of them drops at the next block change beside it, as a torch does. A
+  redstone torch clicked onto the side of a block hangs on that wall, as in 4.B, instead of standing on
+  the block below it or in mid-air, and glowstone's side refuses it (for its top, see below).
+- **The redstone torch on top of glowstone and ice** (#055, #061). A redstone torch could still stand on
+  top of glowstone or ice, which 4.B refuses, because BTW took Minecraft's answer to whether a block's
+  top is solid. BTW's own answer decides now (see Changed): a standing redstone torch is refused on
+  glowstone, ice, TNT, pistons, redstone lamps, beacons, the top half of a closed oak trapdoor and BTW
+  machines without a solid top, whether you place it sneaking or not, and one already standing there
+  drops when a block next to it changes. Glass, fences and walls still hold it, as in 4.B.
+- **Snow on glass, glowstone and BTW machines** (#055, #061). Snow could lie on glass, glowstone,
+  redstone lamps, TNT, pistons, beacons, the top half of a closed oak trapdoor and BTW machines such as
+  the hopper, mill stone, cauldron and crucible, where 4.B never lets snow lie. By the maintainer's
+  ruling, falling snow now skips them, a snow layer placed while sneaking is refused there, and BTW's
+  ash follows the same rule. Ice already refused snow.
+- **Pressure plates and rails placed while sneaking** (#055, #061). Placed while sneaking, a stone or
+  oak pressure plate could go on glass, glowstone, ice, a fence or a wall, the soulforged steel plate
+  even in mid-air, and a rail, powered rail or detector rail (BTW's included) on glass, glowstone, ice
+  or a hopper. By the maintainer's ruling they now follow 4.B's rules whichever way you place them, and
+  a rail drops when the block under it, or the block an ascending rail climbs onto, stops being solid
+  (Minecraft kept it on glass). A BTW ladder placed while sneaking no longer hangs with nothing to hang
+  from, and a BTW torch with nothing to hold it is refused instead of dropping at once.
+- **Minecraft's newer pressure plates** (#055). By the maintainer's ruling the wooden pressure plates of
+  spruce, birch, jungle, acacia, dark oak, mangrove, cherry, bamboo, crimson and warped take BTW's oak
+  plate rule, and the polished blackstone plate the stone plate's: like them, they can no longer be
+  placed on glass, glowstone, fences, walls or the other blocks 4.B refuses, and one already on such a
+  block drops when a block next to it changes. The weighted pressure plates stay removed.
+- **Minecraft's newer fences, walls and stained glass panes** (#062). By the maintainer's ruling the
+  wooden fences of spruce, birch, jungle, acacia, dark oak, mangrove, cherry, bamboo, crimson and warped
+  count as BTW's oak fence, Minecraft's twenty walls other than the cobblestone and mossy cobblestone
+  walls as the cobblestone wall, and the sixteen stained glass panes as the glass pane, wherever BTW
+  asks what a block can hold:
+  - a redstone torch stands on the fences and walls, as on BTW's oak fence and cobblestone wall, and
+    stakes, placed tools and lightning rods now go on top of them and under them;
+  - sand, gravel and other falling blocks rest on them, and BTW's ash can lie above them over solid
+    ground, as with BTW's oak fence;
+  - pressure plates can no longer be placed on them, and an iron spike on a fence's or wall's arm drops
+    when a block next to it changes;
+  - torches, soul torches, redstone torches, BTW torches, BTW candles, placed ore chunks, ash and
+    pressure plates no longer stand on a stained glass pane.
+
+  All ten fences count as the oak fence, also where BTW has a fence of that wood: a redstone torch
+  stands on Minecraft's spruce fence, while BTW's own spruce fence refuses it, as in 4.B. Their drops,
+  burning, mining, connections and looks stay Minecraft's.
+- **Placed tools in Minecraft's newer fences, walls and panes** (#062). No tool could be stuck into
+  these fences and walls. By the maintainer's ruling, which tool sticks is a support question too:
+  every axe sticks into the top or bottom of the ten fences, as into BTW's oak fence, and no other tool
+  does; pickaxes and the iron chisel stick into the walls, as into the cobblestone wall; and no tool
+  sticks into a stained glass pane, as with the glass pane. Mining them is unchanged.
+- **The wicker pane and other BTW textures** (#059). The wicker pane shows its wicker texture (it drew
+  the missing texture), the soulforged steel pressure plate looks like steel, the BTW workbench shows
+  its top, sides and bottom, the blocks of huge mushrooms show their cap, pores and stem (they showed
+  the red cap on every face), and a hopper's filter shows the right texture (and none for items that are
+  not filters). Blocks and items held or worn by mobs, carried by endermen or lifted by platforms show
+  their BTW textures instead of the missing texture: logs, wool, pumpkins, mycelium, slabs, leaves,
+  walls, gates, jukeboxes, dispensers, furnaces, pistons, enchanting tables, lamps, dyes, potions; a
+  curved rail stays curved, and redstone wire lifted by a platform shows its cross.
+- **Pressure plates, buttons, comparators and detector rails** (#056). The soulforged steel pressure
+  plate presses only for players, stone plates for mobs and players, and wooden plates for everything,
+  as in 4.B: BTW mobs now press plates, and the soulforged plate works (it never pressed). BTW arrows
+  press wooden buttons. Comparators read BTW chests (a double chest as one) and the brick oven, as in
+  4.B; the comparator block itself stays removed, by the maintainer's ruling. A double BTW chest with a
+  solid block on either half stays shut, as in 4.B. BTW's wooden and soulforged steel detector rails are
+  Minecraft detector rails that keep BTW's rules: minecarts run over them (they derailed), the wooden
+  one triggers for every cart and the soulforged one only for a cart carrying a player. Minecraft's
+  detector rail ignores an empty cart, as in 4.B.
+- **Minecarts, boats and other Minecraft entities** (#057). BTW's blocks see Minecraft's minecarts,
+  boats, paintings, XP orbs and mobs, as 4.B's saw their 1.5.2 forms: a BTW hopper fills a chest
+  minecart under it, the block dispenser picks up minecarts and boats (a boat comes back as its own
+  boat, its wood and chest kept, and a chest minecart spills its contents, as in 4.B), the detector
+  block sees them, a mining charge breaks them and a soul-sand hopper swallows XP orbs. Minecarts and
+  boats that BTW places are Minecraft's own.
+- **Nether portals lit by a campfire** (#058). A campfire lit inside an obsidian frame opens a portal
+  that faces the frame's own way and fills any frame a fire would fill (up to 21x21); north-south
+  portals lit by a campfire no longer lose a column when a block is placed beside them. A fire also
+  opens a frame with a campfire inside, as in 4.B, and a campfire opens a portal in any dimension, as in
+  4.B. Lighting a portal either way counts toward the hardcore respawn's distance at once (#054).
+- **Burning netherrack below y=0** went out as it started to fall and lit nothing where it landed. It
+  now falls burning, as it does higher up (#043).
+- **Items pushed off fertilised farmland.** An item or a mob resting on farmland that BTW turned into
+  another block (bone meal fertilising it, for example) was pushed out sideways, up to about two blocks.
+  It is now lifted onto the new block, where 4.B had it all along. The same holds for any block that is
+  a full block to BTW but lower in Minecraft (#060).
 
 Other fixes:
 
@@ -652,8 +892,8 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
   - 1.20.1's drowned, husks and zombie villagers spawn as BTW zombies, strays and wither skeletons as
     BTW skeletons, and glow squids as BTW squids. Drowned therefore bring BTW zombies to rivers and
     oceans, which BTW never had.
-  - Naturally spawned zombie villagers become plain zombies, because BTW makes villager zombies only
-    when a zombie kills a villager (SW5).
+  - Naturally spawned zombie villagers still become plain zombies, because BTW's own zombie spawns never
+    make villager zombies. Zombie villagers in villages stay villager zombies (SW5; #048).
   - Witches spawn naturally only in swamps (GH2).
 - **Blocks added after 1.5.2 are solid to BTW.** BTW mobs stand on and path around deepslate, tuff
   and the other new blocks. BTW sand rests on them, BTW torches attach to them, BTW pistons cannot
@@ -765,7 +1005,7 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
   - HarvestCraft tree fruit and the fruit and pods of Dynamic Trees and its HarvestCraft add-on grow a
     quarter as often, at the pace BTW gives sweet berries, which ripen like cocoa, and never in the End;
     bone meal does nothing on them, as on BTW's cocoa.
-- **Network.** The server and every client must run the same build of this port (network protocol 5, and
+- **Network.** The server and every client must run the same build of this port (network protocol 6, and
   the same set of BTW sound events). 1.3.0-alpha.3 clients and servers are refused. The server sends its
   food table to every client, so tooltips and stack sizes agree.
 - **Acacia, dark oak, mangrove and cherry are BTW woods** (#034). Their logs chew like BTW's, and they
@@ -786,7 +1026,7 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
   Explosions no longer reduce leaf drops. Mangrove leaves drop propagules.
 - **Beds let you sleep** (#037) through the night, with 1.20.1's rules and messages, and they still
   explode in the Nether and the End, whatever you hold; but a bed never sets the spawn point, day or
-  night. A bed spawn set before this version is used for one more respawn and then dropped. BTW's
+  night. A bed spawn set by an earlier version is no longer used (see the hardcore respawn below). BTW's
   hostile mobs within 8 blocks keep you awake, as Minecraft's do. The night skip moves BTW's clocks, the
   moon phase and gloom nights (and Serene Seasons' calendar) on, as in 1.20.1. Phantoms stay off. 4.B
   had no sleeping at all; this middle path is the maintainer's ruling.
@@ -813,6 +1053,132 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
   at BTW's grids.
 - **With Legendary Survival Overhaul**, LSO's sleep recovery now applies, since beds sleep (#031; not
   checked in a run).
+- **Villages are zombified, as in 4.B** (#048). In a survival world, the villagers of every newly
+  generated village are BTW villager zombies. They don't burn in daylight and never despawn.
+  - Throw a soul urn at one to cure it. A few minutes later it becomes a villager you can trade with, of
+    the same trade as its house (a farmer comes out dirty).
+  - Villages near the world spawn are abandoned. Within 2250 blocks (9000 on Large Biomes) almost nobody
+    lives there, now and then a lone farmer. Between 2250 and 3000 blocks (9000 and 12000), only
+    farmers, blacksmiths and butchers.
+  - Creative worlds keep villagers. Villages that were already generated are not changed; villages
+    placed with `/place structure` follow the same rule.
+  - A villager's trade now comes from the job block of its house (a lectern makes a librarian, a brewing
+    stand a priest, and so on). It used to be random.
+  - By the maintainer's rulings, as in 4.B, new villages have no iron golem and there are no zombie
+    sieges. Before, a village from a world you played before this port, or one with another mod's
+    villagers, could still be attacked by 20 zombies at midnight.
+- **Respawning follows BTW 4.B's hardcore respawn** (#054). Dying no longer brings you back at the world
+  spawn: you respawn at a random spot 1000 to 2000 blocks from the world's original spawn. The distance
+  grows to 1.5 times once a Nether portal has been lit, 2 times after a Wither has been summoned and 4
+  times once an End portal exists, and it is 4 times again on Large Biomes worlds. The spot is never in
+  water or lava, and never outside the world border.
+  - If you die again within a day of getting that spot, you come back near it, but with half health and
+    one food pip less (never below two). Until a Nether portal is lit, players who die within a day of
+    each other respawn together. A night you sleep through counts toward that day. In singleplayer, each
+    new respawn spot starts the next morning and ends a thunderstorm, as in 4.B.
+  - Leaving the End takes you to the original spawn, as in 4.B, and keeps your respawn point for your
+    next death.
+  - A charged respawn anchor in the Nether, `/spawnpoint` and a bound soulforged steel beacon (see the
+    beacon below) still decide where you respawn. A beacon gives 4.B's messages when it is gone, too far
+    or blocked, and you can rebind right after dying. A bed spawn set by an earlier version is no longer
+    used.
+  - By the maintainer's ruling this applies in every game mode, to players switched to Creative or
+    Spectator too, except in a world created in Creative mode (one whose default game mode is Creative).
+    There you respawn as in Minecraft: at your respawn anchor, `/spawnpoint` or bound beacon, otherwise
+    at the world spawn. Changing the world's default game mode (`/defaultgamemode`, or `gamemode` in
+    `server.properties`) changes this from the next death.
+  - In creative worlds BTW's own creative-world rules now apply, as in 4.B: animals are never
+    possessed, BTW mobs drop no arcane scrolls (Minecraft's mobs already did not), possessed cows give
+    stillbirths instead of mutant calves, trading does not level villagers up, and rotten flesh no
+    longer infects wolves or turns them dire.
+  - On an existing survival world, the first death after updating already uses the new respawn.
+- **The beacon works as in BTW 4.B** (#053). The block its pyramid is made of decides what it does: gold
+  gives haste, diamond Fortune, emerald Looting (mobs that die near it drop more, too), lapis True
+  Sight, glowstone night vision, hellfire blocks fire resistance and a ring of fire, iron a strong
+  magnetic field, glass nothing (decoration), dung blocks a sickening cloud, and ender blocks draw
+  endermen around it (silverfish in the End). A soulforged steel beacon binds your respawn (see above).
+  The pyramid must be one kind of block. The beacon menu is gone, and so are its Speed, Resistance, Jump
+  Boost, Strength and Regeneration powers: a beacon built before this version gives its BTW effect
+  instead of the power chosen in the menu, and a pyramid of netherite or of mixed blocks gives none. A
+  beacon's range is a column: it reaches players at any height inside its range. It plays BTW's sounds
+  when it powers up or down (a wither's cry); a working beacon still hums and shows its beam.
+  - Compasses point at the strongest magnetic field around you: the world spawn, or a powered beacon
+    (iron and soulforged steel pull twice as hard). In the Nether and the End they spin unless a beacon
+    is near. A lodestone compass still points at its lodestone.
+  - Effects from beacons, the mill stone, starving, nearly dying and the gloom show as ambient effects
+    (faint particles, a framed icon), as in 4.B.
+  - In the End, and above the Nether's ceiling, BTW sees the open sky as 4.B did: beacons work there,
+    flowers survive under the open sky, and fishing under the open sky can get bites.
+- **Stone gets harder with depth, as in BTW 4.B** (#050). Below y=48 it takes longer to mine and a stone
+  pickaxe only cracks it; below y=24, the whole deepslate layer included, only a diamond or soulforged
+  steel pickaxe mines it properly, and an iron pickaxe only cracks it and wears it down. Ores in those
+  layers are harder too; a pickaxe good enough for the ore but not for the rock knocks the ore loose and
+  leaves rough stone. Explosions also break less rock down there. This applies in the Overworld, and to
+  existing worlds at once (CF2-PR-DEEP). By the maintainer's rulings depth alone decides: stone you
+  place or make deep down is as hard as the rock around it (in 4.B only generated rock was), and
+  granite, diorite, andesite, tuff and calcite stay Minecraft blocks, as soft at any depth.
+  - Deepslate is BTW's deep stone: it mines like the deepest stone, drops BTW's loose cobblestone,
+    stones and gravel, and is a hard surface to walk on, like stone. Cobbled deepslate is BTW
+    cobblestone, and it no longer smelts into deepslate. The deepslate ores are BTW ores: iron and gold
+    give ore chunks, and they drop no experience. Polished deepslate, deepslate bricks and tiles stay
+    decorative Minecraft blocks, found in structures such as ancient cities.
+  - Raw iron and raw gold count as BTW's iron and gold ore chunks: they cook into nuggets in BTW's oven
+    or a furnace, and no Minecraft recipe turns them, or a deepslate ore, into an ingot. A block of raw
+    iron or gold unpacks into nine BTW chunks. Raw ore you put through a BTW container or machine comes
+    back as BTW's chunk, and using raw ore on a block places a chunk on it, as BTW's chunks do. Nether
+    gold ore no longer smelts into a gold ingot; its drops stay Minecraft's (CF2-PR-ORE).
+  - Fortune gives more ore chunks, coal, diamonds, emeralds and lapis from BTW's ores, as in 4.B.
+- **Explosion drops follow BTW's rules** (#049; see Fixed). By the maintainer's ruling Minecraft's
+  explosion drop gamerules decide for BTW blocks too, and new worlds start with `tntExplosionDropDecay`
+  true: TNT drops one in four of the blocks it breaks (4.B's rule: the bigger the explosion, the fewer
+  blocks it drops). Use `/gamerule tntExplosionDropDecay false` for Minecraft's rule. Existing worlds
+  keep their setting; use `/gamerule tntExplosionDropDecay true` there for 4.B's rule. Ores broken by an
+  explosion you set off no longer drop experience (BTW gives no experience for breaking blocks), and the
+  items an explosion drops lie in stacks of up to 16, as in Minecraft.
+- **Acacia, dark oak, mangrove and cherry planks follow BTW's plank rule** (#051): break them with an
+  iron axe or better to keep them; anything else leaves sawdust. Their stairs now make 6 from 6 planks
+  (or 1 from 3 mouldings), two of their slabs make a plank again, and the saw cuts their stairs and
+  slabs. By the maintainer's ruling their Minecraft trapdoors stay craftable, so six of their planks
+  make trapdoors, not BTW fences; their BTW fences come from three mouldings.
+- **Bamboo blocks no longer craft into planks** (#052). By the maintainer's ruling bamboo follows BTW's
+  plank rule: saw a bamboo block (2 bamboo planks and a sawdust), or chop it with a BTW axe at a
+  crafting grid (iron or better: 1 plank and 1 sawdust; a wooden, stone or gold axe: 1 stick and 2
+  sawdust). Bamboo blocks still break by hand and give no bark.
+- **Cornflowers and lilies of the valley follow BTW's flower rules** (#045), like BTW's rose: they need
+  light or open sky and BTW's soils, and they pop otherwise. Wither roses and torchflowers keep
+  Minecraft's rules. The red tulip makes red dye at a crafting grid, as in Minecraft 1.20.1 (BTW read it
+  as a poppy, whose dye recipe 4.B removed). Villagers who want a particular kind of log take only that
+  kind, as in 4.B.
+- **What counts as a solid top follows BTW 4.B** (#061). Before BTW lets a redstone torch, a pressure
+  plate, a rail, snow, ash or fire rest on a block, it asks whether the block's top is solid. Minecraft
+  answered that; BTW's own rule answers it now, as in 4.B. Glass, glowstone, ice, TNT, pistons, redstone
+  lamps, beacons, the top half of a closed oak trapdoor, a full block of snow layers and BTW blocks that
+  4.B gives no solid top (light bulbs, the BTW hopper, mill stone, cauldron, crucible, bellows and
+  others) no longer count, though glass still holds a redstone torch, as in 4.B; top slabs,
+  upside-down stairs and solid blocks such as stone still count. Besides the attachments under Fixed:
+  - fire on top of such a block goes out at its next tick unless something next to it can burn;
+  - mushrooms can no longer be planted on, spread onto or stay on glass, ice, TNT, pistons, the top half
+    of a closed oak trapdoor or a BTW machine, stems grow no pumpkin or melon on them, and nether growth
+    does not spread onto them;
+  - a mining charge on top of a block stays stuck only where the top is solid (a top slab, not glass);
+  - endermen and silverfish drawn by an ender block beacon appear only on a solid top, and a bound
+    beacon respawns you only on one;
+  - a squid letting go of your head, and a tamed wolf or ocelot teleporting to you, land only on a solid
+    top.
+
+  The weighted pressure plates, the activator rail and the trapped chest, which 4.B removed, now count
+  as solid on top (see Known issues).
+- **Existing builds: attachments on blocks 4.B does not count as solid** (#040, #055, #061, #062). BTW
+  torches and other BTW attachments on glowstone, redstone lamps, doors, beds or BTW panes, and torches,
+  soul torches and ladders on the blocks listed under Fixed, drop at the next block change beside them.
+  So do standing redstone torches, snow, pressure plates and rails on the tops 4.B does not count as
+  solid (see above), pressure plates on Minecraft's newer fences, walls and stained glass panes,
+  torches, BTW candles and placed ore chunks on stained glass panes, and iron spikes on the arms of the
+  newer fences and walls. BTW grates, wicker panes and slats stop joining doors, beds and other kinds of
+  pane.
+- **You can aim at a falling block**, as in 4.B and Minecraft (#043).
+- **Other mods' block breakers.** Machines and fake players from other mods that break BTW stone, ores
+  or logs get BTW's conversion drops on the side facing them (they came out on top) (#044).
 - CurseForge description:
   - removed the "field manual" instruction;
   - filled in the issue tracker;
@@ -823,7 +1189,13 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
     fence-gate redstone, the newer woods, the 1.20.1 dyes and the anvil's repair menu; the Dynamic Trees
     notes follow the new log and leaf rules; "Sleep costs you" and the "Hardcore spawn, costly sleep,
     FC's death penalties" line are gone, since neither 4.B nor the port has costly sleep and the
-    hardcore respawn is not ported.
+    hardcore respawn was not ported then;
+  - updated it on 2026-10-28: the Known Differences now cover the zombified villages, the hardcore
+    respawn, the beacon, the stone strata with deepslate and raw ore, explosions, larger Nether portals,
+    soul torches, creative players and falling blocks saved in mid-air;
+  - updated it on 2026-11-03: the Known Differences now cover where torches, ladders, snow, pressure
+    plates and rails can go, and Minecraft's newer fences, walls, stained glass panes and pressure
+    plates following their BTW relatives, with the blocks that do not yet.
 
 ### Added
 - JEI: soulforge and campfire recipe categories, FC's special crafting recipes in the crafting
@@ -835,6 +1207,16 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
     warning) and the "Hardcore Modes" line, and then apply the server's player-names option.
 
   A one-time note per port version points to the issue tracker.
+- BTW sidings, mouldings, corners, benches, fences, columns, pedestals and tables of acacia, dark oak,
+  mangrove and cherry (#051). Their planks go through the saw like oak planks, and the saw keeps cutting
+  each piece down (planks, sidings, mouldings, corners, gears). As in 4.B, they are not in a creative
+  tab.
+- BTW's own particles as particle types: `betterthanwolves:white_smoke`, `white_cloud`, `small_flame`,
+  `cinders` and `snow_shovel`, ports of 4.B's (#042).
+- The beacon's 4.B effects as status effects: `betterthanwolves:fortune`, `looting` and `true_sight`
+  (#053).
+- The damage type `betterthanwolves:mob_attack_unblockable` (a BTW squid's bite, which ignores armour),
+  in `#minecraft:bypasses_armor` (#047).
 - BTW iron golem (`fc_iron_golem`) and silverfish (`fc_silverfish`) entity types, with their 1.5.2
   models. Before, they borrowed the vanilla villager and zombie types and turned into BTW villagers
   and zombies after a reload.
@@ -916,7 +1298,10 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
     `acacia`, `dark_oak`, `mangrove`, `cherry`) and `#betterthanwolves:bark/none` decide which bark a
     log BTW has no wood type for pays, or that it pays none; an untagged log pays oak bark (#034);
   - an integration can decide what its leaves drop under BTW's leaf rule with `LeafDrops.register`,
-    using Minecraft types only (#035).
+    using Minecraft types only (#035);
+  - `betterthanwolves:modern_log_chopping` recipes give a log BTW has no item for BTW's two plank
+    routes, the saw and an axe at a crafting grid, with their yields; BTW ships one for bamboo blocks
+    (#052).
 - Development tooling:
   - `tools/LinkAudit.java` checks the class precedence of the built jar and reports Minecraft class
     references in frozen BTW code;
@@ -951,7 +1336,22 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
     client jar it reads, and a missing input only warns;
   - the start-up self-audit also checks the four newer woods at legacy id 165 (`[SELF-AUDIT/wood]`), the
     beds and doors that take 1.20.1 drops (`[SELF-AUDIT/pairdrops]`) and which code owns each block hook
-    (`[SELF-AUDIT/hook]`).
+    (`[SELF-AUDIT/hook]`);
+  - the start-up self-audit also checks BTW's particle names (`[SELF-AUDIT/particles]`), the dig face
+    (`[SELF-AUDIT/digface]`), the blocks that keep their own kind (`[SELF-AUDIT/identity]`), the
+    creative-target rule and the squid's damage type (`[SELF-AUDIT/targets]`, `[SELF-AUDIT/damage]`),
+    explosions (`[SELF-AUDIT/blast]`), the strata (`[SELF-AUDIT/strata]`), the beacon
+    (`[SELF-AUDIT/fcbe]`), the hardcore respawn (`[SELF-AUDIT/hcspawn]`), BTW's view of Minecraft's
+    entities (`[SELF-AUDIT/views]`) and BTW's detector rails (`[SELF-AUDIT/rails]`);
+  - the start-up self-audit also counts the Minecraft fences, walls and stained glass panes that answer
+    as BTW's oak fence, cobblestone wall and glass pane, and the blocks that take another block's
+    attachment rule (`Support relatives: ...`), and warns about a Minecraft fence, wall or stained glass
+    pane that is neither a BTW block nor given a relative, and about an entry whose BTW block is missing
+    (#062);
+  - `composeLegacyIconTextures` (`Forge/gradle/legacy-icon-textures.gradle`, part of every build)
+    composes the cross texture of platform-lifted redstone wire from 1.20.1's own dust textures (no
+    1.5.2 art), and `deriveModernWoodTextures` now also derives the four newer woods' column sides
+    (`8 textures checked`).
 
 ### Known issues
 - **Mostly not checked on a client yet.** A dedicated server has been run on a fresh world three times
@@ -970,9 +1370,15 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
   (2026-10-15), the AppleSkin, Cold Sweat and LSO displays (2026-10-17), hold-to-craft (2026-10-18), and
   from 2026-10-19 to 2026-10-21 the item count after placing a block (also from a ladder and after
   death), windmill dyeing, sleeping through the night, the hand after a refused placement, and the newer
-  woods' textures and dig speed. No client has been run from a launcher install with the release jar,
-  and no release jar has been booted at all for the work of 2026-10-19 to 2026-10-21. Multiplayer is
-  untested too.
+  woods' textures and dig speed. From 2026-10-25 to 2026-10-28 development clients also checked the
+  breaking crack, BTW's particles, torch and ladder placement, falling blocks, drops from a dug block,
+  creative players and squid head crabs, the depth dig speed, the newer woods' decorative blocks, the
+  beacon, the hardcore respawn, the restored textures (the wicker pane, huge mushrooms, hopper filters,
+  blocks held by mobs) and a player on the soulforged steel plate and detector rail, and on 2026-11-03
+  torches, redstone torches and pressure plates placed while sneaking on the newer fences, walls and
+  stained glass panes. No client has been run from a launcher install with the release jar, and no
+  release jar has been booted at all for the work of 2026-10-19 to 2026-11-03. Multiplayer is untested
+  too.
 - **Re-entering a world.** No cause was found. It has not been tested whether a world now always
   shuts down cleanly and releases its `session.lock`. If a world will not open again, please report
   it with `logs/latest.log` and any crash report.
@@ -984,12 +1390,13 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
   decision (CT6). The blocks and items that 4.B removed or replaced (the vanilla hopper, comparator,
   chest, crafting table, cobweb, ladder, ...) are now hidden from the tabs (see Changed).
 - **BTW's own placement code is skipped in some cases.** When you place a block item while sneaking,
-  from the off hand, or against a block added after 1.5.2 (deepslate, tuff, ...) or a vanilla block
-  with its own right-click action, Minecraft's placement runs with BTW's facing and variant, but
-  without BTW's item-specific placement code: slabs do not join into a double slab, saplings ignore
-  BTW's soil rules, a burning torch does not light the block you click, and BTW's "cannot be placed
-  here" checks are not made (MISSED-1). Placing against any other block uses BTW's code, with 4.B's
-  placement checks since 2026-10-21.
+  from the off hand, or against a block added after 1.5.2 (tuff, copper ore, ...) or a vanilla block
+  with its own right-click action, Minecraft's placement runs with BTW's facing and variant, but without
+  BTW's item-specific placement code: slabs do not join into a double slab, saplings ignore BTW's soil
+  rules, a burning torch does not light the block you click, and BTW's "cannot be placed here" checks
+  are not made (MISSED-1). The support rules of torches, ladders, snow, ash, pressure plates and rails
+  apply either way (#055). Placing against any other block uses BTW's code, with 4.B's placement checks
+  since 2026-10-21.
 - **The enchanted golden apple cannot be crafted, and the golden apple costs 8 gold ingots.** In 4.B, 8
   gold nuggets make a golden apple and 8 gold blocks an enchanted one. The BTW workbench makes these
   Minecraft recipes in their 1.20.1 form, which has no enchanted golden apple. A 4.B recipe for it is a
@@ -1000,8 +1407,6 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
 - Waterlogged blocks (stairs, slabs, fences, ...) do not count as water for BTW: sugar cane whose only
   water is in waterlogged blocks breaks when a block next to it changes, and BTW farmland watered only
   by them dries out.
-- Huge mushrooms that grow from mushrooms on mycelium show placeholder textures. BTW's huge mushroom
-  blocks already lacked their textures; before this release, mushrooms never grew into them.
 - JEI's recipe and usage lookups (R and U) treat all variants of an item as one: looking up red knit
   wool shows the recipes of every knit wool colour (CI-3). The item list itself shows each variant.
 - The BTW chest's item shows as a planks-textured cube, and a few other BTW block items whose 1.5.2
@@ -1009,29 +1414,71 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
 - Chunk rebuilds in large BTW builds may be slower: many BTW building blocks (decorative blocks,
   slabs, sidings, mouldings, stairs) are now drawn from their live neighbours every time their chunk
   section is rebuilt. This has not been measured (RP-R2).
-- Some mob animations and effects are still missing: squid tentacle movement, the cow's kick, the
-  squid's tentacle attack, and villager and witch particles (R8).
-- BTW's Hardcore Buoy option has no effect: dropped items float as in 1.20.1. The "Obstructed"
-  player-names option hides only players' name tags behind walls, not named mobs'.
-- BTW mobs do not trigger pressure plates or tripwire, do not travel through nether or end portals,
-  and are not slowed by soul sand. Moving piston blocks are solid cubes to them (SW-M1).
+- Some mob animations and effects are still missing: squid tentacle movement, the animations of the
+  cow's kick and the squid's tentacle attack (both fling you since 2026-10-28), and villager and witch
+  particles (R8). Falling smouldering logs and burning netherrack give off no smoke while they fall:
+  particles of BTW's own moving objects are not drawn yet.
+- BTW's Hardcore Buoy option (`fcEnableHardcoreBuoy`) has no effect yet: dropped items float, and are
+  pushed out of blocks they are stuck in, as in Minecraft 1.20.1. The "Obstructed" player-names option
+  hides only players' name tags behind walls, not named mobs'.
+- BTW mobs press pressure plates (since 2026-10-28), but they do not trigger tripwire, do not travel
+  through nether or end portals, and are not slowed by soul sand. Moving piston blocks are solid cubes
+  to them (SW-M1).
+- The maintainer's rulings give Minecraft's newer pressure plates, fences, walls and stained glass panes
+  their BTW relative's support rules (#055, #062). The blocks below are not ruled yet and still answer
+  by their Minecraft shape, unlike their nearest BTW block (FU-REL-FAMILIES):
+  - fence gates other than oak: torches, soul torches and BTW candles stand on a closed one and pressure
+    plates go on it, where the oak fence gate refuses them; a redstone torch placed on a closed one
+    leaves your hand one short while the server refuses it;
+  - stained and tinted glass: pressure plates, snow, rails, ash and stakes go on top, and wall torches
+    and ladders hang on the sides, where glass refuses them all;
+  - packed and blue ice: pressure plates, rails, stakes and a standing redstone torch go on top (and
+    snow on blue ice), where ice refuses them;
+  - trapdoors other than oak, the iron one included: a closed one in the top half holds torches,
+    redstone torches, pressure plates, snow, rails, ash, stakes and BTW candles, and an open one holds
+    wall torches and ladders, where the oak trapdoor holds none of them;
+  - acacia, dark oak, azalea, flowering azalea, mangrove and cherry leaves: BTW torches and candles
+    cannot stand on them and BTW's snow and ash do not rest on them, as they do on oak leaves;
+  - wooden doors other than oak: wall torches and ladders hang on a closed one, not on the oak door.
+- BTW's ash above Minecraft's newer fences and walls is drawn on top of the post; above BTW's oak fence
+  and cobblestone wall it is drawn on the ground below, as in 4.B. By the maintainer's ruling this waits
+  for a follow-up (FU-REL-DRAW; #062).
+- Clicked without sneaking onto a block whose top 4.B does not count as solid, a powered rail is placed
+  and drops at once as an item, where 4.B refuses the click (FU-RAIL27; #055).
+- Snow that world generation lays on glass, TNT or a redstone lamp open to the sky in a snowy biome
+  (rare) is not refused; it goes when a block next to it changes (FU-WGSNOW; #055).
+- The tables in taiga and savanna village houses, a pressure plate on a fence, lose their plate when a
+  block next to it changes, as the oak tables of plains villages do: BTW's rule lets no plate stand on
+  a fence (#055, #062). A village placed with `/place structure` loses them at once.
+- A full block of snow layers (eight) is not a solid top: 4.B has no eight-layer snow, and its snow
+  cover holds nothing. A redstone torch, a pressure plate, a rail or another snow layer cannot be placed
+  on it (#055, #061).
+- The weighted pressure plates and the activator rail, which 4.B removed, have no BTW support rule:
+  placed with commands, they keep Minecraft's. BTW counts them and the trapped chest as solid blocks,
+  so BTW's own placement can stand a redstone torch, a pressure plate or a rail on one where Minecraft
+  would refuse it, and snow and fire can rest on one (#055, #061).
+- An attachment the server refuses on or next to some of Minecraft's newer blocks that have no BTW
+  relative can leave your hand one short until the next inventory update: for example a redstone torch
+  on a bell, a chain, a lightning rod or pointed dripstone, or a BTW torch or ladder placed while
+  sneaking beside such a block, such as a BTW torch on a stained glass pane next to one (#055, #062).
+- A squid on your head is drawn as a free squid, a little behind you when you move fast (#047).
+- In creative, a wild wolf you hit or feed wolf meat still turns hostile (to survival players), animals
+  still panic and endermen still scream, as in 4.B: by the maintainer's ruling only the targeting
+  changes (#046).
+- A block that falls for more than about 5 seconds and ends its fall below y=1 drops as an item. This is
+  4.B's rule for blocks falling into the void, which 1.20.1's deeper world can reach (#043).
 - Lightning does not charge BTW creepers or turn BTW pigs into zombie pigmen: Minecraft's lightning
   strikes are not passed to BTW mobs (HAI-M1).
 - The vanilla bow fires Minecraft's arrows and draws with arrows from anywhere in the inventory. 4.B
   fired BTW arrows, from the hotbar only. BTW's arrow code runs only for rotten arrows and for the
   composite bow.
-- When BTW stores or changes items that 1.20.1 split into separate items, some come back as their
-  1.5.2 equivalent:
-  - smooth sandstone becomes cut sandstone;
-  - stone slabs become smooth stone slabs;
-  - blue orchids, tulips, wet sponge and coloured beds collapse the same way (a broken bed keeps its
-    colour since 2026-10-20, when beds began to drop as in 1.20.1);
-  - at the BTW workbench this means: the blue orchid, azure bluet, oxeye daisy, allium and tulip dyes
-    and the flower banner pattern make nothing; a dyed bed comes out red; and smooth sandstone slabs and
-    stairs and stone slabs come out as cut sandstone slabs, sandstone stairs and smooth stone slabs;
-  - the same collapse reaches placed flowers: a blue orchid, allium, azure bluet, tulip or oxeye daisy
-    drops a poppy when it is broken or pops, and one placed without sneaking against a block BTW handles
-    becomes a poppy (CF2-DR3, CF2-P8c).
+- When BTW stores or places items that 1.20.1 split into separate items, some still come back as their
+  1.5.2 equivalent: smooth sandstone becomes cut sandstone; stone slabs become smooth stone slabs; wet
+  sponges become dry sponges; carved pumpkins become pumpkins; coloured beds held by BTW come back red
+  (a broken bed keeps its colour). At the BTW workbench, smooth sandstone slabs and stairs and stone
+  slabs come out as cut sandstone slabs, sandstone stairs and smooth stone slabs, and a dyed bed comes
+  out red. Other split items, such as flowers, wool colours and wooden slabs, keep their kind since
+  2026-10-28 (#045).
 - BTW's own items can only be used from the main hand.
 - Minecraft water can wash away BTW vine traps and placed buckets, which 1.5.2 protected.
 - Right-click order (#033): a few blocks that have their own 1.20.1 right-click act before the held BTW
@@ -1042,46 +1489,52 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
   Minecraft's own use of the item can still run: flint and steel lights a fire while you are in mid-air,
   where 4.B refuses. With an empty main hand, a sneak-click with an item in the off hand does not
   activate the block (1.20.1's rule; 4.B activates it).
-- Placement (#040): glass counts as a full block for BTW's placement, so a tripwire hook can be hung on
-  glass, which 4.B refuses. Stairs placed without sneaking against a block BTW handles (oak stairs on
-  stone, for example) face the wrong way round, and oak trapdoors placed that way always sit in the
-  lower half and face by your look, not by the side you clicked. A tripwire hook placed through BTW's
-  code shows as attached only after a block next to it changes. Placements through BTW's code post no
-  block-place event, so other mods that watch placements do not see them. Other mods' block placers that
-  act as a fake player can be refused against blocks BTW handles, because 4.B's mid-air rule sees them
-  as airborne (Create's deployer is not affected); the maintainer ruled on 2026-10-20 to keep the rule
-  for them.
+- Placement (#040): stairs placed without sneaking against a block BTW handles (oak stairs on stone, for
+  example) face the wrong way round, and oak trapdoors placed that way always sit in the lower half and
+  face by your look, not by the side you clicked. A tripwire hook placed through BTW's code shows as
+  attached only after a block next to it changes. Placements through BTW's code post no block-place
+  event, so other mods that watch placements do not see them. Other mods' block placers that act as a
+  fake player can be refused against blocks BTW handles, because 4.B's mid-air rule sees them as
+  airborne (Create's deployer is not affected); the maintainer ruled on 2026-10-20 to keep the rule for
+  them.
 - A door whose top half burns first may drop itself (1.20.1; 4.B dropped nothing).
 - Dyes stored in BTW containers before this update read back as the 4.B items: white dye as bone meal,
   and black, brown and blue dye as the ink sac, cocoa beans and lapis lazuli. A world opened again in an
   older build does not read the dyes that this build stored correctly.
-- In the 2x2 grid, BTW's colour recipes accept a candle, wool, vase or wool slab of any colour, where
-  4.B needs the white one. This is older than this update, which adds the three 1.20.1 dyes to those
-  recipes.
-- The newer woods have no BTW sidings, mouldings or corners yet (approved as a follow-up, FU-W1).
-  Crimson and warped stems chew into BTW's chewed log, which looks like oak, as every chewed log does in
-  4.B. Acacia logs stored by BTW before this update do not stack with new ones until they pass through a
-  Minecraft inventory. The newer woods' work stumps use textures made from Minecraft's at build time, so
-  resource packs do not change them (their bark items do follow resource packs).
-- Right-clicking a note block, furnace, ender chest or beacon runs Minecraft's own action, and breaking
-  an ender chest or beacon runs Minecraft's own break, until BTW's block entities are bridged.
-- BTW 4.B's random hardcore respawn is not ported. With beds no longer setting the spawn, you respawn at
-  the world spawn, or at a charged respawn anchor (CF2-U1-HS).
+- Spruce, birch and jungle trapdoors cannot be crafted: BTW's fence recipe takes the same grid (BTW's
+  own trapdoor recipe works with any planks). Crimson and warped stems chew into BTW's chewed log, which
+  looks like oak, as every chewed log does in 4.B. Acacia logs stored by BTW before this update do not
+  stack with new ones until they pass through a Minecraft inventory. The newer woods' work stumps and
+  column sides use textures made from Minecraft's at build time, so resource packs do not change them
+  (their bark items do follow resource packs).
+- Right-clicking a note block, furnace or ender chest runs Minecraft's own action, and breaking an ender
+  chest runs Minecraft's own break, until BTW's block entities are bridged. So ender chests open your
+  personal ender inventory, as in Minecraft. By the maintainer's ruling, 4.B's ender chest tiers, which
+  depend on an ender block beacon, are queued as their own update.
+- The beacon (#053): True Sight shows no spawn particles yet. Fortune from a beacon does not reach
+  blocks BTW does not know, such as copper ore. Other players' compasses, and compasses in item frames,
+  point at the world spawn.
+- The hardcore respawn (#054): BTW's day is Minecraft's day clock, so with the daylight cycle turned off
+  the one-day windows never end. On very slow world generation a respawn can fall back to the world
+  spawn (servers can raise `-Dbtw.hardcoreRespawn.budgetMs`, 3000 by default). 4.B's mystery-meat drop
+  on a player's death is not ported. The singleplayer morning skip is not covered by the scripted tests,
+  which run on a dedicated server.
+- Explosions (#049): TNT set off by another explosion goes off as Minecraft TNT, because BTW's own lit
+  TNT is not ported yet. Chests, furnaces and other blocks that hold contents, beds and doors, and the
+  1.20.1 flower and stone variants keep Minecraft's explosion rule. Blasted infested stone still
+  releases silverfish, and blasted nether quartz ore still gives experience.
+- The strata (#050): deeper stone and ores look the same as surface stone; 4.B drew them darker, and a
+  texture update is queued. Other mods' recipes can still turn raw iron and raw gold into ingots: only
+  Minecraft's are removed.
 - BTW's own code learns of a `/difficulty` change only at the next player tick, and not at all while no
   player is online; until then BTW's mobs go by the old difficulty.
-- Other problems from the 2026-10-19 CurseForge comment are still open: a falling block shows as an
-  orange outline until it lands (CF2-R1); the cobweb's breaking crack looks stretched (CF2-R3); loose
-  snow slabs give off long-lived campfire smoke instead of 4.B's faint wisps (CF2-R5b); items from a
-  broken block can shoot out in odd directions (CF2-DR2); a mining charge drops nothing from the blocks
-  it destroys, beds and doors aside (CF2-DR5); and deepslate and raw ores work as in plain 1.20.1
-  (CF2-PR-DEEP, CF2-PR-ORE). The triage gives the status of each.
 - Hunger costs that still differ from 4.B:
   - food poisoning (the hunger effect) drains a fifth of 4.B's hunger: 1.20.1 charges 0.005 exhaustion
     per tick and level, 1.5.2 charged 0.025;
   - breaking a block added after 1.5.2 costs 0.005, a fifth of 4.B's 0.025. That includes the bark and
     stripped forms of BTW's woods, crimson and warped stems and other mods' logs. BTW's own blocks, the
-    four newer woods' logs (since 2026-10-20) and beds and doors (which now break as in 1.20.1) cost
-    4.B's amount;
+    four newer woods' logs (since 2026-10-20), deepslate and the deepslate ores (since 2026-10-28) and
+    beds and doors (which now break as in 1.20.1) cost 4.B's amount;
   - a jump onto a ladder costs a jump's hunger, which 4.B did not charge;
   - with only your feet in water, BTW blocks already mine at the under-water speed (4.B slowed mining
     only with your head under water).
@@ -1123,7 +1576,9 @@ Most of these restore BTW 4.B behaviour, but players will notice them.
   - BTW sounds pitched above 2.0 (the wet cement's moan, fizzing) are capped at 2.0 by 1.20.1;
   - some BTW sounds have a generic subtitle or none: hitting a BTW block reads "Footsteps", BTW's
     creaking machinery reads "Chest opens";
-  - in water, soulforged boots do not change 1.20.1's swimming sounds.
+  - in water, soulforged boots do not change 1.20.1's swimming sounds;
+  - BTW mobs walking on deepslate sound like stone;
+  - the target outline of a falling block sits about half a block above the block.
 
 ## [1.3.0-alpha.3] - 2026-07-09
 

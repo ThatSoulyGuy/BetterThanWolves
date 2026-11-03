@@ -16,6 +16,50 @@ public class BlockPistonBase extends Block {
         return (metadata & 8) != 0;
     }
 
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockPistonBase's icon members (vanilla/client
+    // BlockPistonBase.java:24-42, :59-93): registerIcons fills the side icon and the public top, inner-top and bottom
+    // fields that FCBlockPistonBase.getIcon reads (Client FCBlockPistonBase.java:500-524); they were never assigned,
+    // so a held piston drew two faces with no texture and the others with the unlocalized "pistonBase", which names
+    // no texture. FCBlockPistonBase (29, 33) answers getIcon itself.
+    public Icon getPistonExtensionTexture() {
+        return this.topIcon;
+    }
+
+    // 1.5.2 BlockPistonBase.getIcon (vanilla/client BlockPistonBase.java:72-76); Block's icon until registerIcons runs
+    // (client only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.topIcon == null || this.innerTopIcon == null || this.bottomIcon == null) {
+            return super.getIcon(side, metadata);
+        }
+        int facing = getOrientation(metadata);
+        return facing > 5 ? this.topIcon
+                : (side == facing ? (!isExtended(metadata) && this.minX <= 0.0D && this.minY <= 0.0D
+                        && this.minZ <= 0.0D && this.maxX >= 1.0D && this.maxY >= 1.0D && this.maxZ >= 1.0D
+                        ? this.topIcon : this.innerTopIcon)
+                : (side == Facing.oppositeSide[facing] ? this.bottomIcon : this.blockIcon));
+    }
+
+    // 1.5.2 BlockPistonBase.func_94496_b (vanilla/client BlockPistonBase.java:78-81): Block.pistonBase's or
+    // Block.pistonStickyBase's icons by name (compared by value; 1.5.2's callers pass these literals)
+    public static Icon func_94496_b(String name) {
+        BlockPistonBase piston = Block.pistonBase;
+        BlockPistonBase sticky = Block.pistonStickyBase;
+        return "piston_side".equals(name) ? (piston != null ? piston.blockIcon : null)
+                : ("piston_top".equals(name) ? (piston != null ? piston.topIcon : null)
+                : ("piston_top_sticky".equals(name) ? (sticky != null ? sticky.topIcon : null)
+                : ("piston_inner_top".equals(name) ? (piston != null ? piston.innerTopIcon : null) : null)));
+    }
+
+    // 1.5.2 BlockPistonBase.registerIcons (vanilla/client BlockPistonBase.java:87-93)
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.blockIcon = register.registerIcon("piston_side");
+        this.topIcon = register.registerIcon(this.isSticky ? "piston_top_sticky" : "piston_top");
+        this.innerTopIcon = register.registerIcon("piston_inner_top");
+        this.bottomIcon = register.registerIcon("piston_bottom");
+    }
+
     public void updatePistonState(World world, int i, int j, int k) {}
     public boolean canExtend(World world, int i, int j, int k, int facing) { return false; }
     public boolean tryExtend(World world, int i, int j, int k, int facing) { return false; }
@@ -41,5 +85,22 @@ public class BlockPistonBase extends Block {
     public void onBlockPlacedBy(World world, int x, int y, int z, EntityLiving placer, ItemStack stack) {
         int facing = determineOrientation(world, x, y, z, placer);
         world.setBlockMetadataWithNotify(x, y, z, facing);
+    }
+
+    // 1.5.2 BlockPistonBase.getRenderType / isOpaqueCube / renderAsNormalBlock (vanilla/client
+    // BlockPistonBase.java:98-110, :373-376). FCBlockPistonBase (29, 33) overrides none of them.
+    @Override
+    public int getRenderType() {
+        return 16;
+    }
+
+    @Override
+    public boolean isOpaqueCube() {
+        return false;
+    }
+
+    @Override
+    public boolean renderAsNormalBlock() {
+        return false;
     }
 }

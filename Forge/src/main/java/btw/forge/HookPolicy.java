@@ -13,6 +13,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.DetectorRailBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FallingBlock;
@@ -69,8 +70,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * TileEntityBridge WorldBridge hands it (WorldBridge.getBlockTileEntity, WorldBridge.java:1002); (4) RULED and ADAPTER
  * rows, permanent: VANILLA; (5) PENDING metadata prerequisites: VANILLA until the codec lands (staging like
  * TickPolicy.PENDING); (6) EQUIVALENT: NOTIFY; (7) the general rule: FC iff the 1.20.1 class overrides the hook and
- * the runtime FC class declares it in FC code (below btw.modern), else NOTIFY. RESIST is left UNDECIDED (Phase 5,
- * explosions).</p>
+ * the runtime FC class declares it in FC code (below btw.modern), else NOTIFY. RESIST (explosions, fc_blast_rules) is
+ * decided before them: FC when the runtime FC class declares the positional getExplosionResistance(Entity, World, int,
+ * int, int) in FC code (FCBlockStone, FCBlockOre: the strata; ExplosionDamageCalculatorMixin answers it to 1.20.1's
+ * explosion rays), else NOTIFY (BlockMixin's position-less lookup).</p>
  *
  * <p><b>Rebalance:</b> rows, each from a ruling or 4.B:</p>
  * <ul>
@@ -136,7 +139,10 @@ public final class HookPolicy {
     public static final int STEP = 7;
     /** fallOn -&gt; onFallenUpon. */
     public static final int FALL = 8;
-    /** getExplosionResistance: left {@link #UNDECIDED} until Phase 5 (explosions); BlockMixin keeps its lookup. */
+    /**
+     * getExplosionResistance: FC when FC's class reads its position for it (ExplosionDamageCalculatorMixin, via
+     * BlastRules.positionalResistance), else NOTIFY (BlockMixin's position-less lookup).
+     */
     public static final int RESIST = 9;
     public static final int HOOKS = 10;
 
@@ -170,7 +176,7 @@ public final class HookPolicy {
      * @param fcId   legacy id of the state's FC block
      * @param owners the packed owners, read with {@link #owner(int)}
      * @param rules  the rule that decided each hook (general, removed(T1), te-guard, RULED(n), ADAPTER(..),
-     *               pending:.., equivalent:.., phase5); for the self-audit
+     *               pending:.., equivalent:.., positional, lookup); for the self-audit
      */
     public record Decision(int fcId, int owners, String[] rules) {
 
@@ -203,7 +209,8 @@ public final class HookPolicy {
     public static final Map<Integer, Integer> EXPECTED_FC = Map.of(
             145, 1 << USE,       // ANVIL, CHIPPED_ANVIL, DAMAGED_ANVIL (Client FCBlockAnvil.java:134-150)
             86, 1 << PLACE,      // CARVED_PUMPKIN (Common FCBlockPumpkinCarved.java:39-43)
-            91, 1 << PLACE);     // JACK_O_LANTERN (Client FCBlockJackOLantern.java:54-64)
+            91, 1 << PLACE,      // JACK_O_LANTERN (Client FCBlockJackOLantern.java:54-64)
+            138, 1 << USE);      // BEACON: FCBlockBeacon.onBlockActivated (Client FCBlockBeacon.java:69-113), fc_beacon ruling 2026-10-21
 
     // ================================================================
     // Decision
@@ -229,12 +236,14 @@ public final class HookPolicy {
             int owner;
             String rule;
             if (h == RESIST) {
-                owner = UNDECIDED;
-                rule = "phase5";
+                // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: 4.B's doExplosionA reads the positional overload (vanilla/server Explosion.java:107-108)
+                boolean positional = fcDeclaresPositionalResistance(fc.getClass());
+                owner = positional ? FC : NOTIFY;
+                rule = positional ? "positional" : "lookup";
             } else if (removed != null) {
                 owner = VANILLA;
                 rule = removed;
-            } else if ((h == USE || h == REMOVE) && isTeGuarded(fc)) {
+            } else if ((h == USE || h == REMOVE) && isTeGuarded(block, fc)) {
                 owner = VANILLA;
                 rule = "te-guard";
             } else if ((rule = ruledRule(block, h)) != null) {
@@ -273,6 +282,17 @@ public final class HookPolicy {
         return fc instanceof btw.modern.BlockContainer;
     }
 
+    /**
+     * Rule 3 for a cell of {@code mc}: the class guard above, lifted for a block whose 1.20.1 block entity carries FC's
+     * tile entity ({@link FcBackedBlockEntities#backs}: the beacon), because WorldBridge then hands FC its own tile
+     * entity; rules 4-7 decide. The hook rule (decide, BlockBehaviorMixin's REMOVE and USE executors) uses this one; the
+     * one-argument form keeps the class meaning ("FC's block expects a tile entity") for other readers.
+     */
+    // FCMOD-INTEGRATION(1.20.1): fc_beacon: the block-entity guard lifts for FC-backed block entities
+    public static boolean isTeGuarded(Block mc, btw.modern.Block fc) {
+        return isTeGuarded(fc) && !FcBackedBlockEntities.backs(mc);
+    }
+
     /** Rule 4, permanent rows (P4 never flips them): rulings 3, 4 and vanilla_pair_drops, and the two adapters. */
     private static String ruledRule(Block block, int hook) {
         if (hook == USE && block instanceof BedBlock) return "RULED(3)";
@@ -297,7 +317,6 @@ public final class HookPolicy {
                 default: return null;
             }
         }
-        if (hook == INSIDE && id == 28) return "pending:rail-metadata";   // Client FCBlockDetectorRail.java:48
         return null;
     }
 
@@ -316,6 +335,10 @@ public final class HookPolicy {
         if (block instanceof FallingBlock && hook == PLACE) return "equivalent:falling";
         // the lamp's timing is equal; its notify is P3(iv)
         if (block instanceof RedstoneLampBlock && hook == NEIGHBOR) return "equivalent:lamp";
+        // FCMOD-INTEGRATION(1.20.1): fc_redstone: FCBlockDetectorRail's contact body (Client FCBlockDetectorRail.java:42-52)
+        // is DetectorRailBlock.entityInside with FC's cart rule, which DetectorRailBlockMixin gives 1.20.1's own check; the
+        // rail metadata codec (WorldBridge) lets FC read the result (28, and BTW's 235 and 236, FcDetectorRailBlock)
+        if (block instanceof DetectorRailBlock && hook == INSIDE) return "equivalent:detector-rail";
         return null;
     }
 
@@ -463,7 +486,9 @@ public final class HookPolicy {
     public static InteractionResult runFcOwnedUse(BlockState state, ServerLevel sl, Player player, InteractionHand hand,
                                                   BlockHitResult hit) {
         if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
-        if (player.isSecondaryUseActive() && player.getMainHandItem().isEmpty() && player.getOffhandItem().isEmpty()) {
+        // FCMOD-INTEGRATION(1.20.1): fc_beacon: an FC-backed block has no 1.20.1 activation left to fall back to; 4.B activated it on an empty-handed sneak (vanilla/server ItemInWorldManager.java:380)
+        if (player.isSecondaryUseActive() && player.getMainHandItem().isEmpty() && player.getOffhandItem().isEmpty()
+                && !FcBackedBlockEntities.backs(state.getBlock())) {
             return null;
         }
         btw.modern.Block fc = ProxyRegistry.getFcBlock(state.getBlock());
@@ -520,7 +545,9 @@ public final class HookPolicy {
                         btw.modern.Entity.class}}},
                 {{"onFallenUpon", new Class<?>[]{btw.modern.World.class, int.class, int.class, int.class,
                         btw.modern.Entity.class, float.class}}},
-                {{"getExplosionResistance", new Class<?>[]{btw.modern.Entity.class}}},
+                {{"getExplosionResistance", new Class<?>[]{btw.modern.Entity.class}},
+                        {"getExplosionResistance", new Class<?>[]{btw.modern.Entity.class, btw.modern.World.class,
+                                int.class, int.class, int.class}}},
         };
     }
 
@@ -602,6 +629,14 @@ public final class HookPolicy {
     /** True when the runtime FC class declares the hook (any of its 1.5.2 methods) in FC code, below btw.modern. */
     public static boolean fcDeclares(Class<?> fcClass, int hook) {
         return ((declareMask(fcClass) >>> (hook * 3)) & 7L) != 0;
+    }
+
+    /**
+     * True when the runtime FC class declares the positional getExplosionResistance(Entity, World, int, int, int) in
+     * FC code (RESIST sub-method 1 of {@link FcSigs}): FCBlockStone and FCBlockOre read the strata there.
+     */
+    public static boolean fcDeclaresPositionalResistance(Class<?> fcClass) {
+        return ((declareMask(fcClass) >>> (RESIST * 3 + 1)) & 1L) != 0;
     }
 
     private static long overrideMask(Class<?> start) {

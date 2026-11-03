@@ -80,8 +80,11 @@ public abstract class World implements IBlockAccess {
 
     public abstract TileEntity getBlockTileEntity(int x, int y, int z);
 
+    // 1.5.2 (FCMOD) World.isBlockNormalCube (vanilla/server World.java:2538-2553): the block's own IsNormalCube.
     public boolean isBlockNormalCube(int x, int y, int z) {
-        return Block.isNormalCube(getBlockId(x, y, z));
+        int id = getBlockId(x, y, z);
+        Block block = id > 0 && id < Block.blocksList.length ? Block.blocksList[id] : null;
+        return block != null && block.IsNormalCube(this, x, y, z);
     }
 
     // 1.5.2 World.isBoundingBoxBurning (FCMOD Entity overload, vanilla/server World.java:2112) —
@@ -820,6 +823,17 @@ public abstract class World implements IBlockAccess {
 
     public abstract boolean doesBlockHaveSolidTopSurface(int i, int j, int k);
 
+    /**
+     * FCMOD-INTEGRATION(1.20.1): support_relatives. The id a support question compares with block ids reads at the cell:
+     * {@link #getBlockId}, unless the backend counts the cell's block as a BTW relative for support questions
+     * (btw.forge.WorldBridge and ClientFcWorld's support view: a modern fence, wall or stained glass pane reads as the oak
+     * fence, the cobblestone wall or the glass pane). Asked only by 1.5.2 BlockTorch.canPlaceTorchOn's id list; 4.B's and
+     * FC's code never call it.
+     */
+    public int getSupportBlockId(int x, int y, int z) {
+        return getBlockId(x, y, z);
+    }
+
     // --- World access ---
 
     public void addWorldAccess(IWorldAccess worldAccess) {}
@@ -885,13 +899,25 @@ public abstract class World implements IBlockAccess {
     }
 
     /**
-     * Port hook (vanilla_pair_drops; also the seam the collapsed-identity rule, triage CF2-DR3 (b), extends): true when
+     * Port hook (vanilla_pair_drops; the collapsed-identity rule has its own seam, {@link #ResolveModernSelfDrop}): true when
      * the live block at (x, y, z) owns the loot FC would drop there as {@code blockID} (a bed or door that 1.20.1 breaks
      * and drops), so FC's drop entry points (Block.dropBlockAsItemWithChance, Block.DropItemsOnDestroyedByExplosion)
      * drop that block's loot through {@link #DropModernBlockLoot}. Base worlds have no live block: false.
      */
     public boolean UsesModernBlockLoot(int x, int y, int z, int blockID) {
         return false;
+    }
+
+    /**
+     * Port hook (collapsed_identity, triage CF2-DR3): the stack an FC block's drop at (x, y, z) becomes
+     * (Block.dropBlockAsItem_do). When {@code stack} is the dropping block's own item and its subtype lost the
+     * identity of the 1.20.1 block there (an oxeye daisy drops FC 38:0, which reads as the poppy; orange wool drops
+     * 35:0, white wool; wet sponge 19:0, the sponge), the bridge answers that block's own item: its FC stack when FC
+     * can hold it, or null after dropping the 1.20.1 item itself. Base worlds have no 1.20.1 block: the stack,
+     * unchanged.
+     */
+    public ItemStack ResolveModernSelfDrop(int x, int y, int z, int blockID, ItemStack stack) {
+        return stack;
     }
 
     // 1.5.2 World.setItemData/loadItemData/getUniqueDataId (vanilla/server World.java:3873-3894) —

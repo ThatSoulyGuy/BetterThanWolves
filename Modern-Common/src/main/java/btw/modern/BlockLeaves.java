@@ -103,4 +103,39 @@ public class BlockLeaves extends Block {
     public boolean canSilkHarvest() {
         return true;
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockLeaves' icon members (vanilla/client BlockLeaves.java:23-25,
+    // :352-355, :390-401): a fancy and a fast (opaque) set of oak, spruce, birch and jungle leaves, by species.
+    // FCBlockLeaves (18) inherits both; a held leaves block drew Block's default, the unlocalized "leaves" (oak),
+    // for every species. iconType stays 0, the fancy set: nothing in the port calls 1.5.2's setGraphicsLevel, which
+    // also wrote the opacity this class answers from the server (ruling Q-R2 (a)). Both sets name the same 1.20.1
+    // sprites.
+    public static final String[][] field_94396_b = new String[][] {
+            {"leaves", "leaves_spruce", "leaves", "leaves_jungle"},
+            {"leaves_opaque", "leaves_spruce_opaque", "leaves_opaque", "leaves_jungle_opaque"}};
+    private int iconType;
+    private Icon[][] iconArray = new Icon[2][];
+
+    // 1.5.2 BlockLeaves.getIcon (vanilla/client BlockLeaves.java:352-355); Block's icon until registerIcons runs
+    // (client only)
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        Icon[] icons = this.iconArray[this.iconType];
+        if (icons == null) {
+            return super.getIcon(side, metadata);
+        }
+        return (metadata & 3) == 1 ? icons[1] : ((metadata & 3) == 3 ? icons[3] : icons[0]);
+    }
+
+    // 1.5.2 BlockLeaves.registerIcons (vanilla/client BlockLeaves.java:390-401)
+    @Override
+    public void registerIcons(IconRegister register) {
+        for (int set = 0; set < field_94396_b.length; ++set) {
+            Icon[] icons = new Icon[field_94396_b[set].length];
+            for (int i = 0; i < icons.length; ++i) {
+                icons[i] = register.registerIcon(field_94396_b[set][i]);
+            }
+            this.iconArray[set] = icons;
+        }
+    }
 }

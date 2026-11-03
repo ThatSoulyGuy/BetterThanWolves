@@ -25,4 +25,10 @@ public class BlockLever extends Block {
     public boolean renderAsNormalBlock() {
         return false;
     }
+
+    // 1.5.2 BlockLever.getRenderType (vanilla/client BlockLever.java:54-57). FCBlockLever (69) does not override it.
+    @Override
+    public int getRenderType() {
+        return 12;
+    }
 }

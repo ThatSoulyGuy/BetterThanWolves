@@ -43,6 +43,12 @@ public final class BridgeSelfAudit {
         auditThermalTable();
         // FCMOD-INTEGRATION(1.20.1): modern_woods: log2 FCBlockLog at 165, both mappings, bark and work-stump textures
         ModernWoods.audit();
+        // FCMOD-INTEGRATION(1.20.1): fc_particles: every particle name FC spawns resolves through the shared table
+        FcParticles.audit();
+        // FCMOD-INTEGRATION(1.20.1): fc_dig_face: the dig-face record is on ServerPlayerGameMode (the mixin's dig injects applied)
+        DigFace.audit();
+        // FCMOD-INTEGRATION(1.20.1): strata: the strata ids, the deepslate forms, the canonical stone forms, the height rule, the counts-as items and the blast hook
+        StrataRule.audit();
     }
 
     private static boolean tickPolicyAudited;
@@ -58,9 +64,25 @@ public final class BridgeSelfAudit {
         auditTickPolicy();
         // FCMOD-INTEGRATION(1.20.1): hook_ownership: owner and rule per managed block and hook, RULED(3)/(4)/(5) and ADAPTER rows, unclassified FC pairs, lost expected FC rows
         auditHookPolicy();
+        // FCMOD-INTEGRATION(1.20.1): fc_beacon: the FC-backed block entity rows (mixin applied, FC tile entity, hook owners), FC's beacon table and potions
+        auditFcBackedBlockEntities();
         auditTwins();
         // FCMOD-INTEGRATION(1.20.1): vanilla_pair_drops: the beds and doors 1.20.1 harvests, and the FC drop ids routed to 1.20.1 loot
         VanillaPairDrops.audit();
+        // FCMOD-INTEGRATION(1.20.1): collapsed_identity: the blocks whose FC self-drop takes their own 1.20.1 identity; the flower subtypes 38:1-10 and the subtype flag of every FC form checked
+        CollapsedIdentity.audit();
+        // FCMOD-INTEGRATION(1.20.1): creative_targets: the target rule's reflective ghast slot resolves
+        FcTargetRule.audit();
+        // FCMOD-INTEGRATION(1.20.1): head_crab: FC's armour-bypassing mob hit has its damage type, tagged bypasses_armor
+        DamageSourceMapping.audit();
+        // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: which FC-identity blocks follow FC's blast rules, the expected owners, the pending ids, the positional resistance ids
+        BlastRules.audit();
+        // FCMOD-INTEGRATION(1.20.1): fc_entity_views: every view override reaches the running 1.5.2 classes
+        VanillaEntityViews.audit();
+        // FCMOD-INTEGRATION(1.20.1): fc_redstone: BTW's detector rails are tagged 1.20.1 rails with FC's cart rule
+        FcDetectorRailBlock.audit();
+        // FCMOD-INTEGRATION(1.20.1): support_relatives: the support relatives and rule twins by FC target, and every minecraft fence, wall or stained glass pane without FC identity the relatives miss
+        FcAttachSupport.audit();
         auditLightPolicy();
     }
 
@@ -129,11 +151,12 @@ public final class BridgeSelfAudit {
     /**
      * Mapped ids whose 1.20.1 class overrides tick and is expected to keep its scheduled ticks (TickPolicy
      * class javadoc): leaves, dispenser/dropper, detector rail, stairs, chests, farmland/cactus/sugar cane
-     * survival, plates, torches, buttons, soul sand, repeater, cauldron, lamp, tripwire, comparator.
+     * survival, plates, torches, buttons, soul sand, repeater, cauldron, lamp, tripwire, comparator, and BTW's
+     * own detector rails 235 and 236 (FcDetectorRailBlock, 1.20.1 detector rails: fc_redstone).
      */
     private static final Set<Integer> EXPECTED_VANILLA_SCHED_IDS = Set.of(18, 23, 28, 53, 54, 60, 67, 70, 72, 76,
             77, 81, 83, 88, 93, 108, 109, 114, 118, 123, 128, 130, 131, 132, 134, 135, 136, 143, 146, 147, 148, 149,
-            156, 158);
+            156, 158, 235, 236);
 
     /**
      * Legacy ids whose FC object random-ticks in 4.B (needsRandomTick after the 1.5.2 constructors), from the
@@ -262,18 +285,80 @@ public final class BridgeSelfAudit {
      * Block-entity-guarded hooks FC declares in FC code, accepted until FC tile entities are bridged onto 1.20.1 block
      * entities (hook-ownership D7(a), Phase 4), reported at INFO: legacy id -&gt; HookPolicy hook mask. Note block USE
      * (Common FCBlockNote.java:36), furnace USE (Client FCBlockFurnace.java:84), ender chest USE and REMOVE (Client
-     * FCBlockEnderChest.java:39, :104), beacon USE and REMOVE (Client FCBlockBeacon.java:69, :42).
+     * FCBlockEnderChest.java:39, :104). The beacon's USE and REMOVE (138) left the map with fc_beacon: FC's beacon tile
+     * entity rides on 1.20.1's beacon block entity ({@link FcBackedBlockEntities}).
      */
     private static final Map<Integer, Integer> KNOWN_TE_GAPS = Map.of(
             25, 1 << HookPolicy.USE,
             61, 1 << HookPolicy.USE,
-            130, (1 << HookPolicy.USE) | (1 << HookPolicy.REMOVE),
-            138, (1 << HookPolicy.USE) | (1 << HookPolicy.REMOVE));
+            130, (1 << HookPolicy.USE) | (1 << HookPolicy.REMOVE));
+
+    /**
+     * The FC-backed block entities ({@link FcBackedBlockEntities}): WARN when a row's block entity class does not carry
+     * the attachment (its mixin was not applied), when FC's block for the row makes no FC tile entity (null or a
+     * btw.modern stand-in), when a block of the row is not FC USE / non-VANILLA REMOVE, when FC's beacon table is empty
+     * (FCTileEntityBeacon.InitializeEffectsByBlockID did not run: Server FCBetterThanWolves.java:804, Client :803), or
+     * when FC's potions 29-31 are not the BTW MobEffects. Expected: {@code 0 warnings}.
+     */
+    private static void auditFcBackedBlockEntities() {
+        if (!BTWLifecycle.isFcReady()) return;
+        int warnings = 0;
+        for (FcBackedBlockEntities.Row r : FcBackedBlockEntities.ROWS) {
+            if (!FcBackedBlockEntity.class.isAssignableFrom(r.blockEntity())) {
+                LOGGER.warn("[SELF-AUDIT/fcbe] {} does not carry FC's tile entity (mixin not applied)", r.blockEntity().getName());
+                warnings++;
+            }
+            btw.modern.Block fc = btw.modern.Block.blocksList[r.legacyId()];
+            btw.modern.TileEntity te = null;
+            try { te = fc == null ? null : fc.createNewTileEntity(null); } catch (Throwable ignored) { }
+            if (te == null || te.getClass().getName().startsWith("btw.modern.")) {
+                LOGGER.warn("[SELF-AUDIT/fcbe] FC block {} makes no FC tile entity ({})", r.legacyId(), te);
+                warnings++;
+            }
+            for (net.minecraft.world.level.block.Block b : net.minecraftforge.registries.ForgeRegistries.BLOCKS) {
+                if (!r.block().isInstance(b) || ProxyRegistry.getBlockId(b) != r.legacyId()) continue;
+                HookPolicy.Decision d = HookPolicy.decide(b.defaultBlockState());
+                if (d == null || d.owner(HookPolicy.USE) != HookPolicy.FC || d.owner(HookPolicy.REMOVE) == HookPolicy.VANILLA) {
+                    LOGGER.warn("[SELF-AUDIT/fcbe] {}: USE {} REMOVE {} (expected FC, not VANILLA)",
+                            net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(b),
+                            d == null ? "-" : d.owner(HookPolicy.USE), d == null ? "-" : d.owner(HookPolicy.REMOVE));
+                    warnings++;
+                }
+            }
+        }
+        boolean table = false;
+        try {
+            java.lang.reflect.Field f = Class.forName("net.minecraft.src.btw.tileentity.FCTileEntityBeacon")
+                    .getDeclaredField("m_beaconEffectsByBlockID");
+            f.setAccessible(true);
+            Object[] byId = (Object[]) f.get(null);
+            table = byId != null && byId[41] instanceof java.util.List<?> l && !l.isEmpty();   // gold block (41): haste
+        } catch (Throwable ignored) { }
+        if (!table) {
+            LOGGER.warn("[SELF-AUDIT/fcbe] FC's beacon table is empty (InitializeEffectsByBlockID did not run): no beacon powers");
+            warnings++;
+        }
+        int potions = 0;
+        String[] keys = {"true_sight", "looting", "fortune"};
+        for (int id = 29; id <= 31; id++) {
+            net.minecraft.world.effect.MobEffect e = PotionMapping.getEffect(id);
+            net.minecraft.resources.ResourceLocation key = e == null ? null
+                    : net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.getKey(e);
+            if (key != null && key.equals(new net.minecraft.resources.ResourceLocation(BTWForgeMod.MOD_ID, keys[id - 29]))) {
+                potions++;
+            } else {
+                LOGGER.warn("[SELF-AUDIT/fcbe] FC potion {} maps to {} (expected {}:{})", id, key, BTWForgeMod.MOD_ID, keys[id - 29]);
+                warnings++;
+            }
+        }
+        LOGGER.info("[SELF-AUDIT/fcbe] {} rows, beacon table {}, potions {}/3, {} warnings (0 expected)",
+                FcBackedBlockEntities.ROWS.size(), table ? "ok" : "EMPTY", potions, warnings);
+    }
 
     /**
      * Hook-ownership self-audit ({@link HookPolicy}, hook_ownership): one line per managed block with the owner and
-     * rule of every hook other than the plain general NOTIFY (RESIST, UNDECIDED until Phase 5, is left out), and a
-     * summary. WARNs on
+     * rule of every hook other than the plain general NOTIFY (RESIST only where it is FC: the positional resistance of
+     * stone and the ores, fc_blast_rules), and a summary. WARNs on
      * (a) a pair the general rule hands to FC that is not an expected FC row (the anvils' USE, the carved pumpkin's
      *     and the jack o'lantern's PLACE): an override plus an FC-declared hook nobody classified. The reflection rule
      *     cannot see a super call, so classify it (EQUIVALENT, PENDING, RULED) or confirm it as an FC row;
@@ -285,8 +370,8 @@ public final class BridgeSelfAudit {
      * (e) an expected FC row ({@link HookPolicy#EXPECTED_FC}) that no block of its legacy id carries: an unresolved
      *     1.20.1 method name or a drifted FC signature turned it back to NOTIFY (no golem block, no FC anvil).
      * Expected: {@code 0 warnings}, with RULED(3) on the 16 beds' USE and RULED(4) on OAK_DOOR, IRON_DOOR,
-     * OAK_TRAPDOOR and OAK_FENCE_GATE NEIGHBOR, and {@code 6 known block-entity gaps} on 4 blocks (counted per block
-     * and hook: note and furnace USE, ender chest and beacon USE and REMOVE).
+     * OAK_TRAPDOOR and OAK_FENCE_GATE NEIGHBOR, and {@code 4 known block-entity gaps} on 3 blocks (counted per block
+     * and hook: note and furnace USE, ender chest USE and REMOVE).
      */
     private static void auditHookPolicy() {
         if (!BTWLifecycle.isFcReady()) {
@@ -350,7 +435,8 @@ public final class BridgeSelfAudit {
                             warnings++;
                         }
                     }
-                    if (h == HookPolicy.RESIST || (owner == HookPolicy.NOTIFY && "general".equals(rule))) continue;
+                    if ((h == HookPolicy.RESIST && owner == HookPolicy.NOTIFY)
+                            || (owner == HookPolicy.NOTIFY && "general".equals(rule))) continue;
                     rows.append(' ').append(HookPolicy.hookName(h)).append('=')
                             .append(HookPolicy.ownerName(owner)).append('[').append(rule).append(']');
                 }
@@ -582,7 +668,8 @@ public final class BridgeSelfAudit {
      * 1.20.1 blocks that keep their own random tick or bone meal on purpose (TwinRegistry, kept list): leaves of the
      * new species (decay already at 4.B pacing, S13), nylium (S14), bone-meal-only spreaders (S15: moss, dripleaf,
      * rooted dirt, pink petals, tall flowers, glow lichen, sea pickles, seagrass, the vine and kelp bodies), and what is
-     * not a plant (copper weathering, dripstone, amethyst, turtle eggs, frosted ice, deepslate redstone ore, stairs
+     * not a plant (copper weathering, dripstone, amethyst, turtle eggs, frosted ice, redstone ore (both forms are FC 73
+     * since StrataRule; TickPolicy keeps their 1.20.1 tick), stairs
      * delegating to their base block).
      */
     private static boolean isKeptOn1201(Block b) {

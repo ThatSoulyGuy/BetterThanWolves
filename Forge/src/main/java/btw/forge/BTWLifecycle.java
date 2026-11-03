@@ -171,6 +171,15 @@ public class BTWLifecycle {
             LOGGER.error("Building log2 failed; acacia, dark oak, mangrove and cherry keep the modern-log rule", t);
         }
 
+        // FCMOD-INTEGRATION(1.20.1): modern_wood_subblocks: the newer woods' sidings, mouldings, corners and decorative blocks
+        // (FC wood types 5-8) as plain FC sub-block instances at the reserved ids 1093-1100, before fcReady like log2
+        LOGGER.info("Step 5f: Building the sub-blocks of FC wood types 5-8...");
+        try {
+            ModernWoodSubBlocks.create();
+        } catch (Throwable t) {
+            LOGGER.error("Building the newer woods' sub-blocks failed; they keep no sidings and their planks stay 1.20.1 planks", t);
+        }
+
         LOGGER.info("Step 6: Block/item registration happens via RegisterEvent (see BTWForgeMod).");
         // Registration moved to BTWForgeMod.onRegister() which calls BTWRegistration.registerAllBTWContent(event)
         try {
@@ -1998,6 +2007,9 @@ public class BTWLifecycle {
 
         // Wire up worlds
         wireWorlds(server);
+
+        // FCMOD-INTEGRATION(1.20.1): hardcore_respawn: FC links and the hardcore respawn self-audit, once per world start
+        HardcoreRespawn.onServerStarting(server);
     }
 
     /**
@@ -2085,6 +2097,7 @@ public class BTWLifecycle {
             WorldBridge.clearCache();
             EntityBridge.clearCache();
             LivingEntityBridge.clearCache();
+            VanillaEntityViews.clearCaches();
             TileEntityBridge.clearCache();
             LOGGER.info("Released BTW legacy server state (MinecraftServer instance, worldServers, bridge caches).");
         } catch (Throwable t) {

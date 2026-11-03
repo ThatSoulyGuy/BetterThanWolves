@@ -6,10 +6,12 @@ package btw.modern;
  * FCEntityRenderer invokes {@link #doRender}. Records the falling block's geometry
  * through the recording Tessellator via Block.RenderFallingBlock.
  *
- * <p>Adaptations from vanilla: the BlockAnvil/BlockDragonEgg special branches are
- * omitted — vanilla falling blocks are handled by the modern engine, only FC falling
- * entities route here — and the loadTexture/GL lighting calls are dropped (textures
- * come from the modern pipeline; GL11 shim calls are no-ops).</p>
+ * <p>Adaptations from vanilla: the BlockAnvil branch is omitted (FCBlockAnvil never
+ * falls: its updateTick is empty and TickPolicy hands the anvils' scheduled ticks to
+ * FC); the BlockDragonEgg branch is kept, tested by class because the stand-in
+ * BlockDragonEgg has no render type 27. The loadTexture/GL lighting calls are dropped
+ * (textures come from the modern pipeline; FCEntityRenderer shades the faces as a
+ * placed block's).</p>
  */
 public class RenderFallingSand extends Render {
 
@@ -46,11 +48,20 @@ public class RenderFallingSand extends Render {
 
                 block.m_currentBlockRenderer = sandRenderBlocks;
 
-                block.RenderFallingBlock(sandRenderBlocks,
-                        MathHelper.floor_double(entity.posX),
-                        MathHelper.floor_double(entity.posY),
-                        MathHelper.floor_double(entity.posZ),
-                        entity.metadata);
+                if (block instanceof BlockDragonEgg egg) {
+                    // FCMOD-INTEGRATION(1.20.1): falling_blocks: 1.5.2's render-type-27 branch (vanilla/client RenderFallingSand.java:64-73):
+                    // a falling dragon egg keeps the egg shape (FCBlockDragonEgg has no RenderFallingBlock override)
+                    sandRenderBlocks.renderBlockDragonEgg(egg,
+                            MathHelper.floor_double(entity.posX),
+                            MathHelper.floor_double(entity.posY),
+                            MathHelper.floor_double(entity.posZ));
+                } else {
+                    block.RenderFallingBlock(sandRenderBlocks,
+                            MathHelper.floor_double(entity.posX),
+                            MathHelper.floor_double(entity.posY),
+                            MathHelper.floor_double(entity.posZ),
+                            entity.metadata);
+                }
 
                 Tessellator.instance.setTranslation(0D, 0D, 0D);
                 Tessellator.instance.draw();

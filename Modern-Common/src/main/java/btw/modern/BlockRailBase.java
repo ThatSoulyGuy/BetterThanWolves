@@ -141,4 +141,11 @@ public abstract class BlockRailBase extends Block {
             }
         }
     }
+
+    // 1.5.2 BlockRailBase.getMobilityFlag (vanilla/client BlockRailBase.java:244-247): rails are pushed, not broken,
+    // by FC's piston rules. FCBlockRailRegular (66) and FCBlockDetectorRail (28, 235, 236) do not override it.
+    @Override
+    public int getMobilityFlag() {
+        return 0;
+    }
 }

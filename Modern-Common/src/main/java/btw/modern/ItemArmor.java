@@ -94,4 +94,56 @@ public class ItemArmor extends Item {
     }
 
     public EnumArmorMaterial getArmorMaterial() { return material; }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 ItemArmor's icon members (vanilla/client ItemArmor.java:21-22,
+    // :46-47, :142-145, :203-251): the cloth overlay drawn in the second pass, and the empty armour-slot icons. FC's
+    // armour (FCItemArmor and its subclasses) inherits them; picked-up armour is drawn with armour textures, so
+    // nothing FC draws asks for them today.
+    private static final String[] CLOTH_OVERLAY_ICON_NAMES = new String[] {"helmetCloth_overlay",
+            "chestplateCloth_overlay", "leggingsCloth_overlay", "bootsCloth_overlay"};
+    public static final String[] field_94603_a = new String[] {"slot_empty_helmet", "slot_empty_chestplate",
+            "slot_empty_leggings", "slot_empty_boots"};
+    private Icon clothOverlayIcon;
+    private Icon emptySlotIcon;
+
+    // 1.5.2 ItemArmor.getIconFromDamageForRenderPass (vanilla/client ItemArmor.java:142-145); Item's answer while the
+    // overlay is not registered (client only; never for non-cloth armour)
+    @Override
+    public Icon getIconFromDamageForRenderPass(int damage, int renderPass) {
+        return renderPass == 1 && this.clothOverlayIcon != null ? this.clothOverlayIcon
+                : super.getIconFromDamageForRenderPass(damage, renderPass);
+    }
+
+    // 1.5.2 ItemArmor.registerIcons (vanilla/client ItemArmor.java:203-213)
+    @Override
+    public void registerIcons(IconRegister register) {
+        super.registerIcons(register);
+        if (this.material == EnumArmorMaterial.CLOTH) {
+            this.clothOverlayIcon = register.registerIcon(CLOTH_OVERLAY_ICON_NAMES[this.armorType]);
+        }
+        this.emptySlotIcon = register.registerIcon(field_94603_a[this.armorType]);
+    }
+
+    // 1.5.2 ItemArmor.func_94602_b (vanilla/client ItemArmor.java:232-251): the empty-slot icon for an armour slot,
+    // read from the diamond pieces
+    public static Icon func_94602_b(int armorType) {
+        ItemArmor piece;
+        switch (armorType) {
+            case 0:
+                piece = Item.helmetDiamond;
+                break;
+            case 1:
+                piece = Item.plateDiamond;
+                break;
+            case 2:
+                piece = Item.legsDiamond;
+                break;
+            case 3:
+                piece = Item.bootsDiamond;
+                break;
+            default:
+                return null;
+        }
+        return piece != null ? piece.emptySlotIcon : null;
+    }
 }

@@ -1,5 +1,7 @@
 package btw.modern;
 
+import java.util.List;
+
 public class BlockChest extends BlockContainer {
 
     public int isTrapped;
@@ -113,6 +115,9 @@ public class BlockChest extends BlockContainer {
         return true;
     }
 
+    // FCMOD-INTEGRATION(1.20.1): fc_redstone: 1.5.2 BlockChest.getInventory (vanilla/client BlockChest.java:433-488) in
+    // full: a chest does not open (and reads 0 to a comparator) when a normal cube or a sitting ocelot is on it or on the
+    // other half of its double chest
     public IInventory getInventory(World world, int x, int y, int z) {
         Object inv = world.getBlockTileEntity(x, y, z);
         if (inv == null) return null;
@@ -120,6 +125,25 @@ public class BlockChest extends BlockContainer {
 
         // Block above is solid — can't open
         if (world.isBlockNormalCube(x, y + 1, z)) return null;
+        if (isOcelotBlockingChest(world, x, y, z)) return null;
+
+        // The other half of a double chest blocked the same way
+        if (world.getBlockId(x - 1, y, z) == this.blockID
+                && (world.isBlockNormalCube(x - 1, y + 1, z) || isOcelotBlockingChest(world, x - 1, y, z))) {
+            return null;
+        }
+        if (world.getBlockId(x + 1, y, z) == this.blockID
+                && (world.isBlockNormalCube(x + 1, y + 1, z) || isOcelotBlockingChest(world, x + 1, y, z))) {
+            return null;
+        }
+        if (world.getBlockId(x, y, z - 1) == this.blockID
+                && (world.isBlockNormalCube(x, y + 1, z - 1) || isOcelotBlockingChest(world, x, y, z - 1))) {
+            return null;
+        }
+        if (world.getBlockId(x, y, z + 1) == this.blockID
+                && (world.isBlockNormalCube(x, y + 1, z + 1) || isOcelotBlockingChest(world, x, y, z + 1))) {
+            return null;
+        }
 
         // Check for adjacent chest and merge into double-chest inventory
         if (world.getBlockId(x - 1, y, z) == this.blockID) {
@@ -139,5 +163,45 @@ public class BlockChest extends BlockContainer {
                     (IInventory) inv, (IInventory) world.getBlockTileEntity(x, y, z + 1));
         }
         return (IInventory) inv;
+    }
+
+    /** 1.5.2 BlockChest.isOcelotBlockingChest (vanilla/client BlockChest.java:539-557): a sitting ocelot on the chest. */
+    private static boolean isOcelotBlockingChest(World world, int x, int y, int z) {
+        List ocelots = world.getEntitiesWithinAABB(EntityOcelot.class, AxisAlignedBB.getAABBPool().getAABB(
+                (double) x, (double) (y + 1), (double) z, (double) (x + 1), (double) (y + 2), (double) (z + 1)));
+        for (Object o : ocelots) {
+            if (((EntityOcelot) o).isSitting()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): fc_redstone: 1.5.2's comparator answers (vanilla/client BlockChest.java:563-575): a
+    // comparator reads the BTW chest 1035 (FCBlockChest, a ProxyBlock) as a vanilla chest, the inventory getInventory
+    // opens (ruling Q-RS3 (a)); the vanilla-id chest 54 keeps 1.20.1's ChestBlock answers
+    @Override
+    public boolean hasComparatorInputOverride() {
+        return true;
+    }
+
+    @Override
+    public int getComparatorInputOverride(World world, int x, int y, int z, int side) {
+        return Container.calcRedstoneFromInventory(this.getInventory(world, x, y, z));
+    }
+
+    // 1.5.2 BlockChest.getRenderType (vanilla/client BlockChest.java:55-58): FCBlockChest (54, 1035) does not
+    // override it.
+    @Override
+    public int getRenderType() {
+        return 22;
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockChest.registerIcons (vanilla/client BlockChest.java:581-584)
+    // registers "wood", the oak planks the chest's particles and FC captures draw. FCBlockChest (54, 1035) inherits
+    // it; Block's default registered the unlocalized "chest", which only a map entry sent to the same oak planks.
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.blockIcon = register.registerIcon("wood");
     }
 }

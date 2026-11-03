@@ -42,6 +42,41 @@ public class BlockFurnace extends BlockContainer {
         return true;
     }
 
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockFurnace's icon members (vanilla/client
+    // BlockFurnace.java:46-50, :116-130): the top above and below, the front (lit or not) on the facing side, the side
+    // elsewhere; the public front and top fields are FCMOD's. FCBlockFurnace (61, 62) reads both through super; a held
+    // furnace drew Block's default, the unlocalized "furnace", which names no texture.
+    @Override
+    public Icon getIcon(int side, int metadata) {
+        if (this.furnaceIconTop == null || this.furnaceIconFront == null) {
+            return super.getIcon(side, metadata);
+        }
+        return side == 1 ? this.furnaceIconTop
+                : (side == 0 ? this.furnaceIconTop : (side != metadata ? this.blockIcon : this.furnaceIconFront));
+    }
+
+    // 1.5.2 BlockFurnace.registerIcons (vanilla/client BlockFurnace.java:125-130)
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.blockIcon = register.registerIcon("furnace_side");
+        this.furnaceIconFront = register.registerIcon(this.isActive ? "furnace_front_lit" : "furnace_front");
+        this.furnaceIconTop = register.registerIcon("furnace_top");
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): fc_redstone: 1.5.2's comparator answers (vanilla/client BlockFurnace.java:336-348): a
+    // comparator reads FC's brick oven (1023, 1024: FCBlockFurnaceBrick < FCBlockFurnace, ProxyBlocks) as a vanilla furnace
+    // (ruling Q-RS3 (a)); the vanilla-id furnaces 61 and 62 keep 1.20.1's FurnaceBlock answers
+    @Override
+    public boolean hasComparatorInputOverride() {
+        return true;
+    }
+
+    @Override
+    public int getComparatorInputOverride(World world, int x, int y, int z, int side) {
+        TileEntity te = world.getBlockTileEntity(x, y, z);
+        return Container.calcRedstoneFromInventory(te instanceof IInventory inventory ? inventory : null);
+    }
+
     public static void updateFurnaceBlockState(boolean isBurning, World world, int i, int j, int k) {}
     public void updateFurnaceBlockState(boolean isBurning, World world, int i, int j, int k, boolean bHasContents) {}
 }

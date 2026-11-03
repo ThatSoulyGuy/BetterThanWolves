@@ -420,7 +420,7 @@ public final class DTHarvestHandler {
         FCLogRules.wearConvert(level, p, held, state, pos);
     }
 
-    /** The face of {@code pos} the player is looking at, else UP ({@link FCLogRules#hitFace}). */
+    /** The face the player breaks {@code pos} from: the dig packet's, else the look ray's, else UP ({@link FCLogRules#hitFace}). */
     private static Direction hitFace(ServerPlayer p, BlockPos pos) {
         return FCLogRules.hitFace(p, pos);
     }

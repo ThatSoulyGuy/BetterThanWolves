@@ -14,4 +14,33 @@ public class ItemDye extends Item {
         setHasSubtypes(true);
         setMaxDamage(0);
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 ItemDye's icon members (vanilla/client ItemDye.java:23-25,
+    // :38-42, :349-357): dyePowder_<colour> by damage. FCItemDye (351) reads both through super (cocoa beans, damage
+    // 3, are its own); a held dye drew Item's default, the unlocalized "dyePowder", which names no texture.
+    public static final String[] field_94595_b = new String[] {"dyePowder_black", "dyePowder_red", "dyePowder_green",
+            "dyePowder_brown", "dyePowder_blue", "dyePowder_purple", "dyePowder_cyan", "dyePowder_silver",
+            "dyePowder_gray", "dyePowder_pink", "dyePowder_lime", "dyePowder_yellow", "dyePowder_lightBlue",
+            "dyePowder_magenta", "dyePowder_orange", "dyePowder_white"};
+    private Icon[] dyeIcons;
+
+    // 1.5.2 ItemDye.getIconFromDamage (vanilla/client ItemDye.java:38-42); Item's icon until registerIcons runs
+    // (client only)
+    @Override
+    public Icon getIconFromDamage(int damage) {
+        if (this.dyeIcons == null) {
+            return super.getIconFromDamage(damage);
+        }
+        return this.dyeIcons[MathHelper.clamp_int(damage, 0, 15)];
+    }
+
+    // 1.5.2 ItemDye.registerIcons (vanilla/client ItemDye.java:349-357)
+    @Override
+    public void registerIcons(IconRegister register) {
+        Icon[] icons = new Icon[field_94595_b.length];
+        for (int i = 0; i < icons.length; ++i) {
+            icons[i] = register.registerIcon(field_94595_b[i]);
+        }
+        this.dyeIcons = icons;
+    }
 }

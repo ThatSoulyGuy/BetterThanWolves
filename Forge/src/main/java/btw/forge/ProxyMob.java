@@ -57,6 +57,8 @@ public class ProxyMob extends Mob
     }
 
     private btw.modern.EntityLiving fcEntity;
+    /** CF2-R1: building the FC entity failed for this proxy; it is not retried every frame and tick. */
+    private boolean fcBuildFailed;
     private String fcClassName = "";
     private boolean pendingKnockback = false;
     // Last known finite position — used for NaN recovery. Updated every tick
@@ -107,7 +109,7 @@ public class ProxyMob extends Mob
     }
 
     public btw.modern.EntityLiving getFcEntity() {
-        if (fcEntity == null) {
+        if (fcEntity == null && !fcBuildFailed) {
             ensureFcEntity();
         }
         if (fcEntity != null) syncToFc();
@@ -168,15 +170,13 @@ public class ProxyMob extends Mob
             return;
         }
         try {
-            Class<?> fcClass = Class.forName(className);
-            try {
-                var ctor = fcClass.getConstructor(btw.modern.World.class);
-                fcEntity = (btw.modern.EntityLiving) ctor.newInstance(world);
-            } catch (NoSuchMethodException e) {
-                var ctor = fcClass.getDeclaredConstructor();
-                ctor.setAccessible(true);
-                fcEntity = (btw.modern.EntityLiving) ctor.newInstance();
+            // FCMOD-INTEGRATION(1.20.1): fc_entity_construction: the FcEntityFactory rule, resolved once per class; a living proxy needs (World) or no-argument
+            FcEntityFactory factory = FcEntityFactory.of(className);
+            if (!factory.livingUsable()) {
+                throw new IllegalStateException(factory.usable()
+                        ? "a living FC entity needs a (World) or no-argument constructor" : factory.failure());
             }
+            fcEntity = (btw.modern.EntityLiving) factory.create(world, getX(), getY(), getZ());
             if (fcEntity != null) {
                 fcEntity.worldObj = world;
                 // CRITICAL: seed the FC entity's position from MC's spawn
@@ -212,8 +212,11 @@ public class ProxyMob extends Mob
                 ProxyMobTaskDumper.dumpFcTasks(fcEntity);
             }
         } catch (Throwable e) {
+            // CF2-R1: a construction failure is not retried every frame and tick for this proxy
+            if (fcEntity == null) fcBuildFailed = true;
+            Throwable root = FcEntityFactory.rootCause(e);
             if (FCPuppetSupport.firstFailure("create|" + className)) {
-                LOGGER.warn("Could not create FC entity {}: {}", className, e.getMessage(), e);
+                LOGGER.warn("Could not create FC entity {}: {}", className, root.toString(), root);
             }
         }
     }
@@ -331,7 +334,7 @@ public class ProxyMob extends Mob
 
     @Override
     public void tick() {
-        if (fcEntity == null) ensureFcEntity();
+        if (fcEntity == null && !fcBuildFailed) ensureFcEntity();
 
         // CLIENT SIDE: FC physics only run on the server. The client
         // receives position updates via network packets. If we ran

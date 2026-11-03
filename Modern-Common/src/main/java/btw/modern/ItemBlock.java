@@ -57,7 +57,10 @@ public class ItemBlock extends Item {
         }
         Icon icon;
         try {
-            icon = block.getBlockTextureFromSide(1);
+            icon = this.getClass() == ItemBlock.class ? this.getLegacyItemClassIcon(block, damage) : null;
+            if (icon == null) {
+                icon = block.getBlockTextureFromSide(1);
+            }
         } catch (Throwable t) {
             // An FC getIcon override that throws (e.g. before its icons are registered) must not abort the
             // entity / tile-entity capture drawing this item. The failure may be transient, so every call
@@ -72,9 +75,35 @@ public class ItemBlock extends Item {
         return icon != null ? icon : super.getIconFromDamage(damage);
     }
 
+    /**
+     * The flat icon of the 1.5.2 item class at an id where the port registers a plain ItemBlock (vanilla/client
+     * Block.java:1546-1565), as getMetadata's table does: ItemColored (31, 106) the block's bottom icon for the damage
+     * (ItemColored.java:42-45); ItemMultiTextureTile (6, 24, 97, 98, 139, 155) and ItemSlab (43, 44, 125, 126) its
+     * side icon (ItemMultiTextureTile.java:34-37, ItemSlab.java:40-43); ItemLeaves (18) the leaves' bottom icon
+     * (ItemLeaves.java:37-40); ItemCloth (35) the wool's side icon for the dye-inverted damage (ItemCloth.java:29-32).
+     * Null for every other id, and while the icon is not registered: getIconFromDamage then answers as before.
+     * FCMOD-INTEGRATION(1.20.1): legacy_icons: a held fern (31:2) drew the tall grass and a held birch sapling (6:2)
+     * the oak sapling (Block.getBlockTextureFromSide(1) is meta 0's icon)
+     */
+    private Icon getLegacyItemClassIcon(Block block, int damage) {
+        switch (this.blockID) {
+            case 31: case 106:
+                return block.getIcon(0, damage);
+            case 6: case 24: case 97: case 98: case 139: case 155:
+            case 43: case 44: case 125: case 126:
+                return block.getIcon(2, damage);
+            case 18:
+                return Block.leaves != null ? Block.leaves.getIcon(0, damage) : null;
+            case 35:
+                return Block.cloth != null ? Block.cloth.getIcon(2, BlockCloth.getBlockFromDye(damage)) : null;
+            default:
+                return null;
+        }
+    }
+
     // 1.5.2 ItemBlock.registerIcons (vanilla/client ItemBlock.java:229-237) registers the block's item icon name,
     // if any. Port: Item.registerIcons still runs first, so itemIcon keeps the value it had before this override
-    // (Item.GetHopperFilterIcon and func_94597_g read it).
+    // (Item.func_94597_g reads it).
     @Override
     public void registerIcons(IconRegister register) {
         super.registerIcons(register);
@@ -83,6 +112,16 @@ public class ItemBlock extends Item {
         if (iconName != null) {
             this.itemBlockIcon = register.registerIcon(iconName);
         }
+    }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 (FCMOD) ItemBlock.GetHopperFilterIcon (vanilla/client
+    // ItemBlock.java:371-376): a block item in a hopper's filter slot draws its block's filter icon (the wicker
+    // pane's fcBlockHopper_wicker, the grate's, ...), or none. Before, Item's stand-in answered the item's own icon,
+    // which FCBakedModel drew as a bin-side box for every block item. Port guard: null when no block is there.
+    @Override
+    public Icon GetHopperFilterIcon() {
+        Block block = this.getBlockForItem();
+        return block != null ? block.GetHopperFilterIcon() : null;
     }
 
     /** Block class + hook group pairs that threw in onItemUse; only the log is once per pair. */
@@ -115,7 +154,8 @@ public class ItemBlock extends Item {
         }
         if (this.getClass() == ItemBlock.class) {
             switch (this.blockID) {
-                case 5: case 6: case 17: case 24: case 31: case 35: case 43: case 44: case 97: case 98:
+                // FCMOD-INTEGRATION(1.20.1): flower_subtypes: 38 places its port-only flower subtypes 38:0-10 (ProxyRegistry, LegacyVariants), as 1.7.2's ItemMultiTexture for red_flower did
+                case 5: case 6: case 17: case 24: case 31: case 35: case 38: case 43: case 44: case 97: case 98:
                 case 106: case 125: case 126: case 139: case 155:
                     return damage;
                 case 18:
@@ -125,6 +165,31 @@ public class ItemBlock extends Item {
             }
         }
         return super.getMetadata(damage);
+    }
+
+    /**
+     * 1.5.2's subtype flag for the plain ItemBlock the Block constructor registers where 1.5.2 registered ItemCloth
+     * (35), ItemSlab (43, 44, 125, 126), ItemLeaves (18), ItemColored(tallGrass, true) (31) and ItemMultiTextureTile
+     * (6, 24, 97, 98, 139, 155) (vanilla/server Block.java:1383-1402; each sets setHasSubtypes(true): ItemCloth.java:22,
+     * ItemSlab.java:33, ItemLeaves.java:22, ItemColored.java:29, ItemMultiTextureTile.java:27), plus the port-only flower
+     * subtypes of 38 (flower_subtypes). 5 and 17 are listed as in getMetadata (FC registers its own items there; the
+     * ItemMultiTextureTile stub declares the flag itself). The vine 106 is ItemColored(vine, false): no subtypes. Readers:
+     * FCUtilsInventory.CanStacksMerge (FC compares the damage only of a subtyped item), Container.AttemptToMergeWithSlot,
+     * ItemStack.isItemDamaged (a subtyped item without durability is never "damaged", so equal subtypes stack) and
+     * MerchantRecipeList. Without it, orange wool never stacked in BTW storage and white wool merged into it.
+     */
+    // FCMOD-INTEGRATION(1.20.1): item_subtypes: the plain block items declare 1.5.2's subtypes, so BTW storage stacks each subtype and never merges one into another (wool colours, slab and stone types, flowers)
+    @Override
+    public boolean getHasSubtypes() {
+        if (super.getHasSubtypes()) return true;
+        if (this.getClass() != ItemBlock.class) return false;
+        switch (this.blockID) {
+            case 5: case 6: case 17: case 18: case 24: case 31: case 35: case 38: case 43: case 44: case 97: case 98:
+            case 125: case 126: case 139: case 155:
+                return true;
+            default:
+                return false;
+        }
     }
 
     /**

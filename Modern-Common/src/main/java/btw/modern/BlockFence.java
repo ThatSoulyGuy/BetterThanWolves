@@ -137,4 +137,16 @@ public class BlockFence extends Block {
         // Reset bounds
         this.setBlockBounds(minX, 0.0F, minZ, maxX, 1.0F, maxZ);
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockFence.registerIcons (vanilla/client BlockFence.java:196-199)
+    // registers the texture name its constructor takes. No block is a BlockFence (FCBlockFence, 85 and 113, extends
+    // Block), so nothing draws it. A fence made through the name-less constructor keeps Block's default.
+    @Override
+    public void registerIcons(IconRegister register) {
+        if (this.textureName == null) {
+            super.registerIcons(register);
+            return;
+        }
+        this.blockIcon = register.registerIcon(this.textureName);
+    }
 }

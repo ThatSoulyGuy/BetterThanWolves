@@ -53,6 +53,11 @@ public class BTWRegistration {
         for (int id = 175; id < 4096; id++) {
             btw.modern.Block fcBlock = btw.modern.Block.blocksList[id];
             if (fcBlock != null) {
+                // FCMOD-INTEGRATION(1.20.1): fc_redstone: BTW's detector rails are 1.20.1 detector rails under the same name
+                if (FcDetectorRailBlock.isFcRailId(id)) {
+                    registerFcRail(event, id);
+                    continue;
+                }
                 try {
                     ProxyBlock proxy = new ProxyBlock(id, fcBlock);
                     ResourceLocation key = new ResourceLocation(
@@ -73,6 +78,23 @@ public class BTWRegistration {
     }
 
     /**
+     * FCMOD-INTEGRATION(1.20.1): fc_redstone: FC id {@code id} (235, 236) as a {@link FcDetectorRailBlock} named
+     * {@code betterthanwolves:block_<id>}, its FC identity in ProxyRegistry, so 1.20.1's minecarts ride it (INTEGRATIONS
+     * #056).
+     */
+    private static void registerFcRail(net.minecraftforge.registries.RegisterEvent event, int id) {
+        try {
+            FcDetectorRailBlock rail = new FcDetectorRailBlock(id);
+            ResourceLocation key = new ResourceLocation(BTWForgeMod.MOD_ID, "block_" + id);
+            event.register(net.minecraftforge.registries.ForgeRegistries.Keys.BLOCKS, helper -> helper.register(key, rail));
+            ProxyRegistry.registerFcOwnBlock(id, rail);
+            LOGGER.info("Registered BTW detector rail {} as a 1.20.1 detector rail.", id);
+        } catch (Exception e) {
+            LOGGER.error("Failed to register BTW detector rail {}: {}", id, e.getMessage());
+        }
+    }
+
+    /**
      * Registers items for all BTW content:
      * 1. BlockItems for every ProxyBlock (so block drops and /give work)
      * 2. Standalone items from Item.itemsList[256..32000]
@@ -84,17 +106,19 @@ public class BTWRegistration {
         // Without this, ProxyBlock.asItem() returns Items.AIR and drops are empty.
         for (int id = 175; id < btw.modern.Block.blocksList.length; id++) {
             ProxyBlock proxy = ProxyRegistry.getProxy(id);
-            if (proxy == null) continue;
+            // FCMOD-INTEGRATION(1.20.1): fc_redstone: the block items of the FC blocks registered as 1.20.1 classes too
+            Block block = proxy != null ? proxy : id < 4096 ? ProxyRegistry.getFcOwnBlock(id) : null;
+            if (block == null) continue;
 
             try {
                 // Last-resort name only: ProxyBlockItem names each stack through FC (getItemDisplayName,
                 // localized and per metadata) and places the block FC's ItemBlock names for it.
-                btw.modern.Block fcBlock = proxy.getFcBlock();
+                btw.modern.Block fcBlock = proxy != null ? proxy.getFcBlock() : btw.modern.Block.blocksList[id];
                 String fcName = fcBlock != null ? fcBlock.getUnlocalizedName() : "";
                 String displayName = formatFcName(fcName, "Block " + id);
 
                 net.minecraft.world.item.BlockItem blockItem =
-                        new ProxyBlockItem(proxy, new Item.Properties(), id, displayName);
+                        new ProxyBlockItem(block, new Item.Properties(), id, displayName);
 
                 ResourceLocation key = new ResourceLocation(
                         BTWForgeMod.MOD_ID, "block_" + id);

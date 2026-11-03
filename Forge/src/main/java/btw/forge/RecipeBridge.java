@@ -1,6 +1,7 @@
 package btw.forge;
 
 import btw.forge.recipes.ModernCookingImport;
+import btw.forge.recipes.ModernLogChoppingRecipe;
 import btw.forge.recipes.RawCraftedFoods;
 import btw.forge.recipes.RecipeReplacements;
 import btw.forge.recipes.TagMachineRecipes;
@@ -51,12 +52,13 @@ import java.util.*;
  * logs one ERROR and leaves the recipes as they were:</p>
  * <ol>
  *   <li>clear the previous cooking and millstone imports (FC statics hold no stale headless ids);</li>
- *   <li>collect the loaded non-FC recipes and inject FC's crafting and smelting recipes;</li>
+ *   <li>collect the loaded non-FC recipes and inject FC's crafting and smelting recipes, then 4.B's stair and
+ *       slab rules for the newer woods ({@link ModernWoodSubBlocks#contributeRecipes});</li>
  *   <li>{@link RecipeReplacements}: data-driven replacements by id ({@code btw_recipe_replacements});</li>
  *   <li>{@link FcRecipeRemovals}: 4.B's removals, the result-only fence rule and the stays-removed rule;</li>
  *   <li>{@link RetiredIngredientWidening}: removed ingredients also accept their BTW successor (furnace to
  *       brick oven and tripwire hook to FC iron nugget included);</li>
- *   <li>install the map ({@code replaceRecipes});</li>
+ *   <li>install the map ({@code replaceRecipes}) and index its {@link ModernLogChoppingRecipe}s for FC's saw;</li>
  *   <li>{@link ModernCookingImport}: edible unmapped cooking inputs join FC's furnace and campfire tables;</li>
  *   <li>{@link TagMachineRecipes}: item tags feed the FC millstone ({@code btw_machine_recipes});</li>
  *   <li>{@link RawCraftedFoods}: crafted foods made from poisonous raw items are marked for food-core;</li>
@@ -120,6 +122,12 @@ public class RecipeBridge {
             int[] crafting = injectCraftingRecipes(all);
             int smeltingCount = injectSmeltingRecipes(all);
 
+            // FCMOD-INTEGRATION(1.20.1): modern_wood_subblocks: 4.B's stair and slab rules for the four newer woods
+            // (FCRecipes.java:877-901, :2396-2420, :2923-2929); before the replacements, so a pack's replacement by id
+            // still wins, and before 4.B's removals, the widening and the workbench fallback, which see the result.
+            int[] woods = mapStep(all, "Failed to add the newer woods' stair and slab recipes; they stay as loaded",
+                    () -> ModernWoodSubBlocks.contributeRecipes(all, access), new int[3]);
+
             // FCMOD-INTEGRATION(1.20.1): recipes: replacements by id first, so the stays-removed rule and the
             // widening below also govern replacement recipes; after every pack loaded, so pack order is irrelevant.
             int[] replacements = mapStep(all, "Failed to apply BTW recipe replacements; recipes stay as loaded",
@@ -144,6 +152,11 @@ public class RecipeBridge {
             }
 
             recipeManager.replaceRecipes(all.values());
+
+            // FCMOD-INTEGRATION(1.20.1): bamboo_planks: FC's saw follows the installed modern_log_chopping recipes
+            // (ModernWoodSawHooks), so one data file drives the saw and the axe, and a /reload re-indexes it.
+            runStep("index the modern log chopping recipes for the saw",
+                    () -> ModernLogChoppingRecipe.rebuildSawIndex(all.values()), 0);
 
             lastInjected = new WeakReference<>(recipeManager);
             injectedProbe = all.keySet().stream().filter(RecipeBridge::isFcRecipeId).findFirst().orElse(null);
@@ -171,10 +184,11 @@ public class RecipeBridge {
 
             LOGGER.info("[BTW-Recipes] {} recipes installed: FC {} crafting + {} smelting; replacements {} replaced,"
                             + " {} removed; 4.B removals {} recipes; widened {}; cooking import {} furnace + {}"
-                            + " campfire; millstone tag recipes {}; raw-crafted foods {}; FC workbench fallback {}",
+                            + " campfire; millstone tag recipes {}; raw-crafted foods {}; FC workbench fallback {};"
+                            + " newer woods {} replaced, {} added",
                     all.size(), crafting[0], smeltingCount, replacements[0], replacements[1], removedCount,
                     widenedCount, cooking[0], cooking[1], millstone, rawCrafted < 0 ? "n/a" : rawCrafted,
-                    fallback ? "on" : "OFF");
+                    fallback ? "on" : "OFF", woods[0], woods[1]);
         } catch (Throwable e) {
             LOGGER.error("Failed to inject FC recipes into the RecipeManager", e);
         }
@@ -242,6 +256,11 @@ public class RecipeBridge {
             WorkbenchFallback.onRecipesReplaced();
             return null;
         }, null);
+        // FCMOD-INTEGRATION(1.20.1): bamboo_planks: the saw follows no previous world's chopping recipes
+        runStep("clear the modern log chopping saw index", () -> {
+            ModernLogChoppingRecipe.clearSawIndex();
+            return null;
+        }, null);
     }
 
     /**
@@ -283,7 +302,8 @@ public class RecipeBridge {
      * subtype: the black, brown, blue and white dye items for ink sac, cocoa beans, lapis and bone meal (1.5.2 dye
      * 0/3/4/15, ItemDye.java:19; each dye keeps its own FC stack, 351:256/259/260/271, and never reads as the 4.B item,
      * which still stands in for it, as in 4.B), the stone slab for the smooth stone slab (44:0) and smooth sandstone
-     * for cut sandstone (24:2). Lossy collapses (modern flowers onto the rose, the 16 beds onto one) are not aliases.
+     * for cut sandstone (24:2). Lossy collapses (the 16 beds onto one) are not aliases; the modern flowers are their
+     * own subtypes 38:1-10 (flower_subtypes).
      */
     // FCMOD-INTEGRATION(1.20.1): recipes: the FC workbench fallback retries a grid with these spellings (INTEGRATIONS #025)
     public static net.minecraft.world.item.Item legacyAlias(net.minecraft.world.item.Item canonical) {
@@ -303,6 +323,8 @@ public class RecipeBridge {
             for (net.minecraft.world.item.Item item : BuiltInRegistries.ITEM) {
                 int[] legacy = LegacyVariants.toLegacy(item);
                 if (legacy == null || legacy[0] <= 0 || legacy[0] == LegacyVariants.SPAWN_EGG_ID) continue;
+                // FCMOD-INTEGRATION(1.20.1): raw_ore_chunks: raw iron counts as the chunk one way; it is not a spelling of the chunk (no chunk -> raw iron alias in BTW grids)
+                if (LegacyVariants.isCountsAs(item)) continue;
                 // the base subtype's FC -> MC pick (white dye 351:271 -> bone meal); toMcStack makes no headless id
                 net.minecraft.world.item.Item canonical = ItemStackHelper.toMcStack(
                         new btw.modern.ItemStack(legacy[0], 1, LegacyVariants.baseSubtype(legacy[1]))).getItem();
@@ -392,6 +414,13 @@ public class RecipeBridge {
                 // Convert input ID to Ingredient
                 Ingredient input = fcIdToIngredient(inputId);
                 if (input.isEmpty()) continue;
+                // FCMOD-INTEGRATION(1.20.1): raw_ore_chunks: an item that counts as the FC input cooks the same way, so a furnace and JEI show raw iron -> BTW iron nugget
+                List<net.minecraft.world.item.Item> aliases = LegacyVariants.countsAsItems(inputId, 0);
+                if (!aliases.isEmpty()) {
+                    List<ItemStack> stacks = new ArrayList<>(Arrays.asList(input.getItems()));
+                    for (net.minecraft.world.item.Item alias : aliases) stacks.add(new ItemStack(alias));
+                    input = Ingredient.of(stacks.toArray(new ItemStack[0]));
+                }
 
                 // Convert output
                 ItemStack output = ItemStackHelper.toMcStack(fcOutput);

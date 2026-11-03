@@ -100,12 +100,12 @@ public class BlockFire extends Block {
     }
 
     // 1.5.2 BlockFire.onBlockAdded (vanilla/server BlockFire.java:381-394): on obsidian outside the End, try to open a
-    // portal (Block.portal is FCBlockPortal, whose tryToCreatePortal is FC's frame test); otherwise put out unsupported
-    // fire or schedule the first tick. FCBlockFireStoked overrides it. Port note: for vanilla fire (51) this is not
-    // reached today. FireBlock.onPlace -> BaseFireBlock.onPlace never calls BlockBehaviour.onPlace, where the FC hook
-    // sits, and BaseFireBlock.onPlace already lights 1.20.1 portals (BaseFireBlock.java:123-139) and schedules the
-    // first tick (FireBlock.onPlace, 30 + nextInt(10)). A future onPlace route for fire must drop one of the two portal
-    // attempts.
+    // portal (Block.portal is FCBlockPortal; the bridge answers its tryToCreatePortal with 1.20.1's PortalShape,
+    // btw.forge.NetherPortalShapes); otherwise put out unsupported fire or schedule the first tick. FCBlockFireStoked
+    // overrides it. Port note: for vanilla fire (51) this is not reached today. FireBlock.onPlace ->
+    // BaseFireBlock.onPlace never calls BlockBehaviour.onPlace, where the FC hook sits, and BaseFireBlock.onPlace
+    // already lights 1.20.1 portals (BaseFireBlock.java:123-139) and schedules the first tick (FireBlock.onPlace,
+    // 30 + nextInt(10)). A future onPlace route for fire must drop one of the two portal attempts.
     @Override
     public void onBlockAdded(World world, int x, int y, int z) {
         if (world.provider.dimensionId > 0 || world.getBlockId(x, y - 1, z) != Block.obsidian.blockID
@@ -188,5 +188,12 @@ public class BlockFire extends Block {
                 world.spawnParticle("largesmoke", (double) fx, (double) fy, (double) fz, 0.0D, 0.0D, 0.0D);
             }
         }
+    }
+
+    // 1.5.2 BlockFire.getRenderType (vanilla/client BlockFire.java:115-118). FCBlockFire (51) and FCBlockFireStoked
+    // (251) do not override it.
+    @Override
+    public int getRenderType() {
+        return 3;
     }
 }

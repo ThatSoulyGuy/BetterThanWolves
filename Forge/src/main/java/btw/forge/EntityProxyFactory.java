@@ -22,6 +22,8 @@ import org.apache.logging.log4j.Logger;
  *   <li>{@link btw.modern.EntityCreature} / {@link btw.modern.EntityGolem} /
  *       {@link btw.modern.EntityWaterMob} / {@link btw.modern.EntityAgeable}
  *       &rarr; {@link ProxyPathfinderMob}</li>
+ *   <li>A frozen 1.5.2 minecart or boat without a BTW type &rarr; the 1.20.1 minecart or boat
+ *       ({@link FcVehicles})</li>
  *   <li>Any other {@link btw.modern.Entity}
  *       &rarr; {@link ProxyEntity}</li>
  * </ul>
@@ -122,6 +124,13 @@ public class EntityProxyFactory {
             return createItemEntity(fcItem, level);
         }
 
+        // FCMOD-INTEGRATION(1.20.1): fc_entity_views: a frozen 1.5.2 minecart or boat with no BTW type is the 1.20.1 one
+        // (the block dispenser's carts and boats), never the undrawn generic fc_entity puppet (FcVehicles)
+        if (FcVehicles.isVehicle(fcEntity, registeredType)) {
+            net.minecraft.world.entity.Entity vehicle = FcVehicles.create(fcEntity, level);
+            if (vehicle != null) return vehicle;
+        }
+
         // Plain entity (arrows, fireballs, mech power, etc.)
         return createPlainProxy(fcEntity, registeredType, level);
     }
@@ -201,6 +210,21 @@ public class EntityProxyFactory {
     /**
      * Creates a real MC ItemEntity from an FC EntityItem.
      * This produces a visible, pickupable item drop in the world.
+     *
+     * <p>FCMOD-INTEGRATION(1.20.1): fc_drop_position. The drop's box is 1.5.2's: FC's {@code posY} is the box centre
+     * ({@code minY + yOffset}, frozen Entity.setPosition, vanilla/server Entity.java:358-366; an EntityItem's yOffset is
+     * half its 0.25 height, EntityItem.java:40-41), while 1.20.1's position is the feet, so the item spawns at
+     * {@code posY - yOffset}, the conversion {@link ItemEntityBridge} already makes both ways (:153-156, :249-250). The
+     * port used {@code posY} as the feet, 0.125 too high: a block drop (Modern-Common Block.dropBlockAsItem_do, centre at
+     * y+0.15 to y+0.85) reached y+1.1, so about one in seven overlapped the block above and 1.20.1 pushed it through the
+     * rock (triage CF2-DR2 (B)). One exception keeps 1.20.1 from pushing what 1.5.2 never pushed: 1.20.1 pushes an item
+     * out of any block its box overlaps, without collision (ItemEntity.java:131-133), 1.5.2 only one whose centre was
+     * inside a normal cube (vanilla/server EntityItem.java:98-106, :624-640), so a drop FC centres on a floor (every
+     * entity drop: Entity.entityDropItem puts the centre at the feet, Entity.java:1614-1620) rose out of it with its
+     * spawn velocity. When 1.5.2's box collides and the box at {@code posY} (yOffset higher) does not, the item spawns
+     * there, on the floor, as before; when both collide, 1.5.2's box stands. ProxyEntity-wrapped FC items (floating
+     * items, blood wood saplings) keep {@link #applyPositionFromFc}: their FC entity keeps running, and ProxyEntity
+     * syncs {@code posY} with the proxy's feet both ways.</p>
      */
     private static net.minecraft.world.entity.Entity createItemEntity(
             btw.modern.EntityItem fcItem, Level level) {
@@ -217,9 +241,19 @@ public class EntityProxyFactory {
             return null;
         }
 
+        // FCMOD-INTEGRATION(1.20.1): fc_drop_position: an FC drop spawns with 1.5.2's box (feet = posY - yOffset, the ItemEntityBridge convention), not 0.125 higher
+        double feet = fcItem.posY - (double) fcItem.yOffset;
         net.minecraft.world.entity.item.ItemEntity itemEntity =
                 new net.minecraft.world.entity.item.ItemEntity(
-                        level, fcItem.posX, fcItem.posY, fcItem.posZ, mcStack);
+                        level, fcItem.posX, feet, fcItem.posZ, mcStack);
+        // FCMOD-INTEGRATION(1.20.1): fc_drop_position: a drop FC centres on a floor (entity drops) sits on it, as 1.5.2 let it rise out, instead of 1.20.1 pushing it sideways
+        // Only when 1.5.2's box collides and the box at posY does not (the javadoc); the predicate is ItemEntity.tick's own.
+        if (!level.noCollision(itemEntity, itemEntity.getBoundingBox().deflate(1.0E-7D))) {
+            net.minecraft.world.phys.AABB atPosY = itemEntity.getBoundingBox().move(0.0D, fcItem.posY - feet, 0.0D);
+            if (level.noCollision(itemEntity, atPosY.deflate(1.0E-7D))) {
+                itemEntity.setPos(fcItem.posX, fcItem.posY, fcItem.posZ);
+            }
+        }
         itemEntity.setPickUpDelay(fcItem.delayBeforeCanPickup);
 
         // Apply velocity if FC set any
@@ -227,13 +261,20 @@ public class EntityProxyFactory {
 
         LOGGER.debug("Created ItemEntity for FC item id={} count={} at ({},{},{})",
                 fcStack.itemID, fcStack.stackSize,
-                fcItem.posX, fcItem.posY, fcItem.posZ);
+                itemEntity.getX(), itemEntity.getY(), itemEntity.getZ());
         return itemEntity;
     }
 
     /**
      * Copies the position from the FC entity to the Forge proxy so
      * that the entity spawns at the correct location.
+     *
+     * <p>FC's {@code posY} becomes the proxy's feet, the convention every proxy's per-tick sync keeps both ways
+     * (ProxyEntity.syncToFc / syncFromFc, ProxyMob, ProxyAnimal), so it stays here even for the FC entities whose
+     * yOffset is not 0 (fc_drop_position audit: living FC entities have 0; dynamite, mining charges, floating items,
+     * XP orbs, primed TNT, falling blocks, platforms, anchors and windmills do not, and their 1.20.1 box sits yOffset
+     * above FC's). Spawning them at {@code posY - yOffset} alone would drop the FC entity by yOffset at its first
+     * sync.</p>
      */
     private static void applyPositionFromFc(
             net.minecraft.world.entity.Entity proxy, btw.modern.Entity fcEntity) {

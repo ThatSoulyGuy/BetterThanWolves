@@ -66,7 +66,8 @@ public final class ModernCookingImport {
     public static boolean isMapped(Item item) {
         if (item == null || item == Items.AIR) return false;
         if (ProxyRegistry.getItemId(item) > 0) return true;
-        return item instanceof BlockItem bi && ProxyRegistry.getBlockId(bi.getBlock()) > 0;
+        // FCMOD-INTEGRATION(1.20.1): strata: item identity, so a deepslate form's item stays unmapped (its own recipes may import)
+        return item instanceof BlockItem bi && ProxyRegistry.getBlockFormItemId(bi.getBlock()) > 0;
     }
 
     /**

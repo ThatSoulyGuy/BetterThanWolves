@@ -22,4 +22,19 @@ public class BlockStem extends BlockFlower {
     public int getRenderType() {
         return 19;
     }
+
+    // FCMOD-INTEGRATION(1.20.1): legacy_icons: 1.5.2 BlockStem's icon members (vanilla/client BlockStem.java:28,
+    // :303-312): the straight stem (blockIcon) and the bent one RenderBlocks.renderBlockStem reads. FCBlockStem
+    // (104, 105) inherits them.
+    private Icon stemBentIcon;
+
+    @Override
+    public void registerIcons(IconRegister register) {
+        this.blockIcon = register.registerIcon("stem_straight");
+        this.stemBentIcon = register.registerIcon("stem_bent");
+    }
+
+    public Icon func_94368_p() {
+        return this.stemBentIcon;
+    }
 }

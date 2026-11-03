@@ -28,6 +28,7 @@ import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BaseSpawner;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
@@ -42,6 +43,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -136,7 +138,8 @@ public final class VanillaMobReplacer {
     }
 
     /** A cancelled vanilla mob waiting for its FC proxy; {@code fcId == null}: dropped, only discarded. */
-    private record Pending(ServerLevel level, Entity vanilla, ResourceLocation fcId, boolean fromDisk) {}
+    private record Pending(ServerLevel level, Entity vanilla, ResourceLocation fcId, boolean fromDisk,
+                           @Nullable StructureStart livePlacement) {}
 
     /** Filled by the join handler, drained on the server thread at the end of each server tick. */
     private static final Queue<Pending> PENDING = new ConcurrentLinkedQueue<>();
@@ -172,6 +175,13 @@ public final class VanillaMobReplacer {
             return;
         }
 
+        // FCMOD-INTEGRATION(1.20.1): zombified_villages: a new village gets no 1.20.1 iron golem (4.B removed village golems, Village.java:80-97); decision D1 (a1)
+        if (entity.getType() == EntityType.IRON_GOLEM && !event.loadedFromDisk() && entity instanceof Mob golem
+                && !golem.isSpawnCancelled() && golem.getSpawnType() == MobSpawnType.STRUCTURE) {
+            VillageInhabitants.queueGolem(level, golem, VillageInhabitants.livePlacement());
+            return;   // joins as usual; checked at the end of the tick
+        }
+
         ResourceLocation fcId = REPLACEMENTS.get(entity.getType());
         if (fcId == null) return;
 
@@ -195,14 +205,15 @@ public final class VanillaMobReplacer {
         // dropped: FC decides its own jockeys (FCEntitySpider.initCreature, Server FCEntitySpider.java:56-68).
         // Still queued, so drain() discards them (R5) once the chunk is FULL.
         if (!event.loadedFromDisk() && entity instanceof Mob m && isFinalizeSpawnExtra(m)) {
-            PENDING.add(new Pending(level, entity, null, false));
+            PENDING.add(new Pending(level, entity, null, false, null));
             return;
         }
 
         // Deferred: worldgen entities join from LevelChunk.runPostLoad inside
         // ChunkMap.protoChunkToFullChunk (loadedFromDisk=false, chunk not yet FULL), and the
         // FC init / state transfer below touch the world.
-        PENDING.add(new Pending(level, entity, fcId, event.loadedFromDisk()));
+        PENDING.add(new Pending(level, entity, fcId, event.loadedFromDisk(),
+                VillageInhabitants.candidate(entity, event.loadedFromDisk()) ? VillageInhabitants.livePlacement() : null));
     }
 
     /**
@@ -315,6 +326,8 @@ public final class VanillaMobReplacer {
 
     /** Replaces everything queued so far; mobs queued while this runs wait for the next tick. */
     private static void drain() {
+        VillageInhabitants.clearStalePlacement();
+        VillageInhabitants.drainGolems();
         if (PENDING.isEmpty()) return;
         List<Pending> batch = new ArrayList<>();
         for (Pending p; (p = PENDING.poll()) != null; ) batch.add(p);
@@ -364,6 +377,27 @@ public final class VanillaMobReplacer {
             }
             return;
         }
+        // FCMOD-INTEGRATION(1.20.1): zombified_villages: a village's fresh villagers follow ComponentVillage.spawnVillagers (4.B)
+        VillageInhabitants.Decision village = null;
+        if (VillageInhabitants.candidate(vanilla, p.fromDisk())) {
+            try {
+                village = VillageInhabitants.decide(level, (Mob) vanilla, p.livePlacement());
+            } catch (Throwable t) {
+                if (LOGGED.add("village|" + t.getClass().getName())) {
+                    LOGGER.warn("Village rule failed for {} at {}: {}", vanilla.getType(), vanilla.blockPosition(), t.toString());
+                }
+            }
+        }
+        if (village != null && village.kind() == VillageInhabitants.Kind.DROP) {
+            if (LOGGED.add("villagedrop|" + village.abandonment())) {
+                LOGGER.info("[VILLAGES] {} at {} not spawned: village level {}, class {} (logged once per level)",
+                        EntityType.getKey(vanilla.getType()), vanilla.blockPosition(), village.abandonment(), village.fcClass());
+            }
+            return;   // replace()'s finally discards the cancelled vanilla mob (R5)
+        }
+        ResourceLocation fcId = village == null ? p.fcId() : new ResourceLocation(BTWForgeMod.MOD_ID,
+                village.kind() == VillageInhabitants.Kind.VILLAGER ? "fc_villager" : "fc_zombie");
+
         // Riding is not carried over: detach the cancelled entity from vehicles/passengers that are
         // in the world (e.g. a skeleton-trap horse) so they don't keep a reference to it.
         try {
@@ -373,7 +407,7 @@ public final class VanillaMobReplacer {
             // cosmetic only
         }
 
-        EntityType<?> fcType = ForgeRegistries.ENTITY_TYPES.getValue(p.fcId());
+        EntityType<?> fcType = ForgeRegistries.ENTITY_TYPES.getValue(fcId);
         Entity proxy = fcType == null ? null : fcType.create(level);
         if (proxy == null) return;
         proxy.moveTo(vanilla.getX(), vanilla.getY(), vanilla.getZ(), vanilla.getYRot(), vanilla.getXRot());
@@ -391,7 +425,9 @@ public final class VanillaMobReplacer {
             }
             transferIdentity(vanilla, proxy, fc);
             MobSpawnType origin = vanilla instanceof Mob m ? m.getSpawnType() : null;
-            if (!p.fromDisk() && usesFcSpawnInit(origin)) {
+            if (village != null) {
+                applyVillageDecision(vanilla, proxy, fc, village);
+            } else if (!p.fromDisk() && usesFcSpawnInit(origin)) {
                 runFcSpawnInit(level, fc, vanilla, origin);
             } else {
                 applyVariant(level, vanilla, fc, true);
@@ -405,9 +441,15 @@ public final class VanillaMobReplacer {
         // init-before-add (as ItemMonsterPlacer.java:104 / MobSpawnerBaseLogic.java:219) so the spawn
         // packet (writeSpawnData -> FCEntityStateCodec) already carries FC's colour/profession/equipment.
         if (!level.addFreshEntity(proxy)) {
-            LOGGER.warn("addFreshEntity rejected {} for {}", p.fcId(), vanilla.getType());
-        } else if (LOGGED.add("ok|" + vanilla.getType() + "|" + p.fromDisk())) {
-            LOGGER.info("[MobReplacer] {} -> {} ({})", EntityType.getKey(vanilla.getType()), p.fcId(),
+            LOGGER.warn("addFreshEntity rejected {} for {}", fcId, vanilla.getType());
+            return;
+        }
+        if (village != null && LOGGED.add("village|" + village.kind() + "|" + village.abandonment())) {
+            LOGGER.info("[VILLAGES] {} -> {} (village level {}, class {}{})", EntityType.getKey(vanilla.getType()), fcId,
+                    village.abandonment(), village.fcClass(), village.dirtyPeasant() ? ", dirty" : "");
+        }
+        if (LOGGED.add("ok|" + vanilla.getType() + "|" + p.fromDisk())) {
+            LOGGER.info("[MobReplacer] {} -> {} ({})", EntityType.getKey(vanilla.getType()), fcId,
                     p.fromDisk() ? "from disk: state transferred"
                             : String.valueOf(vanilla instanceof Mob m ? m.getSpawnType() : null));
         }
@@ -504,6 +546,28 @@ public final class VanillaMobReplacer {
             int prof = vanilla instanceof ZombieVillager zv ? fcProfession(zv.getVillagerData().getProfession()) : -1;
             if (prof < 0) prof = level.getRandom().nextInt(FC_PROFESSION_COUNT);
             setIntField(fc, "m_iVillagerClass", prof);
+        }
+    }
+
+    /**
+     * ComponentVillage.spawnVillagers (vanilla/server ComponentVillage.java:178-198): no FC spawn init, as 4.B built them
+     * with new FCEntityZombie / new FCEntityVillager(world, type). FCMOD-INTEGRATION(1.20.1): zombified_villages
+     */
+    private static void applyVillageDecision(Entity vanilla, Entity proxy, btw.modern.EntityLiving fc,
+                                             VillageInhabitants.Decision d) {
+        boolean baby = vanilla instanceof AgeableMob am ? am.isBaby() : vanilla instanceof Zombie z && z.isBaby();
+        if (d.kind() == VillageInhabitants.Kind.VILLAGER_ZOMBIE) {
+            setIntField(fc, "m_iVillagerClass", d.fcClass());
+            fc.SetPersistent(true);
+            if (proxy instanceof Mob pm) pm.setPersistenceRequired();
+            fcCall(fc, "setVillager", BOOL, true);
+            if (baby) fcCall(fc, "setChild", BOOL, true);
+        } else {
+            fcCall(fc, "setProfession", INT, d.fcClass());
+            if (d.dirtyPeasant()) fcCall(fc, "SetDirtyPeasant", INT, 1);
+            if (baby && vanilla instanceof AgeableMob va && fc instanceof btw.modern.EntityAgeable fa) {
+                fa.setGrowingAge(va.getAge());
+            }
         }
     }
 
@@ -608,7 +672,7 @@ public final class VanillaMobReplacer {
     }
 
     /** 1.20.1 profession -> FC 0 farmer, 1 librarian, 2 priest, 3 blacksmith, 4 butcher; -1 = let FC pick. */
-    private static int fcProfession(VillagerProfession p) {
+    static int fcProfession(VillagerProfession p) {
         if (p == VillagerProfession.LIBRARIAN || p == VillagerProfession.CARTOGRAPHER) return 1;
         if (p == VillagerProfession.CLERIC) return 2;
         if (p == VillagerProfession.ARMORER || p == VillagerProfession.WEAPONSMITH

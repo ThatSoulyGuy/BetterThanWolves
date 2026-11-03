@@ -46,6 +46,13 @@ public class BTWForgeMod {
         // entries must exist before RegisterEvent fires, i.e. during mod construction.
         LegacySounds.register(modEventBus);
 
+        // FCMOD-INTEGRATION(1.20.1): fc_particles: the BTW particle types (FC's white smoke, white cloud, small flame
+        // and cinders, 1.5.2's snow-shovel puff); DeferredRegister entries must exist before RegisterEvent fires.
+        FcParticleTypes.register(modEventBus);
+
+        // FCMOD-INTEGRATION(1.20.1): fc_beacon: FC's beacon potions as MobEffects
+        BTWMobEffects.register(modEventBus);
+
         // Register network channel early so both sides agree on the protocol
         // before any packets are sent. Must happen during mod construction
         // (before FMLCommonSetupEvent) so the channel exists when the server
@@ -58,6 +65,9 @@ public class BTWForgeMod {
         // FCMOD-INTEGRATION(1.20.1): fc_log_rules: 1.20.1 logs FC has no identity for follow FCBlockLog's rule (class F: the bark and stripped forms FC reads as log 17 or 165; class S: stems and modded logs). The FC machine hook is registered after BTWCompat.init, so an integration's own hook (Dynamic Trees #027) is asked first.
         ModernLogHooks.register();
         MinecraftForge.EVENT_BUS.register(ModernLogRules.class);
+
+        // FCMOD-INTEGRATION(1.20.1): modern_wood_subblocks: FC's saw cuts the newer woods' stairs and slabs and the bamboo blocks; after the log rule so Dynamic Trees and the log rule are asked first
+        ModernWoodSawHooks.register();
     }
 
     /**
@@ -116,6 +126,9 @@ public class BTWForgeMod {
         // FCMOD-INTEGRATION(1.20.1): modern_dyes: the 1.20.1 dyes' FC colour twins, before RecipeBridge and JEI read
         // FC's recipe lists (INTEGRATIONS #038)
         event.enqueueWork(ModernSpellingRecipes::apply);
+        // FCMOD-INTEGRATION(1.20.1): modern_wood_subblocks: FC's sub-block recipes for wood types 5-8, after the modern-dye
+        // twins so no shipped fc_recipe_<n> id moves, before RecipeBridge (ServerStarting) and JEI read FC's list
+        event.enqueueWork(ModernWoodSubBlocks::addFcRecipes);
     }
 
     @SubscribeEvent

@@ -44,7 +44,9 @@ public class PotionMapping {
      * Returns the modern MobEffect for a legacy FC potion ID.
      */
     public static MobEffect getEffect(int legacyId) {
-        return ID_TO_EFFECT.get(legacyId);
+        MobEffect e = ID_TO_EFFECT.get(legacyId);
+        // FCMOD-INTEGRATION(1.20.1): fc_beacon: FC's own potions 29-31 (True Sight, Looting, Fortune) are BTW MobEffects
+        return e != null ? e : BTWMobEffects.byLegacyId(legacyId);
     }
 
     /**
@@ -52,6 +54,6 @@ public class PotionMapping {
      */
     public static MobEffect getEffect(btw.modern.Potion fcPotion) {
         if (fcPotion == null) return null;
-        return ID_TO_EFFECT.get(fcPotion.id);
+        return getEffect(fcPotion.id);
     }
 }

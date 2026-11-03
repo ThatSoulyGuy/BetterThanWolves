@@ -32,7 +32,10 @@ behaviour has to change, the change goes outside FC code:
   no longer tasks) are its precursors and are expected to move into it, as are the load-time mixins on FC
   classes in `btw.forge.mixin.fcext` (2026-10-15, keyed on the plant-twin ids so FC's own blocks are
   untouched; 2026-10-20, the modern-woods patches M1-M9, keyed on log2's id 165 and wood types 5-8, see
-  [Woods and logs (ModernWoods, FCLogRules)](#woods-and-logs-modernwoods-fclogrules)).
+  [Woods and logs (ModernWoods, FCLogRules)](#woods-and-logs-modernwoods-fclogrules); 2026-10-27 to 2026-11-03, the wood
+  sub-block patches W1-W6, keyed on ids 1093-1100 and wood types 5-8, and five narrow patches: the burning netherrack's
+  row below y = 0, the beacon pyramid's floor, FC's portal lighting, the block dispenser's boat item and the placed
+  tools' stick test, listed under Mixins below).
 
 Legacy port edits that predate this rule:
 
@@ -81,10 +84,16 @@ MC ItemStack  ◄── ItemStackBridge ──► btw.modern.ItemStack
 - `WorldBridge` extends `btw.modern.World`, wraps `ServerLevel` — block get/set, entity spawn, explosions
   - placement validity (2026-10-21, `INTEGRATIONS.md` #040): `canPlaceEntityOnSide` is 4.B's rule (an entity
     check in which the placing player counts, a free or replaceable target, `canPlaceBlockOnSide`;
-    WorldBridge.java:1920-1999); `checkNoEntityCollision` follows 1.5.2 (entities that block building, or FC's
-    `preventEntitySpawning`: items and XP orbs no longer obstruct; :1877, :1896); a fully derived block never
-    reads the metadata overlay (`getBlockMetadata`, :219-235); the tripwire hook codec (:533-542, :809-818).
+    WorldBridge.java:2192-2271); `checkNoEntityCollision` follows 1.5.2 (entities that block building, or FC's
+    `preventEntitySpawning`: items and XP orbs no longer obstruct; :2148, :2167); a fully derived block never
+    reads the metadata overlay (`getBlockMetadata`, :235-251); the tripwire hook codec (:563-572, :880-889).
     See [Placement validity (WorldBridge)](#placement-validity-worldbridge).
+  - solid top (2026-10-31, `INTEGRATIONS.md` #061): `doesBlockHaveSolidTopSurface` is 4.B's rule, the large centre hard
+    point on top of the FC block the bridge reads at the cell, with 1.20.1's sturdy face only where FC reads air
+    (WorldBridge.java:2833-2842); the support read `getSupportBlockId` (2026-11-02, #062; :226-232) gives 1.5.2's
+    redstone torch id list a support relative's id. See [Solid top surface (WorldBridge,
+    ClientFcWorld)](#solid-top-surface-worldbridge-clientfcworld) and [Support relatives (FcAttachSupport,
+    ModernBlockStandIn)](#support-relatives-fcattachsupport-modernblockstandin).
 - `ProxyBlock` + `ProxyRegistry` — 148 FC blocks registered, vanilla block ID mapping
 - `ForgeMinecraftServerWrapper` — wraps `MinecraftServer`
 - `btw.modern.Block.blocksList[]` — 148 FC blocks + vanilla blocks with FC properties
@@ -93,7 +102,7 @@ MC ItemStack  ◄── ItemStackBridge ──► btw.modern.ItemStack
 - `btw.modern.AxisAlignedBB` — wraps `AABB`
 - `btw.modern.Vec3` — wraps `Vec3`
 - `btw.modern.ChunkCoordinates` — data class
-- Mixins (`Forge/src/main/resources/betterthanwolves.mixins.json`, updated 2026-10-21: 52 common and 2 client
+- Mixins (`Forge/src/main/resources/betterthanwolves.mixins.json`, updated 2026-11-03: 74 common and 5 client
   entries; the config's `plugin` is `btw.forge.compat.CompatMixinPlugin`, see
   [Mod compatibility (BTWCompat)](#mod-compatibility-btwcompat)):
   - block hooks: `BlockBehaviorMixin` (FC neighbour, place, remove, use, entity, signal and dig hooks;
@@ -135,9 +144,22 @@ MC ItemStack  ◄── ItemStackBridge ──► btw.modern.ItemStack
   - live climate (`INTEGRATIONS.md` #028): `fcext.FCUtilsMiscColdBiomeMixin` (load-time, on
     `FCUtilsMisc.IsIKInColdBiome`);
   - held use (see [Held use (hold-to-craft)](#held-use-hold-to-craft)): `LivingEntityUseAccessor`;
+  - round 3 (2026-10-25 to 2026-11-03, each in its own section below): `ExplosionMixin` and
+    `ExplosionDamageCalculatorMixin` (#049), `StructureStartPlacementMixin` and `VillageSiegeMixin` (#048),
+    `BeaconBlockEntityMixin` (#053), `PlayerListRespawnMixin` (#054), `AttachableSupportMixin` and `RailSupportMixin`
+    (#055), `ButtonBlockMixin` and `DetectorRailBlockMixin` (#056), `PortalShapeMixin` (#058), and the load-time patches
+    on FC classes `fcext.FCBlockNetherrackFallingMixin` (#043), `fcext.FCItemBlockWoodStubWoodMixin`,
+    `fcext.FCBlockWoodSidingWoodMixin`, `fcext.FCBlockWoodMouldingWoodMixin`, `fcext.FCBlockSidingStubRenderMixin`,
+    `fcext.FCBlockSidingDecorativeStubRenderMixin` and `fcext.FCBlockWoodMouldingStubRenderMixin` (W1-W6, #051),
+    `fcext.FCTileEntityBeaconPyramidFloorMixin` (#053), `fcext.FCBlockBlockDispenserBoatItemMixin` (#057),
+    `fcext.FCBlockPortalShapeMixin` (#058) and `fcext.FCItemToolStickRelativeMixin` (#062); `ServerPlayerGameModeMixin`
+    also records the dig face (#044) and the harvest the collapsed-identity rule reads (#045), and `ServerPlayerMixin`
+    gives a respawned player 4.B's fresh state and placement (`restoreFrom`) and saves FC's beacon bind (#054);
   - optional mods, prepared only when the mod is installed: `compat.sereneseasons.SeasonalBonemealVetoMixin`
     (#028), `compat.lso.LsoRegenGateMixin` (#031);
-  - client only: `EntityRendererNameTagMixin`, `client.ClientLevelMixin`.
+  - client only: `EntityRendererNameTagMixin`, `client.ClientLevelMixin`, and since 2026-10-25 the breaking crack's
+    `client.BlockRenderDispatcherCrackMixin`, `client.SheetedDecalAccessor` and
+    `client.VertexMultiConsumerDoubleAccessor` (#041).
 
   `NetherPortalBlockMixin` was deleted on 2026-10-14: the portal's random tick falls under the
   tick-ownership rule.
@@ -268,8 +290,9 @@ unless the 1.20.1 class overrides `tick`):
   |                         |                                       |                      | LIT + unlight = 4.B id 74
 6 | IceBlock (79)           | VANILLA                               | by rule              | FCBlockIce assumes 1.5.2 opacity 3;
   |                         |                                       |                      | 1.20.1 melts at light 12, as 4.B does
-7 | DETECTOR_RAIL (28)      | NONE, gate false                      | VANILLA (override)   | rail SHAPE + POWERED <-> metadata is
-  |                         |                                       |                      | not mapped
+7 | DETECTOR_RAIL (28) and  | NONE, gate false                      | VANILLA (override)   | 1.20.1 presses and releases them; the
+  | BTW's 235, 236; plates  |                                       |                      | plate and rail codecs map every 1.5.2 bit
+  | (70, 72)                |                                       |                      | (fc_redstone, 2026-10-28)
 8 | DEAD_BUSH (32)          | NONE, gate false (decision D3)        | by rule              | its FC tick is survival on sand 12 only
 9 | PENDING ids (staging)   | VANILLA, 1.20.1 flag                  | by rule              | empty
 10| LeavesBlock (18)        | FC, gate = !PERSISTENT                | VANILLA (DISTANCE)   | replaces 1.20.1's DISTANCE == 7 gate
@@ -299,7 +322,7 @@ ANVIL, CHIPPED_ANVIL, DAMAGED_ANVIL   | 145  | FallingBlock.tick                
 leaves 18, dispenser 23 / dropper 158, detector rail 28, the stairs (53, 67, 108, 109, 114, 128, 134,
 135, 136, 156), chests 54 / 130 / 146, farmland 60, cactus 81 and sugar cane 83 (survival executors),
 plates 70 / 72 / 147 / 148, redstone torch 76, buttons 77 / 143, soul sand 88, repeater 93, cauldron
-118, lamp 123, tripwire 131 / 132, comparator 149.
+118, lamp 123, tripwire 131 / 132, comparator 149, and BTW's detector rails 235 / 236 (2026-10-28, #056).
 
 **doFireTick** (maintainer decision D1, `TickPolicy.HONOUR_DO_FIRE_TICK = true`, `INTEGRATIONS.md`
 #012): read at dispatch, never in the gate. `fireTickSuppressed(fc, level)` covers every
@@ -446,6 +469,13 @@ implement rules, not dispatch.
 6 | AttachedStemBlockMixin            | AttachedStemBlock.updateShape         | FC stems: attachment left to FC
   |                                   | m_7417_, HEAD                         | (FCBlockStem.ValidateFruitState)
 ```
+
+- Since 2026-10-31 FC's ticks and the soil clause read 4.B's solid top (tag `solid_top_surface`,
+  `INTEGRATIONS.md` #061, see [Solid top surface (WorldBridge,
+  ClientFcWorld)](#solid-top-surface-worldbridge-clientfcworld)): fire with no burnable neighbour over a
+  top 4.B does not make solid goes out on its next FC tick, a mushroom is neither placed on, kept on nor
+  spread onto one (PlantSoilMixin asks FC's `FCBlockMushroom.CanGrowOnBlock`), stems grow no fruit there,
+  and nether growth does not spread there.
 
 **Post-1.5.2 plants: twins and paced owners** (2026-10-15, maintainer ruling: each plant added after
 1.5.2 takes the 4.B rule of its nearest 1.5.2 / FC relative, adapted to its lore; `STUB_CATALOGUE.md`
@@ -703,7 +733,7 @@ VANILLA     | everything else (moss, nylium, pink petals, seagrass,    | 1.20.1 
   the swing without changing anything. The client never shrinks the stack (as `BoneMealItem.useOn` does
   not); the server's slot update does, and the soil's new state arrives through the normal block update.
 - Creative: `ServerPlayerGameMode.useItemOn` restores the count around `useOn`, and FC's own item use (Stage 2
-  and the item step) gets 1.5.2's restore in `ProxyBlock.runFcItemUse` (ProxyBlock.java:778-811, inside an
+  and the item step) gets 1.5.2's restore in `ProxyBlock.runFcItemUse` (ProxyBlock.java:738-771, inside an
   INV-RESYNC shadow scope), as 4.B did.
 - An FC failure inside `AttemptToApplyFertilizerTo` is logged once and counts as declined (the use
   packet handler has no catch above it).
@@ -973,6 +1003,18 @@ CraftingManager.takeExternalCraft(IInventory inv)         // the pending craft b
   for a non-special recipe, `awardRecipes`; `remainders` runs `getRemainingItems` with
   `ForgeHooks.setCraftingPlayer` set to the taker. FC's own `onCreated` already ran through
   `SlotCrafting.onCrafting`, a no-op on the server under FC's isRemote guard, so nothing runs twice.
+- **The exact 2x2 match** (2026-10-28, tag `recipes`, `INTEGRATIONS.md` #025, `STUB_CATALOGUE.md` (bp)): FC's recipes in
+  the RecipeManager (`FCCraftingRecipes.Shaped` and `Shapeless`, FCCraftingRecipes.java:104, :126) match the 2x2 grid,
+  and any 1.20.1 crafting container, as the FC grids match them: after the item-level test, FC's own `matches` on the
+  grid (`fcMatches`, :321; id and damage, 32767 any), as 1.5.2's ContainerPlayer matched through CraftingManager. A
+  non-square grid and a throw keep the item-level answer. A colour recipe no longer takes another colour's candle, wool,
+  vase or wool slab at the 2x2 grid (R11, see Dyes).
+- **`betterthanwolves:modern_log_chopping`** (2026-10-28, tag `bamboo_planks`, `INTEGRATIONS.md` #052,
+  `STUB_CATALOGUE.md` (bp)): a special crafting recipe with its own serializer (`recipes/ModernLogChoppingRecipe.java`)
+  that names logs FC has no item for, their planks and the yields; the 2x2 grid and the FC grids (through
+  WorkbenchFallback) answer it, and FC's saw follows the installed recipes (RecipeBridge.java:156; cleared at
+  ServerStopped, :259). Shipped for the bamboo blocks; see [Woods and logs (ModernWoods,
+  FCLogRules)](#woods-and-logs-modernwoods-fclogrules).
 
 **RecipeBridge.legacyAlias(Item).** An FC cell holds only the 1.5.2 (id, damage), so an item 1.20.1 split from
 one 1.5.2 subtype reads back as the canonical item `ItemStackHelper.toMcStack` picks. `legacyAlias(canonical)`
@@ -987,14 +1029,14 @@ an item's legacy damage without the `MODERN_SPELLING` bit names the canonical it
   same-subtype spellings: FC reads them as that subtype, and they read back as the canonical item.
 
 The map is built once, after FC is ready (never cached earlier), in registry order, first entry wins; it never
-allocates a headless id. Lossy collapses (every modern flower onto the rose, the 16 bed colours onto one bed)
-are deliberately not aliases: those items are not the same 1.5.2 thing (at FC's grids and in FC storage only: a
-broken bed drops its own colour since 2026-10-20, see
-[Beds and doors (VanillaPairDrops)](#beds-and-doors-vanillapairdrops)). WorkbenchFallback tries the canonical grid
-first and, only when nothing matches and a cell has an alias, once more with every aliased cell swapped (count and
-tag kept); the craft remembers which grid matched, so its remainders and hooks see that grid. Without it no FC grid
-matched a recipe that names one of those items (black candles and stained glass, the grindstone, ...; C1 review
-finding, fixed in the wave).
+allocates a headless id. Lossy collapses (the 16 bed colours onto one bed; the modern flowers until they became
+subtypes 38:1-10 on 2026-10-27, `INTEGRATIONS.md` #045) are deliberately not aliases: those items are not the same
+1.5.2 thing (at FC's grids and in FC storage only: a broken bed drops its own colour since 2026-10-20, see [Beds and
+doors (VanillaPairDrops)](#beds-and-doors-vanillapairdrops)). WorkbenchFallback tries the canonical grid first and,
+only when nothing matches and a cell has an alias, once more with every aliased cell swapped (count and tag kept); the
+craft remembers which grid matched, so its remainders and hooks see that grid. Without it no FC grid matched a recipe
+that names one of those items (black candles and stained glass, the grindstone, ...; C1 review finding, fixed in the
+wave).
 
 **btw_recipe_replacements** (`data/<ns>/btw_recipe_replacements/*.json`; a file whose path inside the folder
 starts with `_` is skipped):
@@ -1051,9 +1093,10 @@ starts with `_` is skipped):
 - `onCraftedBy` and ItemCraftedEvent run on a converted copy of the taken stack, so a listener's change to the
   crafted stack (an owner tag, for example) does not reach the stack the player receives. Vanilla results are
   unaffected.
-- Items LegacyVariants collapses onto one 1.5.2 subtype stay one item at an FC grid: the dye recipes of the
-  modern flowers and the flower banner pattern see a poppy, and dyed beds come back as the red bed (a broken
-  bed keeps its colour since 2026-10-20: `INTEGRATIONS.md` #039).
+- Items LegacyVariants collapses onto one 1.5.2 subtype stay one item at an FC grid: dyed beds come back as the red bed
+  (a broken bed keeps its colour since 2026-10-20: `INTEGRATIONS.md` #039). The flowers no longer collapse: since
+  2026-10-27 each is its own subtype of the rose 38, so their dye recipes and the flower banner pattern see their own
+  flower (`INTEGRATIONS.md` #045; see [Collapsed identity (CollapsedIdentity)](#collapsed-identity-collapsedidentity)).
 - The cooking import takes every edible unmapped smelting input, so FC's campfire spit also accepts chorus
   fruit.
 
@@ -1530,8 +1573,9 @@ dark oak, mangrove and cherry are FC wood types 5-8 (ruling 1: real FC woods thr
 FC's four). A second, plain FCBlockLog at legacy id 165 ("log2") carries them, so FC's own log code runs on them as on
 oak: chewing, bark (tanning), the work stump, the saw, chopping, FC fuel, FC's dig rate and its 0.025 harvest hunger,
 fire, explosions. Every other 1.20.1 log follows FCBlockLog's rule through the log rule below; the crimson and warped
-stems and hyphae give no bark and leave no work stump (ruling 2). Sidings, mouldings, corners and the other decorative
-blocks of the four woods are follow-up FU-W1 (approved 2026-10-20, not done).
+stems and hyphae give no bark and leave no work stump (ruling 2). Since 2026-10-28 the four woods also have FC's
+sidings, mouldings, corners and decorative blocks (FU-W1, `INTEGRATIONS.md` #051), and the bamboo blocks give planks
+through FC's saw and an FC axe (#052): see **Sub-blocks** and **Bamboo** below.
 
 **log2** (tag `modern_woods`):
 
@@ -1655,13 +1699,22 @@ public static void FCLogRules.clearCaches();
   once (logger `BTW-LogRules`) and degrades to EMPTY, null, -1 or false.
 - `isStump` is the port's one stump rule: a vertical log (AXIS Y) standing on a block that is not air, renders solid
   and is not in `#minecraft:logs`. `WorldBridge.deriveVanillaMetadata` sets the stump bit of FC's own logs with it
-  (WorldBridge.java:368-371), so an oak log on a stem or a Dynamic Trees branch is no longer a stump.
+  (WorldBridge.java:398-401), so an oak log on a stem or a Dynamic Trees branch is no longer a stump.
+- `FCLogRules.hitFace` (FCLogRules.java:529-531), the face a chew ejects its bark and pieces toward, is `DigFace.of`
+  since 2026-10-27: the dig packet's face, else the look ray's, else up, the rule FC's harvest uses (see [Dig face and
+  drop position (DigFace, EntityProxyFactory)](#dig-face-and-drop-position-digface-entityproxyfactory)).
 - `ModernLogHooks.register` (ModernLogHooks.java:33) runs once from the BTWForgeMod constructor, right after
-  `BTWCompat.init` (BTWForgeMod.java:58-60), with the class-S structural predicate `isForeignLogCandidate`, so an
+  `BTWCompat.init` (BTWForgeMod.java:63-66), with the class-S structural predicate `isForeignLogCandidate`, so an
   integration's own hook (Dynamic Trees) is asked first. `onSawed`: 4 planks of `sawPlanks`, 2 sawdust and the bark
   if the log still has it; a log with no one-log planks recipe takes FC's generic saw and drops as itself.
   `stumpRemoverWorks`: `isStump`. Log: `[STAND-IN] FC machine hook registered: the log rule (stems and modded logs,
   fc_log_rules)`.
+- `ModernWoodSawHooks.register` (BTWForgeMod.java:69-70) follows it (tag `modern_wood_subblocks`), so Dynamic Trees and
+  the log rule are asked first: FC's saw cuts the four newer woods' 1.20.1 stairs and slabs as FCBlockSaw cuts 4.B's
+  (stairs: a siding and a moulding; a double slab: two slabs; a slab: two mouldings) and a `modern_log_chopping` log
+  (the bamboo blocks) into the recipe's planks and sawdust, with no bark (`onSawed`, ModernWoodSawHooks.java:57-78).
+  Log: `[STAND-IN] FC machine hook registered: FC's saw on 1.20.1 wood blocks (the newer woods' stairs and slabs,
+  modern_log_chopping logs)`.
 - `ModernLogRules` is registered on the Forge bus by the BTWForgeMod constructor. Each handler acts only on a log-rule
   target; a failure is logged once and leaves the event as 1.20.1 has it:
 
@@ -1703,11 +1756,31 @@ Tag (blocks)                                 | Members BTW ships                
   type, so the DT families of the four woods give their own bark, work stump and saw planks (dark oak is wood type 6);
   the crimson and warped fungus families give no bark and no work stump and are chewed; a family with no primitive log
   pays oak bark; modded families pay their bark tag, and their saw planks come from the log's planks recipe.
+- **Sub-blocks** (FU-W1, 2026-10-28; tag `modern_wood_subblocks`, `STUB_CATALOGUE.md` (bp), `INTEGRATIONS.md` #051;
+  `ModernWoodSubBlocks.java`, `ModernWoodSawHooks.java`, `mixin/fcext/` W1-W6): FC's own sub-block classes at four new
+  pairs of ids, built reflectively at BTWLifecycle step 5f as FC builds blood wood's: siding-and-corner 1093 / 1095 /
+  1097 / 1099 and moulding-and-decorative 1094 / 1096 / 1098 / 1100 (`betterthanwolves:block_1093..1100`; the ids must
+  never change). Six load-time patches (W1-W6) teach FC's stubs and the two classes wood types 5-8. FC's sub-block
+  recipe loop runs for 5-8 through FC's own AddRecipe, appended at common setup after the modern-dye twins
+  (`fc_recipe_678..709`), so no shipped `fc_recipe_<n>` moves. The four planks answer 5 (FC planks 5:5-8, under FC's
+  planks rule and saw) only while the sub-blocks exist (ProxyRegistry.java:300, :553). 4.B's stair and slab rules reach
+  the 1.20.1 stairs and slabs as 1.20.1-side recipes (RecipeBridge.java:125) and the saw hook above. No six-plank BTW
+  fence for 5-8 (maintainer ruling 2026-10-22): the 1.20.1 trapdoors keep that grid, and the BTW fences come from
+  mouldings.
+- **Bamboo** (tag `bamboo_planks`, `STUB_CATALOGUE.md` (bp), `INTEGRATIONS.md` #052; maintainer rulings 2026-10-21 and
+  2026-10-22): the BTW plank rule. The 1.20.1 bamboo block -> planks recipe is removed
+  (`btw_recipe_replacements/bamboo_planks.json`), and a `betterthanwolves:modern_log_chopping` recipe
+  (`betterthanwolves:bamboo_chopping`) drives both plank routes: FC's saw (2 planks, 1 sawdust) and an FC axe at any
+  crafting grid (harvest level 2 or more: 1 plank and 1 sawdust; a weaker axe: 1 stick and 2 sawdust). No bark and no
+  work stump; the axe keeps FC's crafting rules (damage, the chop sound) and the sawdust is ejected as a log's is.
 
 ```
 [WOOD] log2 FCBlockLog at 165: acacia, dark oak, mangrove and cherry are FC wood types 5-8            (logger BTW-Wood)
 [WOOD] tanning with bark 5-8 ([2, 5, 2, 8] bark per leather) and the 4 vanilla log -> planks removals added
 [SELF-AUDIT/wood] log2 <FC block class> / <FC item class> at 165: 4 woods (wood types 5-8), <n> warnings (0 expected)
+[WOOD] sub-blocks of wood types 5-8 at 1093-1100 (<siding class> / <moulding class> with <item classes>)
+[WOOD] FC recipes of wood types 5-8: fc_recipe_678..fc_recipe_709 (32), after the modern-dye twins
+[SELF-AUDIT/wood] sub-blocks of wood types 5-8 at 1093-1100: 4 woods, <n> names, <n> warnings (0 expected)
 ```
 
 - `ModernWoods.audit` runs from `BridgeSelfAudit.runCommon` (BridgeSelfAudit.java:44-45). It WARNs when log2 was not
@@ -1716,13 +1789,18 @@ Tag (blocks)                                 | Members BTW ships                
   texture is missing from the jar.
 - Known limits: the stand-in pool is one id smaller (see the twins' Ids); class F and S keep 1.20.1's 0.005 harvest
   hunger (`INTEGRATIONS.md` #021; follow-up FU-W5); stand-in logs have no kiln and no smouldering; explosions drop
-  whole logs; a chew can flicker for one frame; `barked` uses a synthetic strip context with no player; old headless
-  acacia stacks do not stack with new (165, s) stacks until they pass a 1.20.1 inventory. As in 4.B, a broken work
-  stump drops an oak plank and the chewed log is oak-textured (stems become FC's oak-textured, flammable chewed log).
+  whole logs, and since 2026-10-28 a mining charge breaks a class-S log into 6 sawdust and its bark (#049,
+  ModernBlockStandIn.java:606-624); a chew can flicker for one frame; `barked` uses a synthetic strip context with no
+  player; old headless acacia stacks do not stack with new (165, s) stacks until they pass a 1.20.1 inventory. As in
+  4.B, a broken work stump drops an oak plank and the chewed log is oak-textured (stems become FC's oak-textured,
+  flammable chewed log).
 - Verification (2026-10-20, stage B of scratchpad `fu_runs/BASELINE_RUNS_FU.md`): wood_p1 67/67 (HEAD 14/67), mlog_p1
   73/73 (HEAD 18/73), dt_wood 4/4, dt_p2 27/27 (the three new S4 rows), dt_off 2/2; dt_p1 and dt_p5 unchanged.
   Clients: wood_c1 (the derived work-stump sprites, bark from the 1.20.1 log textures, dig progress 0.004) and mlog_c1
   (client dig progress equals the server's). runData wrote the 10 bark tags.
+- Verification of the sub-blocks and bamboo (2026-10-28, W7): P-W1 85/85, P-W1-C (all 10 probes as expected),
+  `deriveModernWoodTextures: 8 textures checked`, the `[WOOD]` and audit lines above, 8 more ProxyBlocks (174 -> 182);
+  P-RV `sweep fc` 675 -> 707, 0 failing.
 
 ---
 
@@ -1741,9 +1819,11 @@ path rolls its loot: shears and Silk Touch give the leaves; anything else gives 
   dispenser) never roll a table: they run FCBlockLeaves on the 1.5.2 drop methods now in Modern-Common BlockLeaves
   (`quantityDropped` 1 in 20, `idDropped` the sapling, `damageDropped` `meta & 3`, `harvestBlock` with shears,
   `createStackedBlock`, and `canSilkHarvest` true, an interim until the general canSilkHarvest, decision D6(b)). Every
-  path that rolls a table goes through the GLM: 1.20.1 breaks and decay of leaves with no FC identity, every 1.20.1
-  explosion, stand-in machine drops and foreign `destroyBlock`. FC's mining charge on leaves is FC's own path, a stub
-  until CF2-DR5.
+  path that rolls a table goes through the GLM: 1.20.1 breaks and decay of leaves with no FC identity, 1.20.1
+  explosions of leaves FC has no blast rule for (FC's own leaves, legacy 18, follow FCBlockLeaves on every blast since
+  2026-10-28: see [Explosions (BlastRules)](#explosions-blastrules)), stand-in machine drops and foreign
+  `destroyBlock`. FC's mining charge reaches FCBlockLeaves through `Block.DropItemsOnDestroyedByExplosion` (CF2-DR5,
+  `INTEGRATIONS.md` #049).
 - **Who decides the sapling.** A registered hook first. Otherwise, only for the block's own table: FC identity (legacy
   id 18) takes FC's `idDropped` / `damageDropped` through the item bridge; any other leaves block takes the
   same-namespace `#minecraft:saplings` member named `<stem>_sapling`, else `<stem>`, else the only `<stem>_*` (the
@@ -1843,7 +1923,7 @@ PlayerBridge.discardInventoryEdits()                  // the one-line helper for
 - `resendHeldSlot` sends the held slot as 1.5.2 did after every place packet (vanilla/server
   NetServerHandler.java:551-569): a `ClientboundContainerSetSlotPacket` for the open menu when it shows the slot, else
   for container 0, recorded as the remote view; never while an item is in use. It runs after the write-back of a
-  consumed click (ProxyBlock.java:606, HookPolicy.java:443, the item step at ServerPlayerGameModeMixin.java:336) and
+  consumed click (ProxyBlock.java:566, HookPolicy.java:443, the item step at ServerPlayerGameModeMixin.java:336) and
   after a REFUSED placement (:285). It repairs a client that predicted a change the server did not make, which
   `broadcastChanges` never does.
 
@@ -1873,7 +1953,7 @@ N     | syncs nested inside FC calls: WorldBridge entity queries and   | keep FC
       | entity-callback wrappers, FC damage and death paths            | scope
 T     | a top-level sync, FC acts, a write-back follows: Stage 1 and 2 | the same results, on the kept object. A catch that skips its
       | (ProxyBlock.use, HookPolicy.activate), the item step,          | write-back now discards: HookPolicy.java:412,
-      | btw$destroyBlock, ProxyItem use / finish / release / onUseTick | BlockBehaviorMixin.java:422 (attack), FCContainerMenu.java:417,
+      | btw$destroyBlock, ProxyItem use / finish / release / onUseTick | BlockBehaviorMixin.java:396 (attack), FCContainerMenu.java:417,
       | / hurtEnemy / mineBlock, ItemStackMixin, FCContainerMenu, the  | :694, ProxyAnimal.java:502, ProxyMob.java:737,
       | mobInteract of ProxyAnimal, ProxyMob and ProxyPathfinderMob,   | ProxyPathfinderMob.java:422, ProxyEntity.java:400, :450,
       | ProxyEntity playerTouch and interact                           | ProxyItem.java:645. ProxyEntity.interact gained its write-back
@@ -1888,7 +1968,7 @@ C     | client bridges (EntityTrackerBridge, ProxyItem.onUseTick's     | never w
       | client branch, FCMiningSpeed's detached bridge)                |
 ```
 
-- A shadow scope also wraps a creative FC item use (`ProxyBlock.runFcItemUse`, ProxyBlock.java:794-810), so 1.5.2's
+- A shadow scope also wraps a creative FC item use (`ProxyBlock.runFcItemUse`, ProxyBlock.java:754-770), so 1.5.2's
   creative restore lands on the slot's own object however many nested syncs FC runs (review finding: a creative blood
   wood sapling planted near FC pigmen ran two and lost the last item).
 - Caveats: `writeBackSlot` still lets FC win when the real slot changed after the baseline with no sync in between
@@ -1930,8 +2010,8 @@ at HEAD of `useItemOn`, ahead of all of it (`STUB_CATALOGUE.md` (aj), (at) cavea
   |                                              | (ServerPlayerGameModeMixin.java:244-249)     |
 2 | PlayerInteractEvent.RightClickBlock (Forge   | FcItemUseOrder (FcItemUseOrder.java:41-45)   | records useItem == DENY on the frame
   | event), LOWEST, server                       |                                              |
-3 | blockstate.use: ProxyBlock.use (:567);       | Stage 1, then Stage 2 through                | main hand only (the off hand: PASS on the
-  | BlockBehaviorMixin.btw$use (:256) ->         | ProxyBlock.tryPlaceHeldItem                  | server for a ProxyBlock, else 1.20.1's
+3 | blockstate.use: ProxyBlock.use (:527);       | Stage 1, then Stage 2 through                | main hand only (the off hand: PASS on the
+  | BlockBehaviorMixin.btw$use (:230) ->         | ProxyBlock.tryPlaceHeldItem                  | server for a ProxyBlock, else 1.20.1's
   | HookPolicy.activate (:388)                   |                                              | use); Stage 2 refused under DENY
 4 | useItemOn, INVOKE ItemStack.useOn m_41661_   | ServerPlayerGameModeMixin.btw$fcItemStep     | FC onItemUse where Stage 2 did not run at
   | (both calls, require = 2)                    | (:261-346), cancellable                      | this block; CONSUME on success
@@ -1949,9 +2029,9 @@ at HEAD of `useItemOn`, ahead of all of it (`STUB_CATALOGUE.md` (aj), (at) cavea
   ProxyBlockEntity, fires `ITEM_USED_ON_BLOCK`, closes the frame and returns CONSUME; FC false lets 1.20.1's `useOn`
   run (an axe strip or a hoe till where FC declined). Callback injects apply before redirects, so another mod's
   `@Redirect` of `useOn` stays compatible.
-- **`tryPlaceHeldItem`** (ProxyBlock.java:657-705), in order: the white-dye guard (`BoneMealPolicy.mayUseAsFcItem`);
+- **`tryPlaceHeldItem`** (ProxyBlock.java:617-665), in order: the white-dye guard (`BoneMealPolicy.mayUseAsFcItem`);
   the DENY check, which refuses with nothing recorded; the oak-door decline (Placement validity); `markFcItemUse(pos)`;
-  FC `onItemUse` through `runFcItemUse` (:778-811: in survival as it is, in creative with 1.5.2's restore of damage and
+  FC `onItemUse` through `runFcItemUse` (:738-771: in survival as it is, in creative with 1.5.2's restore of damage and
   count inside a shadow scope; a throw is logged once and counts as false); `Stats.ITEM_USED` for the clicked item on
   true (vanilla/server ItemStack.java:127-130); the Stage2 record. It does not fire `ITEM_USED_ON_BLOCK`: a Stage 2
   success makes block use consume, which fires it, and the item step fires it itself.
@@ -2009,7 +2089,7 @@ placement its own check refused (vanilla/client PlayerControllerMP.java:425-433)
 was a stub until 2026-10-21: it only checked that no entity of any kind stood in the cell, so the FC route put flowers
 on stone and slabs and hooks into solid cells, and falling sand deleted rails.
 
-- **`canPlaceEntityOnSide`** (WorldBridge.java:1920-1999; 1.5.2 World.java:3377-3407), in 1.5.2's order: (1) the
+- **`canPlaceEntityOnSide`** (WorldBridge.java:2192-2271; 1.5.2 World.java:3377-3407), in 1.5.2's order: (1) the
   entity check: the new block's collision box holds no entity that prevents spawning, other than an `entity` that is
   not a player, so the placing player counts (4.B's client pre-check passed a null entity, Common
   FCItemPlacesAsBlock :202), skipped for `skipEntities` (FC falling blocks); (2) a free target: air, water, lava,
@@ -2017,14 +2097,14 @@ on stone and slabs and hooks into solid cells, and falling sand deleted rails.
   and modded blocks, bark and stripped logs) is free by 1.20.1's own `canBeReplaced(BlockPlaceContext)`; (3) an anvil
   may take a circuits cell; (4) otherwise the new block's `canPlaceBlockOnSide` must agree (the soil of a plant, the
   wall of a hook, the support of a rail). A throw is logged once and refuses.
-- **`checkNoEntityCollision`** (one argument :1877, two arguments :1896; 1.5.2 World.java:1990-2013): true unless a
+- **`checkNoEntityCollision`** (one argument :2148, two arguments :2167; 1.5.2 World.java:1990-2013): true unless a
   live entity other than `except` that prevents spawning is in the box: 1.20.1's `Entity.blocksBuilding` (living
   entities, boats, minecarts, falling blocks, primed TNT, end crystals) or the FC object's `preventEntitySpawning`
   (windmills, water wheels, platforms, dynamite, mining charges). Removed entities and spectators never count; items
   and XP orbs no longer obstruct; a scan failure refuses. Its other callers (FC's spawn checks, the windmill and the
   water wheel, the ghast, the beacon) get the same rule.
-- **Metadata:** `getBlockMetadata` (:219-235) never reads the overlay for a fully derived block and drops a stale entry
-  (`isMetaFullyDerived`, :284-300, now with the tripwire hook). The hook codec (derive :533-542, write :809-818):
+- **Metadata:** `getBlockMetadata` (:235-251) never reads the overlay for a fully derived block and drops a stale entry
+  (`isMetaFullyDerived`, :304-320, now with the tripwire hook). The hook codec (derive :563-572, write :880-889):
   direction | 4 attached | 8 powered.
 - **Base ports** (Modern-Common, 1.5.2 parity): `BlockTripWireSource.canPlaceBlockOnSide`, `canPlaceBlockAt` and
   `onBlockPlaced` (BlockTripWireSource.java:32-60: a hook goes on the side of a normal cube and faces away from it),
@@ -2036,11 +2116,11 @@ The verdict, on the click frame (see [Use order (FC item step and Stage 2)](#use
 ```
 Step                         | Where                                     | Does
 ─────────────────────────────┼───────────────────────────────────────────┼───────────────────────────────────────────────────────
-the oak door (FCItemDoor,    | ProxyBlock.tryPlaceHeldItem :667-668      | declined before FC runs, nothing recorded: 1.20.1's
-item 324)                    | (isPortGapDoorItem :771)                  | DoorItem places it (Modern-Common
+the oak door (FCItemDoor,    | ProxyBlock.tryPlaceHeldItem :627-628      | declined before FC runs, nothing recorded: 1.20.1's
+item 324)                    | (isPortGapDoorItem :731)                  | DoorItem places it (Modern-Common
                              |                                           | ItemDoor.placeDoorBlock is a stub)
-PLACED or REFUSED            | tryPlaceHeldItem :673-703                 | for a 1.20.1 BlockItem whose FC item is an ItemBlock
-                             | (isItemBlockFamily :756)                  | or FCItemPlacesAsBlock: PLACED with the cell FC filled
+PLACED or REFUSED            | tryPlaceHeldItem :633-663                 | for a 1.20.1 BlockItem whose FC item is an ItemBlock
+                             | (isItemBlockFamily :716)                  | or FCItemPlacesAsBlock: PLACED with the cell FC filled
                              |                                           | (read before FC runs), or REFUSED (false or a throw)
                              |                                           | for a player who may build
 REFUSED is final             | ServerPlayerGameModeMixin.btw$fcItemStep  | at the clicked block: resend the held slot, close the
@@ -2061,16 +2141,35 @@ finish a PLACED block        | ServerPlayerGameModeMixin                 | the l
   FCEntitySquid could dismount through it). Other mods' fake players are never ticked, so `onGround` stays false and
   their FC-route placements are refused (maintainer ruling 2026-10-20: a known issue; Create's deployer calls `useOn`
   directly and is not affected).
-- Known: glass counts as a normal cube (decision 7(b), row H4 KNOWN); FC-route stairs face the wrong way until decision
-  6(c) (row H14 KNOWN); sneak placement keeps 1.20.1's rules (8(b)); FC placements post no EntityPlaceEvent (9(b));
-  FC-route trapdoors take meta 0 until decision 3 stage 2; an FC-placed hook shows as attached only after a neighbour
-  update (4(b')). Not runtime-tested: swimming or riding players, a real player's own collision box, adventure-mode
-  CanPlaceOn, a hook saved before this change.
+- **Block answers** (2026-10-25, round 3 wave W1, RANB-PARITY; no tag of its own): the Modern-Common stand-ins of
+  1.5.2's block base classes answer `isOpaqueCube`, `renderAsNormalBlock`, `getRenderType`, `getRenderBlockPass`,
+  `getBlocksMovement` and `getMobilityFlag` with 1.5.2's bodies wherever they answered differently (40 base classes, 81
+  methods). A block is a normal cube when its material is opaque and it renders as a normal block, unless its FC class
+  answers `IsNormalCube` itself (Modern-Common Block.java:354, :1164), and FC's World asks the block (Modern-Common
+  World.java:83-87, WorldBridge.java:1136-1138). So glass, glowstone, redstone lamps, leaves, doors, beds, panes, walls,
+  cauldrons, hoppers, pistons, cake, skulls, flower pots and beacons are no normal cubes to FC: BTW's attachables that
+  ask a block's default hard point neither attach to them nor stay on them (glass, ice, leaves and walls keep their own
+  FC answer), and the former known issue "glass counts as a normal cube" (decision 7(b), row H4) is gone. BTW grates,
+  wicker panes and slats collide and outline as panes, walls have arms for FC mobs, and FC mobs path over pressure
+  plates and through sign cells. Leaves always count as opaque (BlockLeaves keeps Block's `isOpaqueCube`, 4.B's server
+  answer; maintainer ruling 2026-10-23). The vanilla torch, ladder and redstone torch take the same refusals at
+  placement, and so, since 2026-10-31, do the snow layer, the pressure plates and the rails, a sneaking player's
+  placement and weather snow included (see [Attachment support (FcAttachSupport)](#attachment-support-fcattachsupport)).
+  Since 2026-10-31 FC's World also answers 4.B's solid top, the large centre hard point on top of the FC block, so
+  glass, glowstone, ice, TNT, pistons, redstone lamps, beacons and a closed upper oak trapdoor hold no plate, rail or
+  ground cover, and no standing redstone torch except on glass (1.5.2's id list; see [Solid top surface (WorldBridge,
+  ClientFcWorld)](#solid-top-surface-worldbridge-clientfcworld)).
+- Known: FC-route stairs face the wrong way until decision 6(c) (row H14 KNOWN); sneak placement keeps 1.20.1's rules
+  (8(b)), except where FcAttachSupport vetoes (torches, ladders, redstone torches, snow layers, pressure plates, rails
+  and FC's own blocks of these families); FC placements post no EntityPlaceEvent (9(b)); FC-route trapdoors take meta 0
+  until decision 3 stage 2; an FC-placed hook shows as attached only after a neighbour update (4(b')). Not
+  runtime-tested: swimming or riding players, a real player's own collision box, adventure-mode CanPlaceOn, a hook saved
+  before this change.
 - Verification (2026-10-21, stage C): P-PLACE 27/29 (8/29 before; the 2 FAILs are the KNOWN rows H4 and H14), with
   P8-1 to P8-5 (CF2-P8a: flowers refused on stone, a smooth stone slab and cobblestone; the deepslate and grass
   controls); the joined client `P-PLACE-C` (hand `minecraft:tripwire_hook x1`); the place sweeps change 52 lines, each
   by a 1.5.2 rule (logs on a north face get axis z; saplings, grass, fern, dead bush, flowers, mushrooms, ladder and
-  cactus refused on stone's top).
+  cactus refused on stone's top). Since RANB-PARITY (2026-10-25, W1) row H4 passes too: P-PLACE 28/29.
 
 ---
 
@@ -2102,9 +2201,9 @@ what is not a drop: dig speed, harvest exhaustion, tool wear and the panic of FC
    |                                            |                                               | playerWillDestroy, the loot and the partner pop
 S1 | ServerPlayerGameMode.removeBlock (Forge-   | btw$afterPairRemoved (:105-116), locals       | FC's animal panic (afterPlayerBreak, :122),
    | added, remap = false), RETURN              | captured, CAPTURE_FAILHARD                    | after the removal, before the drops
-S2 | Modern-Common World.UsesModernBlockLoot    | WorldBridge.UsesModernBlockLoot (:3236); read | FC's drop entry points at a live ruled cell
-   | (World.java:887-895, base false), next to  | by Block.dropBlockAsItemWithChance            | (the saw, the mining charge) drop that cell's
-   | DropModernBlockLoot (:879-885)             | (Block.java:653-654) and                      | 1.20.1 loot through DropModernBlockLoot
+S2 | Modern-Common World.UsesModernBlockLoot    | WorldBridge.UsesModernBlockLoot (:3340); read | FC's drop entry points at a live ruled cell
+   | (World.java:901-909, base false), next to  | by Block.dropBlockAsItemWithChance            | (the saw, the mining charge) drop that cell's
+   | DropModernBlockLoot (:893-899)             | (Block.java:653-654) and                      | 1.20.1 loot through DropModernBlockLoot
    |                                            | Block.DropItemsOnDestroyedByExplosion         |
    |                                            | (:1534-1545)                                  |
 B3 | Block.playerDestroy m_6240_: HEAD, and its | BlockPlayerDestroyMixin (:39, :49)            | FC's harvest exhaustion (chargeHarvest, :145;
@@ -2116,9 +2215,11 @@ W  | ItemStack.mineBlock                        | ItemStackMixin.btw$mineBlock (
 
 - S2 keys on the live cell (a ruled block at the position whose legacy id is the dropped id; it never loads a chunk),
   so an FC drop that comes before the removal gives one item, and the partner pops with the other half.
-  `DropItemsOnDestroyedByExplosion` got 1.5.2's base body (vanilla/server Block.java:1730-1747) for ruled cells only;
-  every other block keeps the empty stub until CF2-DR5, which then deletes one clause. S2 is also the seam the
-  collapsed-identity rule (triage CF2-DR3) can extend.
+  `DropItemsOnDestroyedByExplosion` has 1.5.2's base body (vanilla/server Block.java:1727-1748) for every block since
+  2026-10-28 (CF2-DR5, `INTEGRATIONS.md` #049; Modern-Common Block.java:1579-1597), so FC's mining charge drops its
+  pieces; a ruled cell still takes its 1.20.1 loot through S2. The collapsed-identity rule (triage CF2-DR3) took its
+  own seam, `World.ResolveModernSelfDrop` at `Block.dropBlockAsItem_do`, because S2 cannot see a cell the player's
+  harvest emptied (see [Collapsed identity (CollapsedIdentity)](#collapsed-identity-collapsedidentity)).
 - W: a tool BTW breaks while mining fires Forge's `PlayerDestroyItemEvent`.
 - Hook ownership: bed NEIGHBOR is RULED(5) through `isRuled` (BD's recommendation, pending the maintainer's answer to
   BD Q7); doors are RULED(4) first. The drop-parity follow-up D7 must drop its FCBlockBed, FCBlockDoor and
@@ -2133,7 +2234,7 @@ W  | ItemStack.mineBlock                        | ItemStackMixin.btw$mineBlock (
   cell take that cell's 1.20.1 loot; 0 warnings (0 expected)                                (logger BTW-PairDrops)
 ```
 
-- `VanillaPairDrops.audit` (:174) runs from `BridgeSelfAudit.runServerStart` (BridgeSelfAudit.java:62-63). It WARNs on
+- `VanillaPairDrops.audit` (:174) runs from `BridgeSelfAudit.runServerStart` (BridgeSelfAudit.java:70-71). It WARNs on
   W1 a ruled block that is neither a BedBlock nor a DoorBlock, W2 a ruled block whose 1.20.1 class does not override
   `neighborChanged` while its FC class declares `onNeighborBlockChange`, W3 a legacy id that maps both ruled and
   unruled blocks, W4 26, 64 or 71 with no ruled block.
@@ -2175,12 +2276,14 @@ keeps every 4.B role, and the dye gets every FC colour recipe of its subtype.
 - **The merchant slot rule** (Modern-Common MerchantRecipeList.java:9-46): 4.B's slot tests compare the damage of a
   subtyped item (`validFirst` :34, `validSecond` :41), so white dye never sells as the farmer's bone meal, black dye
   never as the librarian's ink sac, and the brown wool knit and blood wood sapling trades take only their own subtype;
-  the log trades stay lenient until the setHasSubtypes audit. 4.B's index strictness is not ported: it relies on
+  the log trades are strict too since 2026-10-27 (#045). 4.B's index strictness is not ported: it relies on
   GuiMerchant selecting the trade from the offered items, while the port's screen selects a trade only on a click
   (client/FCContainerScreen.java:313-333).
 - **`isItemDamaged`** (Modern-Common ItemStack.java:110-118): an item that declares subtypes and has no durability is
   never damaged, 1.5.2's rule, so dyes, FC wool, candles, vases and slabs stack in FC hoppers and chests again (option
-  A of the dye ruling); items without the subtype flag keep `damage > 0` until the setHasSubtypes audit.
+  A of the dye ruling); items without the subtype flag keep `damage > 0`. Since 2026-10-27 the plain block items, the
+  ItemMultiTextureTile stub and the skull item declare it (`item_subtypes`, #045); the ItemBlockWithMetadata stub,
+  coal, spawn eggs, potions and filled maps are still queued (F-SUBTYPES).
 
 ```
 static final int LegacyVariants.MODERN_SPELLING = 0x100;
@@ -2216,8 +2319,9 @@ takes (351, d | 0x100).
   CauldronStoked +0 (1 kept), Crucible, CrucibleStoked and MillStone +0. WARNs: FC not initialised; no spelling
   registered (no twins); a list it cannot reach, which stays as it was. Never throws.
 - Known limits: dyes saved in FC storage before the change reload as the ink sac, cocoa, lapis or bone meal (no
-  migration; R1); an older jar reads Damage 256, 259, 260 or 271 as item 351 with that damage (R2); in the 2x2 grid
-  FC's colour recipes match FC candles, wool, vases and wool slabs by item only (pre-existing; R11).
+  migration; R1); an older jar reads Damage 256, 259, 260 or 271 as item 351 with that damage (R2). R11 (in the 2x2
+  grid FC's colour recipes matched FC candles, wool, vases and wool slabs by item only) is fixed by the exact 2x2 match
+  (2026-10-28, see [Recipe bridge (RecipeBridge, WorkbenchFallback)](#recipe-bridge-recipebridge-workbenchfallback)).
 - Verification (2026-10-20): P-WD 40/40 (HEAD 16/40) and the bone-meal plan 96/96 (its two dropped-white-dye checks
   flipped); P-DYE3 60/60 (35/60 before); P-DYE3Q2 10/10 (6/10 without the `isItemDamaged` change); P-RV
   `sweep fc total=675 skipped=3 fail=0` and `sweep ns minecraft total=708 pass=663 fc=18 fail=27` (32 failed before
@@ -2250,37 +2354,47 @@ UNDECIDED | 0    | no decision (FC not ready at the bake, a ProxyBlock, an unmap
 NOTIFY    | 1    | FC runs where the 1.20.1 chain reaches the base body (non-overriding or super-calling classes):
           |      | the behaviour before 2026-10-21, made explicit
 FC        | 2    | FC replaces 1.20.1 on the server at the BlockStateBase forwarder and the 1.20.1 body is cancelled
-          |      | (USE and PLACE, the only hooks with an FC row)
+          |      | (USE and PLACE; RESIST's FC rows are read by BlastRules alone, since 2026-10-28)
 VANILLA   | 3    | FC's block never runs for the hook, not even through a super call (USE: the held FC item,
           |      | Stage 2, still runs where the base body is reached, as 4.B ran it whatever the block did)
 ```
 
-- Two bits per hook in one int, ten hooks (HookPolicy.java:121-141): USE (`use` -> onBlockActivated), ATTACK
-  (`attack` -> onBlockClicked), PLACE (`onPlace` -> onBlockAdded), REMOVE (`onRemove` -> breakBlock), NEIGHBOR
+- Two bits per hook in one int, ten hooks (HookPolicy.java:122-147): USE (`use` -> onBlockActivated), ATTACK (`attack`
+  -> onBlockClicked), PLACE (`onPlace` -> onBlockAdded), REMOVE (`onRemove` -> breakBlock), NEIGHBOR
   (`neighborChanged`), INSIDE (`entityInside`), SIGNAL (`getSignal`, `getDirectSignal`, `isSignalSource`), STEP
-  (`stepOn`), FALL (`fallOn`), RESIST (`getExplosionResistance`, left UNDECIDED until Phase 5, explosions).
+  (`stepOn`), FALL (`fallOn`), RESIST (`getExplosionResistance`). Since 2026-10-28 RESIST is decided first for every
+  managed state (`decide` :238-242): FC (rule `positional`) when the runtime FC class declares the positional
+  `getExplosionResistance(Entity, World, int, int, int)` (`fcDeclaresPositionalResistance`, :638-640), else NOTIFY
+  (rule `lookup`); only `BlastRules.readsPosition` reads it (see [Explosions (BlastRules)](#explosions-blastrules)).
 
 ```
-# | Rule (HookPolicy.decide :216-254, in order)       | Owner   | Rows today
+# | Rule (HookPolicy.decide :223-263, in order)       | Owner   | Rows today
 ──┼───────────────────────────────────────────────────┼─────────┼───────────────────────────────────────────────────────
 1 | FC not ready, a ProxyBlock, legacy id 0 or an     | (none)  | unmanaged: every hook UNDECIDED
   | empty blocksList slot                             |         |
+R | RESIST, for every managed state, before rules 2-7 | FC or   | FC (positional) where the runtime FC class declares
+  | (2026-10-28)                                      | NOTIFY  | the positional getExplosionResistance: stone, the
+  |                                                   |         | strata ores and their deepslate forms (16 blocks);
+  |                                                   |         | else NOTIFY (lookup)
 2 | a RemovedContent T1 block (D6)                    | VANILLA | every hook of the stubbed (T1) blocks
-3 | the block-entity guard (isTeGuarded :272): USE    | VANILLA | every FC BlockContainer on a vanilla id (the note
-  | and REMOVE of a state whose FC block is a         |         | block, furnace, ender chest, beacon, spawner, skulls,
-  | btw.modern.BlockContainer                         |         | end portal, ...)
-4 | RULED and ADAPTER rows, permanent                 | VANILLA | RULED(3) bed USE (ruling 3); RULED(4) door, trapdoor
-  | (ruledRule :277)                                  |         | and gate NEIGHBOR (ruling 4); RULED(5) NEIGHBOR of
+3 | the block-entity guard (isTeGuarded :281, :292):  | VANILLA | every FC BlockContainer on a vanilla id (the note
+  | USE and REMOVE of a state whose FC block is a     |         | block, furnace, ender chest, spawner, skulls, end
+  | btw.modern.BlockContainer, unless its 1.20.1      |         | portal, ...); not the FC-backed beacon (2026-10-28)
+  | block entity carries FC's tile entity (FC-backed) |         |
+4 | RULED and ADAPTER rows, permanent (ruledRule      | VANILLA | RULED(3) bed USE (ruling 3); RULED(4) door, trapdoor
+  | :297)                                             |         | and gate NEIGHBOR (ruling 4); RULED(5) NEIGHBOR of
   |                                                   |         | VanillaPairDrops.isRuled (the beds); ADAPTER(D16b)
   |                                                   |         | gate USE; ADAPTER(D9b) farmland FALL
-5 | PENDING metadata prerequisites (pendingRule :290) | VANILLA | door USE (the door codec), cake USE, workbench USE
-  |                                                   |         | (D12), flower pot USE, detector rail INSIDE
+5 | PENDING metadata prerequisites (pendingRule :310) | VANILLA | door USE (the door codec), cake USE, workbench USE
+  |                                                   |         | (D12), flower pot USE
 6 | EQUIVALENT: 1.20.1 already runs 4.B's effect      | NOTIFY  | stairs, redstone ore USE / ATTACK / STEP, FallingBlock
-  | (equivalentRule :305)                             |         | PLACE, lamp NEIGHBOR
+  | (equivalentRule :324)                             |         | PLACE, lamp NEIGHBOR, detector rail INSIDE (28, 235,
+  |                                                   |         | 236; 2026-10-28)
 7 | the general rule                                  | FC or   | FC iff the 1.20.1 class overrides the hook and the
   |                                                   | NOTIFY  | runtime FC class declares it in FC code (below
-  |                                                   |         | btw.modern): today the three anvils' USE and the
-  |                                                   |         | carved pumpkin's and jack o'lantern's PLACE
+  |                                                   |         | btw.modern): today the three anvils' USE, the carved
+  |                                                   |         | pumpkin's and jack o'lantern's PLACE, and the beacon's
+  |                                                   |         | USE (FC-backed, 2026-10-28)
 ```
 
 - `decide` is pure, as TickPolicy.decide: it reads the state, FC's static block table, the 1.20.1 and FC classes and
@@ -2291,49 +2405,62 @@ VANILLA   | 3    | FC's block never runs for the hook, not even through a super 
   duck interface `HookPolicy.Access`, and enforce the FC rows on the server with cancellable HEAD injects on the `use`
   (:86) and `onPlace` (:98) forwarders, the one pass of every activation and every placement whatever the class
   overrides. The client keeps the 1.20.1 body as its prediction.
-  - FC-owned USE (`runFcOwnedUse`, HookPolicy.java:463; the three anvils, decisions D2(c) and R15): the off hand gets
-    PASS; an empty-handed sneak runs 1.20.1's use (AnvilMenu, the repair menu); otherwise FC's activation
-    (`activate`), whose PASS lets the item step follow in 4.B's order; a Stage 1 throw answers 1.20.1's use.
-  - FC-owned PLACE (`runFcOwnedPlace`, :483; the carved pumpkin and the jack o'lantern, D3(a)): FC `onBlockAdded`, and
+  - FC-owned USE (`runFcOwnedUse`, HookPolicy.java:486; the three anvils, decisions D2(c) and R15, and since 2026-10-28
+    the FC-backed beacon): the off hand gets PASS; an empty-handed sneak runs 1.20.1's use (AnvilMenu, the repair
+    menu), except on an FC-backed block, which has no 1.20.1 activation left to fall back to (:489-493; 4.B activated
+    on that sneak); otherwise FC's activation (`activate`), whose PASS lets the item step follow in 4.B's order; a
+    Stage 1 throw answers 1.20.1's use.
+  - FC-owned PLACE (`runFcOwnedPlace`, :508; the carved pumpkin and the jack o'lantern, D3(a)): FC `onBlockAdded`, and
     the 1.20.1 body, the golem check, is always cancelled, also on a throw, so no golem forms from a pumpkin or a jack
     o'lantern on any placement path (LevelChunk.setBlockState and Forge's captured-placement replay, so dispensers
     too). A jack o'lantern placed from now on goes out next to water, as in 4.B. Villager-spawned golems are outside
     this rule.
-- **The NOTIFY executors** (`BlockBehaviorMixin`: neighborChanged :171, onPlace :197, onRemove :219, use :256,
-  entityInside :303, the signal methods :329, :353, :385, attack :403; `BlockMixin`: stepOn :103, fallOn :137) run FC only
-  when `HookPolicy.notifyRuns(state, hook)` (HookPolicy.java:342): NOTIFY, UNDECIDED, or FC on a hook with no
+- **The NOTIFY executors** (`BlockBehaviorMixin`: neighborChanged :134, onPlace :171, onRemove :193, use :230,
+  entityInside :277, the signal methods :303, :327, :359, attack :377; `BlockMixin`: stepOn :77, fallOn :111) run FC
+  only when `HookPolicy.notifyRuns(state, hook)` (HookPolicy.java:365): NOTIFY, UNDECIDED, or FC on a hook with no
   forwarder inject. StairBlock's base delegation gets the base block's owner.
 - **The catch.** Every FC call of an executor is caught (`HookPolicy.warnOnce`, logger `BTW-Hook`, once per throw
   site): an FC failure answers the 1.20.1 result and never escapes `LevelChunk.setBlockState` or a packet handler.
   Only an FC-owned PLACE still cancels on a throw. A throw on a click (Stage 1, attack) discards FC's pending
   inventory edits (see [Inventory sync (InventoryBridge)](#inventory-sync-inventorybridge)).
-- **USE** (`btw$use`, BlockBehaviorMixin.java:256-297): `stage1 = notifyRuns(state, USE) && !isTeGuarded(fcBlock)`,
-  then `HookPolicy.activate` (HookPolicy.java:388-446), shared with the FC-owned executor: Stage 1 when allowed;
-  Stage 2 when it declined or did not run (never for a twin); the menu, the write-back and the held-slot resend; a
-  Stage 1 throw returns null, so the 1.20.1 result and the item step follow. A VANILLA USE owner therefore drops
-  Stage 1 only: a BlockItem clicked against a spawner, a skull, an end portal or a removed T1 block now places through
-  FC's ItemBlock (no proof row).
-- **REMOVE** (`btw$onRemove`, :219-250) applies the block-entity guard also to a state without a cached owner and
-  passes FC the old state's derived metadata (it passed 0). **ATTACK** (`btw$attack`, :403) gets a synced
+- **USE** (`btw$use`, BlockBehaviorMixin.java:230-271): `stage1 = notifyRuns(state, USE) &&
+  !isTeGuarded(state.getBlock(), fcBlock)` (:253; the two-argument guard since 2026-10-28), then `HookPolicy.activate`
+  (HookPolicy.java:411-469), shared with the FC-owned executor: Stage 1 when allowed; Stage 2 when it declined or did
+  not run (never for a twin); the menu, the write-back and the held-slot resend; a Stage 1 throw returns null, so the
+  1.20.1 result and the item step follow. A VANILLA USE owner therefore drops Stage 1 only: a BlockItem clicked against
+  a spawner, a skull, an end portal or a removed T1 block now places through FC's ItemBlock (no proof row).
+- **REMOVE** (`btw$onRemove`, :193-224) applies the block-entity guard also to a state without a cached owner and
+  passes FC the old state's derived metadata (it passed 0). **ATTACK** (`btw$attack`, :377) gets a synced
   PlayerBridge (it got none).
-- The block-entity guard keys on the FC class alone, never on the block entity in the world, so it never lifts by
-  itself: when Phase 4 bridges FC tile entities onto 1.20.1 block entities, it must narrow with it. Until then 6 known
-  gaps run 1.20.1: note and furnace USE, ender chest and beacon USE and REMOVE.
+- **NEIGHBOR of a support twin** (`btw$neighborChanged`, BlockBehaviorMixin.java:142-150): a block with no FC identity
+  that takes an FC attachment rule through FcAttachSupport's support twins (the soul torches; since 2026-11-02 the
+  modern pressure plates) drops at any neighbour change on a support 4.B refuses, by 1.20.1's own `destroyBlock` (see
+  [Attachment support (FcAttachSupport)](#attachment-support-fcattachsupport)). The NOTIFY of the snow layer 78 and the
+  plates 70 and 72 runs FC's own neighbour check, which reads 4.B's solid top since 2026-10-31 (see [Solid top surface
+  (WorldBridge, ClientFcWorld)](#solid-top-surface-worldbridge-clientfcworld)).
+- The block-entity guard keys on the FC class, never on the block entity in the world, so it never lifts by itself; it
+  narrows with each FC tile entity the bridge puts on a 1.20.1 block entity. Since 2026-10-28 the hook rule and the
+  REMOVE and USE executors (BlockBehaviorMixin.java:210, :253) ask `isTeGuarded(Block, fc)` (HookPolicy.java:291-294),
+  which is false for an FC-backed block (`FcBackedBlockEntities.backs`: the beacon, see [FC-backed block entities and
+  the beacon (FcBackedBlockEntities,
+  FcBeacons)](#fc-backed-block-entities-and-the-beacon-fcbackedblockentities-fcbeacons)), so rules 4-7 decide its USE
+  and REMOVE. 4 known gaps still run 1.20.1: note and furnace USE, ender chest USE and REMOVE.
 
 **Rulings and adapters:**
 
-- **Beds** (RULED(3), ruling 3; tag `beds_sleep_no_spawn`, `INTEGRATIONS.md` #037): bed USE is 1.20.1's sleep, with
-  the night skip, the action-bar messages and the Nether and End explosion. `BedSpawnPolicy.onSetSpawn`
-  (BedSpawnPolicy.java:59-75), a Forge `PlayerSetSpawnEvent` listener, cancels every non-forced spawn at a block in
-  `#minecraft:beds` or one that reports `isBed`; it never loads a chunk and never throws. Forced spawns (`/spawnpoint`),
-  respawn anchors and any spawn at a block that is not a bed stand (the FC beacon bind passes `forced` false, Server
-  FCBlockBeacon.java:93, and stands as a non-bed spawn; it is unreachable until hup-43, CATALOGUE 2, 2.11); a bed
-  spawn set before this change is used once more and then dropped.
-  `ServerPlayerMixin.btw$fcHostilesPreventRest` (ServerPlayerMixin.java:343-360), at the INVOKE of
-  `Player.startSleepInBed` inside `ServerPlayer.startSleepInBed`, answers NOT_SAFE for a live ProxyMob whose FC entity
-  is an EntityMob within +-8 / +-5 / +-8 (1.5.2's rule; FC hostiles are Mobs, not Monsters, so 1.20.1's own check never
-  saw them); creative players are exempt. `PlayerMixin.btw$disableBeds` is deleted (CATALOGUE 2, 2.6). Phantoms stay
-  off by default (`doInsomnia` false, WorldGamerulesHandler.java:58).
+- **Beds** (RULED(3), ruling 3; tag `beds_sleep_no_spawn`, `INTEGRATIONS.md` #037): bed USE is 1.20.1's sleep, with the
+  night skip, the action-bar messages and the Nether and End explosion. `BedSpawnPolicy.onSetSpawn`
+  (BedSpawnPolicy.java:60-75), a Forge `PlayerSetSpawnEvent` listener, cancels every non-forced spawn at a block in
+  `#minecraft:beds` or one that reports `isBed`; it never loads a chunk and never throws. Forced spawns
+  (`/spawnpoint`), respawn anchors and any spawn at a block that is not a bed stand (the FC beacon bind passes `forced`
+  false, Server FCBlockBeacon.java:93, and stands as a non-bed spawn, which the hardcore respawn validates with 4.B's
+  rules since 2026-10-28, see [Hardcore respawn (HardcoreRespawn)](#hardcore-respawn-hardcorerespawn)); a bed spawn set
+  before this change is ignored at the next respawn and dropped (`HardcoreRespawn.begin` with `BedSpawnPolicy.isBed`,
+  BedSpawnPolicy.java:77-81). `ServerPlayerMixin.btw$fcHostilesPreventRest` (ServerPlayerMixin.java:289-306), at the
+  INVOKE of `Player.startSleepInBed` inside `ServerPlayer.startSleepInBed`, answers NOT_SAFE for a live ProxyMob whose
+  FC entity is an EntityMob within +-8 / +-5 / +-8 (1.5.2's rule; FC hostiles are Mobs, not Monsters, so 1.20.1's own
+  check never saw them); creative players are exempt. `PlayerMixin.btw$disableBeds` is deleted (CATALOGUE 2, 2.6).
+  Phantoms stay off by default (`doInsomnia` false, WorldGamerulesHandler.java:58).
 - **Doors, trapdoors and gates** (RULED(4), ruling 4): NEIGHBOR keeps 1.20.1 redstone (OAK_DOOR, IRON_DOOR,
   OAK_TRAPDOOR, OAK_FENCE_GATE), the oak ones included, although 4.B's wooden ones ignore redstone.
 - **Fence gates** (ADAPTER(D16b)): gate USE is 1.20.1's (the per-wood sounds and the sculk game event), and
@@ -2385,23 +2512,1379 @@ VANILLA   | 3    | FC's block never runs for the hook, not even through a super 
   <n> warnings (0 expected)                                                                 (logger BTW-SelfAudit)
 ```
 
-- `auditHookPolicy` (BridgeSelfAudit.java:291) runs in `runServerStart` right after the tick audit (:60). WARNs: (a) a
-  pair the general rule hands to FC that no row expects (`EXPECTED_FC`: the anvils' USE, the carved pumpkin's and the
-  jack o'lantern's PLACE); (b) a block-entity-guarded hook FC declares, other than the 6 known gaps (those log at
-  INFO); (c) a cached owner that differs from `decide` (BlockStateHookMixin not applied), or states of one block
+- `auditHookPolicy` (BridgeSelfAudit.java:376) runs in `runServerStart` right after the tick audit (:64-66). WARNs:
+  (a) a pair the general rule hands to FC that no row expects (`EXPECTED_FC`, HookPolicy.java:209-213: the anvils'
+  USE, the carved pumpkin's and the jack o'lantern's PLACE, and since 2026-10-28 the beacon's USE); (b) a
+  block-entity-guarded hook FC declares, other than the known gaps (`KNOWN_TE_GAPS`: 6 until 2026-10-28, 4 since; those
+  log at INFO); (c) a cached owner that differs from `decide` (BlockStateHookMixin not applied), or states of one block
   decided differently; (d) a RULED or ADAPTER row on a block that no longer maps to the legacy id its ruling names, or
   a ruled id with no row (`RULED_IDS`); (e) an expected FC row that no block of its legacy id carries.
 - 2026-10-21 values: `242 blocks, 5 FC-owned and 182 VANILLA hook pairs, rows {ADAPTER(D16b)=[107], ADAPTER(D9b)=[60],
   RULED(3)=[26], RULED(4)=[64, 71, 96, 107], RULED(5)=[26]}, 6 known block-entity gaps, 0 warnings (0 expected)`.
-- Queued: P3(iii) the detector rail, P3(iv) the lamp's notify, D12(c) the crafting-table hardpoint veto; P4 (the door
-  codec, then door USE; the cake; the workbench; the flower pot; the ProxyBlockEntity bridge for the beacon and the
-  ender chest); P5 (pistons, explosions, RESIST).
+- 2026-10-28 values (round 3, W8): 257 blocks, 22 FC-owned and 180 VANILLA hook pairs, the same rows, 4 known
+  block-entity gaps, 0 warnings. The 22 FC-owned pairs are the 5 above, the beacon's USE and 16 RESIST rows (stone, the
+  strata ores and their deepslate forms); the block count grew with the flowers (242 -> 244), the deepslate forms (253)
+  and the four newer planks (257). W10 adds the BTW detector rails 235 and 236 as managed blocks and moves detector
+  rail INSIDE from rule 5 to rule 6.
+- Queued: P3(iv) the lamp's notify, D12(c) the crafting-table hardpoint veto; P4 (the door codec, then door USE; the
+  cake; the workbench; the flower pot; the ender chest as the next FC-backed block entity, with 4.B's antenna tiers);
+  P5 (pistons). Done in round 3 (2026-10-28): P3(iii) the detector rail (#056), the beacon (#053), explosions and
+  RESIST (#049).
 - Verification (2026-10-21, stage C): P-HOOK 34/36 (20/36 before wave C; the 2 FAILs are the INVERTED rows P0b and P0c,
   which is the fix), with the bed rows P2g, P2n, P2h and P2m and the lava rows P3a-P3h; P-HOOK-CRASH 1/1 (TNT next to a
   beacon had stopped the server); the joined client `P-BED-C` (night skipped, no bed spawn); the refmap carries
   BlockStateHookMixin, FenceGateBlockMixin, `startSleepInBed`, `m_5486_` and `m_6364_`; no ClassCastException,
   "invalid for ticking" or "Failed to handle packet" in the logs; the place sweeps now run past the ender chest (1440
   -> 4172 lines, 0 THREW).
+
+---
+
+## Dig face and drop position (DigFace, EntityProxyFactory)
+
+Added 2026-10-27 (round 3, wave W3; CurseForge triage CF2-DR2; `STUB_CATALOGUE.md` (bj), `INTEGRATIONS.md` #044). Code:
+`Forge/src/main/java/btw/forge/DigFace.java`, `DigFaceAccess.java`, `mixin/ServerPlayerGameModeMixin.java` (the dig
+injects and `btw$destroyBlock`), `FCLogRules.hitFace`, `EntityProxyFactory.createItemEntity`,
+`BridgeSelfAudit.runCommon`.
+
+**The rule.** `destroyBlock(BlockPos)` carries no face, so the port ran FC's harvest with face 1 (UP) for every break,
+and every FC conversion (stone and rough stone under a pickaxe that cannot harvest them, the staged ores, grass under a
+hoe, chewed logs, the work stump) ejected into the block above: in a tunnel through the rock or the ceiling. FC drops
+also started 0.125 too high. Two rules:
+
+- **R1, `fc_dig_face`: the face of a BTW break is the face the player digs.** `DigFace.of(player, pos)`
+  (DigFace.java:41-49) answers, in order: the face of the dig packet breaking that cell (START for a block that breaks
+  at once, the finishing STOP otherwise, the scheduling STOP's face for a break `tick()` finishes later: 1.5.2's
+  `m_iHarvestingFromFacing`); without a dig packet (another mod's fake player or machine, a vein miner's extra blocks),
+  the face the breaker's look ray hits on that cell (`lookFace`, :52-65); otherwise UP, 1.5.2's default. FC's harvest,
+  the log rule and Dynamic Trees read the same face: `FCLogRules.hitFace` (FCLogRules.java:529-531) returns
+  `DigFace.of`.
+- **R2, `fc_drop_position`: an FC drop spawns with 1.5.2's box.** FC's `posY` is the box centre (`minY + yOffset`),
+  1.20.1's position the feet, so `createItemEntity` (EntityProxyFactory.java:229-266) spawns the item at `posY -
+  yOffset` (:244-248), the convention `ItemEntityBridge` already uses both ways. When 1.5.2's box collides and the box
+  at `posY` does not, the item keeps `posY` (:249-256), so a drop FC centres on a floor (every entity drop) sits on it
+  instead of being pushed sideways; when both collide, 1.5.2's box stands. The test is `ItemEntity.tick`'s own
+  `noCollision`.
+
+```
+Target (ServerPlayerGameMode)             | Hook (ServerPlayerGameModeMixin)  | Does
+──────────────────────────────────────────┼───────────────────────────────────┼───────────────────────────────────────────────────
+handleBlockBreakAction m_214168_, HEAD    | btw$digBegin (:163-174)           | a START or STOP packet records its cell and face
+                                          |                                   | (ABORT names none); with no destroy pending, a
+                                          |                                   | kept face is forgotten
+handleBlockBreakAction, RETURN (every     | btw$digEnd (:176-187)             | a STOP that scheduled the delayed destroy keeps
+return)                                   |                                   | its face for tick(); the record clears
+tick m_7712_, INVOKE of its one           | btw$delayedDigBegin (:189-195)    | the delayed destroy breaks with the face its STOP
+destroyBlock call                         |                                   | carried
+tick, the same INVOKE, shift AFTER        | btw$delayedDigEnd (:197-204)      | clears the record and the kept face
+destroyBlock m_9280_, HEAD (the existing  | btw$destroyBlock (:234-235, :280) | reads DigFace.of before the BreakEvent and passes
+cancel)                                   |                                   | it to tryHarvestBlock (it passed 1)
+```
+
+- The mixin implements the duck interface `DigFaceAccess` (`int btw$digFace(BlockPos)`,
+  ServerPlayerGameModeMixin.java:106, :206-210) and shadows `hasDelayedDestroy` and `delayedDestroyPos` (:110-111). The
+  record answers -1 unless the cell is the one the dig being handled targets, so a direct `destroyBlock` of another
+  cell (a vein miner's extra block inside a BreakEvent handler, a fake player) never takes a stale face. The face is
+  read before the BreakEvent, whose handlers may break other cells or change what the look ray sees. Server thread
+  only; nothing is saved.
+- The proxy convention is unchanged (`applyPositionFromFc`, EntityProxyFactory.java:268-288): every proxy keeps its
+  feet at FC's `posY` both ways every tick. Living FC entities have yOffset 0, so mobs are exact. Plain FC entities
+  with a non-zero yOffset (dynamite, mining charges, floating items, XP orbs, primed TNT, falling blocks, platforms,
+  anchors, windmills) keep a 1.20.1 box yOffset above FC's; spawning them at `posY - yOffset` alone would drop the FC
+  entity by yOffset at its first sync. A whole-convention change is follow-up FU-YOFF.
+
+```
+[SELF-AUDIT/digface] ServerPlayerGameMode carries the dig face: BTW's breaks eject toward it       (logger BTW-DigFace)
+```
+
+- `DigFace.audit` (DigFace.java:72-80) runs from `BridgeSelfAudit.runCommon` (BridgeSelfAudit.java:48-49); its WARN
+  form names a mixin that did not apply. The refmap carries `m_214168_`, `m_7712_` and `m_9280_`; the two shadows are
+  reobfuscated in the class itself (`f_9253_`, `f_9254_`). On a Forge bump, check that `tick` still has exactly one
+  `destroyBlock` call.
+- Known: 1.20.1 still pushes an item out of any block it overlaps, and items float (the Hardcore Buoy option has no
+  effect); FC edits to a dropped item after it spawned (a sheared sheep's wool velocity) do not reach it.
+- Verification (2026-10-27, W3): P-DR2 19/19 (9/19 before), P-DR2-C 2/2, the audit line above; every regression plan
+  the same.
+
+---
+
+## Collapsed identity (CollapsedIdentity)
+
+Added 2026-10-27 (round 3, wave W3; CurseForge triage CF2-DR3, CF2-P8c; maintainer ruling 2026-10-21: flowers keep
+their kind by default; `STUB_CATALOGUE.md` (bk), `INTEGRATIONS.md` #045). Code:
+`Forge/src/main/java/btw/forge/CollapsedIdentity.java`, `WorldBridge.ResolveModernSelfDrop`,
+`mixin/ServerPlayerGameModeMixin.java` (the harvest record), `ProxyRegistry.java` and `LegacyVariants.java` (the flower
+rows), `BridgeSelfAudit.runServerStart`, Modern-Common `World.java`, `Block.java`, `ItemBlock.java`,
+`ItemMultiTextureTile.java`, `Item.java` and `BlockSilverfish.java`.
+
+**The rule.** Several 1.20.1 blocks share one 1.5.2 id. FC drops a block as `ItemStack(idDropped, 1,
+damageDropped(meta))`, and `ItemStackHelper.toMcStack` turns subtype 0 back into the id's base item, so an oxeye daisy
+dropped the poppy, orange wool white wool, a wither skeleton skull a skeleton skull and wet sponge a dry sponge. Three
+tags:
+
+- **`flower_subtypes`:** the ten small flowers BTW read as the rose are port-only subtypes 38:1-10: 1.7.2's
+  `red_flower` order for 0-8 (poppy, blue orchid, allium, azure bluet, the red, orange, white and pink tulip, oxeye
+  daisy), then 9 cornflower and 10 lily of the valley, mapped by the lore ruling (their nearest 1.5.2 relative is the
+  rose; ProxyRegistry.java:227-232, :682-684; LegacyVariants.java:192-197). Placement, the FC world read, storage,
+  grids, the millstone and the removal matching follow through the existing variant machinery; 11-15 read as the poppy.
+  The wither rose (Nether soils) and the torchflower (the crop twin's last stage) stay unmapped.
+- **`item_subtypes`:** 1.5.2's subtype flag, so BTW storage stacks each subtype apart again and FC's log trades take
+  their own species. `ItemBlock.getHasSubtypes` (Modern-Common ItemBlock.java:181-193) is true for an exact `ItemBlock`
+  at 5, 6, 17, 18, 24, 31, 35, 38, 43, 44, 97, 98, 125, 126, 139 and 155 (where 1.5.2 registered ItemCloth, ItemSlab,
+  ItemLeaves, ItemColored and ItemMultiTextureTile, plus 38); the `ItemMultiTextureTile` stub sets it (FC's planks and
+  the logs 17 and 165), and so does the skull item 397 (Item.java:924-925).
+- **`collapsed_identity`, rule R (contract C-CI1):** at an FC drop, let B be the 1.20.1 block FC drops for: the live
+  block at the cell when FC reads it as the dropping id, else the block this thread's player harvest removed there.
+  When (1) B is a vanilla-id block with an FC identity (not a ProxyBlock, not a ruled bed or door, not exempt), (2) the
+  stack is a self-drop (its id is the dropping FC block's, or B's legacy id: a double slab 43 / 125 drops 44 / 126)
+  with no NBT, and (3) the stack reads as its id's base item while B has another item of its own, the drop becomes B's
+  own item with FC's count: its FC stack when FC can hold it (38:8, 35:1, 397:1; FC's EntityItem goes on), else the
+  1.20.1 item dropped at the cell (`Block.popResource`: wet sponge, the stone slab, smooth sandstone). Clause 3 leaves
+  FC's deliberate subtypes alone (a strata subtype, a species); a drop of another id (loose bricks, seeds, bark, metal
+  fragments) is never touched.
+
+```
+Seam | Code                                              | Does
+─────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────────────
+CI1  | Modern-Common Block.dropBlockAsItem_do            | the funnel of every FC block drop
+     | (Block.java:687-691) ->                           | (dropBlockAsItemWithChance, harvestBlock's silk
+     | World.ResolveModernSelfDrop (World.java:911-921,  | branch, DropItemsIndividualy, FC subclasses) asks
+     | base: the stack) ->                               | before it drops; a loaded cell only (never loads a
+     | WorldBridge.ResolveModernSelfDrop                 | chunk); a throw is logged once and keeps FC's stack
+     | (WorldBridge.java:3355-3374) ->                   |
+     | CollapsedIdentity.resolve (:131-154)              |
+CI2  | ServerPlayerGameModeMixin.btw$destroyBlock        | FC's harvest removes the block before it drops it: a
+     | (:276-290): CollapsedIdentity.beginHarvest /      | per-thread record of the removed state (re-read
+     | endHarvest (:101-116)                             | after the BreakEvent), closed in finally, nested
+     |                                                   | records restored; ownerAt (:160-169) reads it only
+     |                                                   | when the live cell no longer reads as the dropping
+     |                                                   | id
+```
+
+- The twin and ruled-pair branch of `dropBlockAsItemWithChance` (Block.java:660-670) returns before the funnel, so a
+  bed or door takes its 1.20.1 loot through S2 (see [Beds and doors
+  (VanillaPairDrops)](#beds-and-doors-vanillapairdrops)) and never meets CI1. The rule took its own seam because S2
+  cannot see a cell the player's harvest emptied.
+- `CollapsedIdentity.exempt(Block...)` (:119-123) leaves a block's FC drop authoritative (none today). `resolve`
+  returns the stack unchanged off the server thread. Nothing is saved: stacks saved as 38:0 stay poppies.
+- Infested blocks drop nothing: Modern-Common `BlockSilverfish.quantityDropped` answers 0 (BlockSilverfish.java:9-14),
+  1.5.2's body, so FC's harvest, improper-tool break and mining charge drop nothing, as in 4.B and 1.20.1.
+
+```
+[SELF-AUDIT/identity] <block> id=<id> meta=<m>: FC drops <id>:<d> = <item>; dropped as <block item> (<FC form>)
+[SELF-AUDIT/identity] <n> blocks keep their identity on FC self-drops (<n> as FC subtypes, <n> as 1.20.1 items) over
+  ids [...]; <n> warnings (0 expected)                                                (logger BTW-CollapsedIdentity)
+```
+
+- `CollapsedIdentity.audit` (:189) runs in `runServerStart` right after `VanillaPairDrops.audit`
+  (BridgeSelfAudit.java:72-73). WARNs: W1 one of the ten flowers is not dropped as its FC 38:m; W2 ProxyRegistry's 38
+  table and LegacyVariants disagree on a flower; W3 a member dropped as an FC subtype whose FC item declares no
+  subtypes.
+- Known: the `ItemBlockWithMetadata` stub (stone, cobblestone, the ores, FC's snow item), coal, spawn eggs, potions and
+  filled maps still lack the subtype flag (follow-up F-SUBTYPES); wet sponge, the carved pumpkin, the stone slab and
+  smooth sandstone keep their identity as drops only and still collapse in BTW storage and at Stage 2
+  (F-COLLAPSE-ITEMS); a player head drops without its owner.
+- Verification (2026-10-27, W3): P-FLOWERS 107/107 (with the red tulip's red dye recipe left craftable, decision D1
+  (b)); `[SELF-AUDIT/identity] 51 blocks keep their identity ... 0 warnings (0 expected)` with the ten flower lines;
+  the hook audit counts 244 blocks (cornflower and lily of the valley mapped); P-RV's `sweep ns minecraft` 708 -> 709
+  recipes, 27 -> 19 failing.
+
+---
+
+## Mob targets and riders (FcTargetRule, FcRiding)
+
+Added 2026-10-28 (round 3, wave W4; maintainer rulings 2026-10-21: BTW mobs never take or keep a creative or spectator
+player as a target, by any path, and 2026-10-22: only targeting changes; CurseForge triage CF2-M7, CF2-MX1, CF2-MX2,
+CF2-MX3; `STUB_CATALOGUE.md` (bl), `INTEGRATIONS.md` #046, #047). Code:
+`Forge/src/main/java/btw/forge/FcTargetRule.java`, `FcRiding.java`, `FCEnvHurtGuard.runOnUpdate`, `WorldBridge.java`
+(`PlayerEntitiesView`, `closestVulnerablePlayer`, `livePuppetOf`), `PlayerBridge.java`, `DamageSourceMapping.java`, the
+damage type `data/betterthanwolves/damage_type/mob_attack_unblockable.json` and the tag
+`data/minecraft/tags/damage_type/bypasses_armor.json`, Modern-Common `EntityPlayer.java`, `EntityAITasks.java`,
+`EntityPigZombie.java` and `EntityWither.java`.
+
+**The rules.** No mixin: every FC living puppet (ProxyMob, ProxyAnimal, ProxyPathfinderMob) runs its server update
+through `FCEnvHurtGuard.runOnUpdate` (FCEnvHurtGuard.java:83-97), and both rules sit there.
+
+- **Targets (`creative_targets`, #046).** `FcTargetRule.sweep` (FcTargetRule.java:53) is the first statement of
+  `runOnUpdate` (:84-85), so it runs once per FC mob per server tick before the mob's AI reads a slot: an FC mob never
+  holds, in any target slot, the FC view of a player for whom 1.20.1's `canBeSeenAsEnemy()` is false (creative or
+  spectator through `abilities.invulnerable`, the Invulnerable tag, spectator, dead, removed; `isTargetable`, :29-31).
+  The slots: `attackTarget`, `entityToAttack` (with the pig zombie's anger and grunt delay), wither heads 1-2, the FC
+  ghast's private `m_entityTargeted` (one reflective field), the head-crab mount; AI tasks that still hold the player
+  in a field are reset (`EntityAITasks.resetExecutingTasks`). Survival players are never touched. The revenge slot and
+  the dispositions a creative player causes (a wolf turned hostile by a hit or wolf meat, animal panic, an enderman's
+  scream) stay 4.B's (ruling 2026-10-22).
+- **Riders (`head_crab`, #047).** `FcRiding.update` (FcRiding.java:21-40) replaces the plain `onUpdate()` inside the
+  update window (FCEnvHurtGuard.java:94-97): 1.5.2's per-entity world update for a puppet (vanilla/server
+  World.java:1721-1730, :1910-1918, :1972-1982). A rider stays on only while its mount is live and still carries it,
+  and runs `updateRidden()`, so its mount places it; after its update a mount forgets a rider that died, left or rides
+  something else. `isLive` (:56-63): a player's bridge whose player is in the rider's level, or an FC entity whose
+  puppet `WorldBridge.livePuppetOf` finds (WorldBridge.java:3121). FC mounts are FC-only: nothing is mirrored as a
+  1.20.1 passenger. 4.B's head-crab knock-off on the 1.20.1 vehicle: a player who carries a squid on the head leaves a
+  boat, minecart or saddle (`leaveVehicleUnderHeadCrab`, :48-53).
+- **The player list (CF2-MX1).** `World.playerEntities` is a live, read-only view of the level's players
+  (`PlayerEntitiesView`, WorldBridge.java:2874, set in the constructor at :107-108); each element is the player's
+  bridge as its last sync left it, and spectators are left out (1.20.1's entity queries skip them). FC's squid night
+  scan, the beacon's effects and dung cloud and the mill stone's netherrack nausea read it.
+- **The vulnerable-player lookup (CF2-MX2).** `getClosestVulnerablePlayer` and `getClosestVulnerablePlayerToEntity`
+  (:2924-2933) share `closestVulnerablePlayer` (:2942): a player qualifies by `FcTargetRule.isTargetable`, and the
+  range is scaled by `LivingEntity.getVisibilityPercent` (4.B's sneak and invisibility factors, plus Forge's visibility
+  hook, so other mods' camouflage reaches BTW mobs).
+
+Player-side hooks (rows 50a-50g of CATALOGUE 3, 3.2):
+
+```
+FC member                                   | Bridge                                  | Does
+────────────────────────────────────────────┼─────────────────────────────────────────┼───────────────────────────────────────────────────
+EntityPlayer.GetCanBeHeadCrabbed(inWater)   | Modern-Common EntityPlayer.java:629;    | 4.B's latch rule: a living player who can take
+                                            | PlayerBridge.java:955                   | damage, neither riding nor ridden; on the bridge
+                                            |                                         | only a player 1.20.1 lets mobs target
+IsValidOngoingAttackTargetForSquid(),       | Modern-Common EntityPlayer.java:635,    | a living player stays a squid's target; the
+IsImmuneToHeadCrabDamage()                  | :640                                    | soulforged plate helm stops the bite
+Entity.getMountedYOffset()                  | PlayerBridge.java:966-969               | where a head-crab squid sits: the real player's
+                                            |                                         | eye height plus 0.025 x height
+EntityPlayer.isBlocking()                   | PlayerBridge.java:1095                  | 4.B blocking from the real use: the main hand
+                                            |                                         | using a BTW item with the BLOCK use action (a
+                                            |                                         | 1.20.1 shield is not 4.B blocking); the inventory
+                                            |                                         | view is re-synced first
+EntityLiving.OnFlungBySquidTentacle(squid)  | PlayerBridge.java:305-313               | the fling lands on the real player (hurtMarked); a
+                                            |                                         | vehicle is left first; a disarm syncs the
+                                            |                                         | inventory at once
+Entity.OnKickedByCow(cow)                   | PlayerBridge.java:321-334               | the same for a cow's kick, from the real velocity
+                                            |                                         | after the kick's hit
+riddenByEntity (no FC world update runs for | PlayerBridge.syncFromReal (:241-248)    | a head crab that died, left or let go stops riding
+the bridge)                                 |                                         | the player, and with it the head-crab weight
+EntityLiving.isWeighted()                   | Modern-Common EntityPlayer.java:902-904 | worn armour weight 10 or more, or a squid on the
+                                            |                                         | head; CanSwim reads it (CATALOGUE 2, row 12)
+an FC mob hit flagged                       | DamageSourceMapping.java:70-76, :133    | betterthanwolves:mob_attack_unblockable, in
+setDamageBypassesArmor                      |                                         | #minecraft:bypasses_armor: no armour, shield or
+                                            |                                         | hunger cost
+```
+
+```
+[SELF-AUDIT/targets] creative/spectator target rule: attackTarget, entityToAttack (+pig zombie anger), wither heads
+  1-2, FCEntityGhast.m_entityTargeted, head-crab mount; AI tasks still holding the player are reset
+                                                                                       (logger BTW-TargetRule)
+[SELF-AUDIT/damage] betterthanwolves:mob_attack_unblockable loaded, in minecraft:bypasses_armor
+```
+
+- `FcTargetRule.audit` (:166) and `DamageSourceMapping.audit` run from `runServerStart` (BridgeSelfAudit.java:74-77).
+  The WARN forms: the ghast's slot did not resolve (an FC ghast keeps a creative player until its 20-tick re-scan); the
+  damage type did not load (the head crab's bite is cut by armour; FC's hit then takes `mob_attack`, logged once).
+- Known: a head-crab squid is drawn as a free squid at its server position (no FC riding link on the client); riders
+  tick in proxy order, so a rider can lag its mount by one tick; a 1.20.1 shield is never knocked out of the hand.
+- Verification (2026-10-28, W4): P-MOBS 65/65, P-MOBS-C 11/11, both audit lines; every regression plan the same.
+
+---
+
+## Villages (VillageInhabitants)
+
+Added 2026-10-28 (round 3, wave W4; maintainer rulings 2026-10-21: 4.B's zombified villages, 2026-10-22: no iron golem
+in any new village, and 2026-10-23: no zombie siege, as in 4.B; CurseForge triage CF2-MU3; `STUB_CATALOGUE.md` (bm),
+`INTEGRATIONS.md` #048). Code: `Forge/src/main/java/btw/forge/VillageInhabitants.java`,
+`mixin/StructureStartPlacementMixin.java`, `mixin/VillageSiegeMixin.java`, `VanillaMobReplacer.java`,
+`WorldBridge.removeEntity`, `WorldInfoBridge.java`.
+
+**The rule** (tag `zombified_villages`). 1.20.1's jigsaw villages stay, and their inhabitants follow 4.B's
+`ComponentVillage.spawnVillagers`, with 1.20.1 buildings standing in for 4.B's components. A fresh (not loaded from
+disk) Villager or ZombieVillager with spawn type STRUCTURE, standing in a piece of a `#minecraft:village` structure:
+
+- the village is that StructureStart, or the one StructureStartPlacementMixin publishes while a structure is placed
+  into a live level; its abandonment level comes from the start piece's distance to the world spawn with FC's own radii
+  (`FCUtilsHardcoreSpawn`, reached by name; x4 on large-biomes worlds): nearly empty inside the inner radius (one
+  building in 20 keeps one dirty farmer), farmers, blacksmiths and butchers out to the outer one, every class beyond
+  (2250 and 3000 blocks before the multipliers);
+- the building is the largest piece at the villager; the class is the villager's own profession, else the building's
+  nearest job-site block, else farmer;
+- the result is a persistent villager zombie, or a villager in a world created as creative
+  (`WorldInfoBridge.isCreativeWorld`). `VillageInhabitants.decide` (VillageInhabitants.java:167) answers
+  VanillaMobReplacer before it picks the proxy type.
+
+Entities loaded from disk are never re-decided. A fresh STRUCTURE iron golem inside a village piece is discarded at the
+end of the tick (4.B removed village golems; outposts keep theirs).
+
+```
+Target                                      | Hook                                        | Does
+────────────────────────────────────────────┼─────────────────────────────────────────────┼───────────────────────────────────────────────────
+StructureStart.placeInChunk m_226850_, HEAD | StructureStartPlacementMixin (:29-40) ->    | publishes the start in a thread local while a
+and RETURN                                  | VillageInhabitants.enterLivePlacement /     | structure is placed into a live level (/place
+                                            | exitLivePlacement (:143-152)                | structure, which never registers its start)
+VillageSiege.tick(ServerLevel, boolean,     | VillageSiegeMixin.btw$noSiege (:54-59)      | returns 0: no zombie siege, as in 4.B, where FC
+boolean) m_7995_, HEAD, cancellable         |                                             | removed the siege's tick (vanilla/server
+                                            |                                             | WorldServer.java:183-185)
+EntityJoinLevelEvent (Forge)                | VanillaMobReplacer.onEntityJoinLevel (:164) | the inhabitant decision before the proxy type is
+                                            | queues the villager with the live start     | picked; DROP empties an abandoned building
+                                            | (:216); the replacement asks                |
+                                            | VillageInhabitants.decide (:381-399;        |
+                                            | VillageInhabitants.java:167)                |
+ServerTickEvent END (Forge)                 | VanillaMobReplacer.onServerTick (:312-313)  | a new village's 1.20.1 iron golem is discarded
+                                            | -> drain (:328-330) ->                      |
+                                            | VillageInhabitants.drainGolems (:302)       |
+```
+
+- **`World.removeEntity` is 1.5.2's** (WorldBridge.java:2069-2081): unmount both ways, `setDead()`, and discard the
+  1.20.1 counterpart `proxyFor` finds, a registered proxy or a puppet (CATALOGUE 3, 3.1 row 6). It discarded registered
+  proxies only and set nothing dead, so the soul-urn cure left the villager zombie standing beside the new villager.
+- **Zombie sieges** (tag `village_sieges`): none, as in 4.B. `VillageSiegeMixin` returns 0 at the head of
+  `VillageSiege.tick`, so the midnight roll, the village test, Forge's VillageSiegeEvent and the zombies never run, for
+  the overworld's siege and any other instance. BTW's VillageCollection still ticks in `WorldBridge.ModSpecificTick`;
+  raids, patrols, cats and the wandering trader are not sieges.
+- **One terrain-type getter** (VILLAGES owns it; the hardcore respawn reads it): `WorldInfoBridge.getTerrainType`
+  (WorldInfoBridge.java:85-94) answers `WorldType.LARGE_BIOMES` when the overworld's generator is a
+  NoiseBasedChunkGenerator with `NoiseGeneratorSettings.LARGE_BIOMES`, else the inherited value; nothing sets it. FC's
+  radii then apply their x4 for villages and the respawn alike (see the WorldInfo table under [Hardcore respawn
+  (HardcoreRespawn)](#hardcore-respawn-hardcorerespawn)).
+
+```
+[VILLAGES] new villages: villager zombies (default game type <type>); abandoned within <r> blocks, partially within
+  <r> of the spawn <pos> (terrain multiplier <m>)                                           (logger BTW-Villages)
+[VILLAGES] a new village's iron golem at <pos> was not spawned (4.B; logged once)
+```
+
+- The first line is logged at ServerStarted (VillageInhabitants.java:320-335); "villagers" in a world created as
+  creative. WARNs: FC's radii did not resolve (villages then use 2250 / 3000 blocks and no large-biomes x4); a golem
+  check failed.
+- Verification (2026-10-28, W4): P-VCURE 19/19, P-VPLACE 23/23, P-VSIEGE 16/16, P-VNAT 11/11, P-VLB 5/5 (terrain
+  multiplier 4.0); refmap StructureStartPlacementMixin `m_226850_`, VillageSiegeMixin `m_7995_`.
+
+---
+
+## Explosions (BlastRules)
+
+Added 2026-10-28 (round 3, wave W5; CurseForge triage CF2-DR4, CF2-DR5; maintainer ruling 2026-10-22, decision D1 = C:
+the 1.20.1 decay gamerules decide for BTW blocks too, and new worlds set `tntExplosionDropDecay` true;
+`STUB_CATALOGUE.md` (bn), `INTEGRATIONS.md` #049). Code: `Forge/src/main/java/btw/forge/BlastRules.java`,
+`mixin/ExplosionMixin.java`, `mixin/ExplosionDamageCalculatorMixin.java`, `HookPolicy.java` (RESIST),
+`WorldBridge.java` (the blast drop capture), `WorldGamerulesHandler.java`, `ProxyBlock.getDrops`,
+`ModernBlockStandIn.DropItemsOnDestroyedByExplosion`, `BridgeSelfAudit.runServerStart`, Modern-Common `Block.java`,
+`BlockTNT.java`, `BlockStairs.java` and `Explosion.java`.
+
+**The rule** (tag `fc_blast_rules`). 1.20.1 explosions never reached FC's blast code: FC's per-block rules (gravel and
+dirt loosening, grass and mycelium to dirt, ore and stone chunks, the leaves' saplings, stairs reacting as their base
+block) did not run, and FC's mining charges dropped nothing. FC owns the blast of a block state when FC's 1.5.2 code
+has something to say about it; otherwise 1.20.1's handling stays. `BlastRules.decide` (BlastRules.java:314-331) is pure
+and cached per state (`fcOwnsBlast`, :299-312):
+
+```
+# | Condition (BlastRules.decide, first match)                  | Owner   | Rule
+──┼─────────────────────────────────────────────────────────────┼─────────┼─────────────
+0 | FC not ready, or no FC identity (stand-ins, twins, class-F  | 1.20.1  | NO_IDENTITY
+  | log forms, modded blocks)                                   |         |
+1 | a ProxyBlock (BTW's own block)                              | FC      | FC
+2 | a RemovedContent T1 block (#019), as HookPolicy rule 2      | 1.20.1  | REMOVED
+3 | VanillaPairDrops.isRuled (the 16 beds, the oak and iron     | 1.20.1  | PAIR
+  | door)                                                       |         |
+4 | a block entity, or HookPolicy.isTeGuarded(fc): its contents | 1.20.1  | BLOCK_ENTITY
+  | are 1.20.1's                                                |         |
+5 | not the canonical member of its legacy id (FC would drop    | 1.20.1  | COLLAPSED
+  | the canonical item)                                         |         |
+6 | a PENDING id: 46, the powder keg (FC primes Modern-Common   | 1.20.1  | PENDING
+  | EntityTNTPrimed, a stub)                                    |         |
+7 | the runtime FC class declares, outside btw.modern,          | FC      | FC
+  | canDropFromExplosion, onBlockDestroyedByExplosion,          |         |
+  | dropBlockAsItemWithChance, idDropped, quantityDropped,      |         |
+  | quantityDroppedWithBonus or damageDropped                   |         |
+  | (declaresBlastRule :342-357, #036's test)                   |         |
+8 | otherwise (Modern-Common placeholders, FC classes that      | 1.20.1  | NO_FC_RULE
+  | inherit vanilla drops: logs drop whole, as in 4.B)          |         |
+```
+
+A double slab is judged on the FC block FC reads it as (43 / 125), as `doExplosionB` reads `getBlockId`.
+
+```
+Target (SRG)                                | Hook                                          | Does
+────────────────────────────────────────────┼───────────────────────────────────────────────┼───────────────────────────────────────────────────
+Explosion.finalizeExplosion m_46075_, HEAD  | ExplosionMixin.btw$fcBlastRules (:37-42) ->   | 1.5.2 doExplosionB's body for every FC-owned cell
+                                            | BlastRules.beforeFinalize (:115-150)          | of a snapshot of getToBlow(), in its order; those
+                                            |                                               | cells are air for 1.20.1's loop
+                                            |                                               | (Explosion.java:248), the fire pass still sees
+                                            |                                               | them
+Explosion.finalizeExplosion, TAIL           | ExplosionMixin.btw$fcSecondaryExplosions      | FC's queued secondary explosions (smouldering
+                                            | (:44-50) -> BlastRules.afterFinalize          | logs) as NoFX blasts, after 1.20.1's loop and
+                                            | (:153-169)                                    | fire, as 1.5.2's PerformSecondaryExplosions
+ExplosionDamageCalculator.                  | ExplosionDamageCalculatorMixin.               | FC's positional resistance where the RESIST owner
+getBlockExplosionResistance m_6617_, HEAD,  | btw$fcPositionalResistance (:32-38) ->        | is FC, maxed with the fluid's; null keeps 1.20.1's
+cancellable                                 | BlastRules.positionalResistance (:265-278)    | path (BlockMixin's position-less FC value)
+WorldBridge.spawnEntityInWorld              | swapBlastDropCapture                          | holds FC's ItemEntities during the HEAD pass, then
+                                            | (WorldBridge.java:1992-2004, :2055-2059) ->   | merges them as 1.20.1's addBlockDrops does (stacks
+                                            | BlastRules.addMerged (:220-244)               | of 16; FC's position, motion and pickup delay
+                                            |                                               | kept)
+```
+
+- **The FC body per cell** (`destroy`, :181-213), 1.5.2's `doExplosionB` order, each step caught on its own: drop with
+  chance 1 / `explosionSize` after `canDropFromExplosion`; remove (always: a fallback air write if FC's threw, so
+  1.20.1's loop never adds its loot to FC's partial drop); react (`onBlockDestroyedByExplosion`).
+- **One FC Explosion per 1.20.1 explosion**, made at the first FC-owned cell: the exploder is `getEntityByID` of the
+  indirect source (a proxy's FC entity, a player's bridge); `isFlaming` is the explosion's fire, `isSmoking` true.
+  `explosionSize` carries the drop radius, the only thing FC reads it for: `dropRadius` (:172-174) is the radius for a
+  DESTROY_WITH_DECAY blast, else 1 (D1 = C).
+- **The drop chance.** A decaying blast drops FC's blocks at 1 in its radius, a non-decaying one at 1, so the 1.20.1
+  gamerules decide. New worlds set `tntExplosionDropDecay` true (WorldGamerulesHandler.java:63-64): TNT drops 1 in 4,
+  as in 4.B; existing worlds keep their gamerule.
+- **Positional blast resistance.** HookPolicy decides RESIST first for every managed state (HookPolicy.java:238-242):
+  FC (rule `positional`) when the runtime FC class declares `getExplosionResistance(Entity, World, int, int, int)`
+  (`fcDeclaresPositionalResistance`, :638-640), else NOTIFY (rule `lookup`). Only `BlastRules.readsPosition` (:281-292)
+  reads that owner; a ProxyBlock whose FC class declares the overload counts too (none today). BlockMixin's
+  position-less answer stays for every caller without a position. The strata blocks read their strata from the position
+  (see [Strata and deepslate (StrataRule)](#strata-and-deepslate-stratarule)).
+- **1.5.2 base logic in Modern-Common** (the port's stand-ins; FC code untouched): `Block.setHardness` raises the blast
+  resistance to at least hardness x 5 (Block.java:273-280); `Block.DropItemsOnDestroyedByExplosion` (:1579-1597) is
+  1.5.2's for every block, so FC's mining charge, which passes a null explosion (chance 1), drops its pieces (CF2-DR5);
+  `OnDirtDugWithImproperTool` and its slab and neighbour forms (:1604-1629); `BlockTNT.canDropFromExplosion` false (a
+  blasted keg never drops itself); `BlockStairs.onBlockDestroyedByExplosion` (the base block's reaction);
+  `Explosion.doExplosionB` in 1.5.2's order. `ProxyBlock.getDrops` (ProxyBlock.java:946-990) applies 1.5.2's
+  `dropBlockAsItemWithChance` on the 1.20.1 loot paths (pistons, a foreign `destroyBlock`, `/loot`, a blast BlastRules
+  does not own); a class-S log breaks under a mining charge into 6 sawdust and its bark
+  (ModernBlockStandIn.java:606-624).
+- Server thread only: HEAD, TAIL and the resistance inject act in a ServerLevel on its server thread; elsewhere 1.20.1
+  handles everything. Nothing throws into the explosion.
+
+```
+[SELF-AUDIT/blast] <n> FC-identity blocks: <n> follow FC's blast rules (<n> BTW blocks), the rest keep 1.20.1's {...};
+  pending [46]; positional resistance on <n> blocks of ids [1, 14, 15, 16, 21, 56, 73, 129] and 0 BTW blocks;
+  <n> warnings (0 expected)                                                                  (logger BTW-Blast)
+```
+
+- `BlastRules.audit` (:363) runs from `runServerStart` (BridgeSelfAudit.java:78-79), after HookPolicy's cache is set.
+  WARNs: `btw.modern.Block` lacks a rule-7 signature; an expected FC id (1, 2, 3, 4, 13, 18, 78, 110) is under another
+  rule; an expected 1.20.1 id (26, 64, 71 PAIR; 54 BLOCK_ENTITY; 46 PENDING) is not; the positional ids differ from 1,
+  14, 15, 16, 21, 56, 73, 129. W5 values: 418 FC-identity blocks, pending [46], positional resistance on 8 blocks, 0
+  warnings; since STRATA (W6) 16 positional blocks (with the deepslate forms).
+- Known: FC-owned cells go first in `toBlow` order, then 1.20.1's shuffled loop, so an attachment 1.20.1 owns (a wall
+  torch, rail, carpet, crop) whose support FC owns always pops through its neighbour update; 4.B's order was its
+  HashSet's, so both outcomes are 4.B's too. The powder keg keeps 1.20.1's blast until its primed entity is ported.
+- Verification (2026-10-28, W5): P-BLAST 79/79 on a fresh world (`tntExplosionDropDecay = true`); refmap ExplosionMixin
+  `m_46075_`, ExplosionDamageCalculatorMixin `m_6617_`; the hook audit's FC-owned pairs 13 (+8 RESIST rows); P-BEDDOOR,
+  P-HOOK, P-LEAF-V, P-LEAF-DT, P-RM, P-USE and P-PLACE unchanged.
+
+---
+
+## Strata and deepslate (StrataRule)
+
+Added 2026-10-28 (round 3, wave W6; maintainer rulings 2026-10-21: 4.B's strata heights, deepslate is BTW's deep-strata
+stone, raw ore is BTW's ore chunks, and 2026-10-22: depth decides for every stone below y = 48, placed or generated;
+mined deepslate gives loose cobblestone; the cobbled deepslate and nether gold ore cooking recipes are removed;
+`STUB_CATALOGUE.md` (bo), `INTEGRATIONS.md` #050). Code: `Forge/src/main/java/btw/forge/StrataRule.java`,
+`WorldBridge.java` (the derive branch and the metadata writes), `FcMetaOverlay.java`, `ProxyRegistry.java` (the
+deepslate forms), `ProxyItem.java`, `LegacyVariants.java` (`COUNTS_AS`), `FcRecipeRemovals.java` (pass 3),
+`RecipeBridge.java`, `recipes/ModernCookingImport.java`, the replacement data `btw_recipe_replacements/raw_ores/` and
+`nether_gold_ore/`, `BridgeSelfAudit.runCommon`, Modern-Common `BlockOre.java`.
+
+**The rule** (tags `strata`, `raw_ore_chunks`).
+
+- **Strata blocks** are FC's own contract, read at runtime (`buildIds`, StrataRule.java:118-133): legacy id 1 and every
+  FC block whose `HasStrata()` is true and whose `GetMetadataConversionForStrataLevel` keeps the strata in bits 0-1.
+  Today 1, 14, 15, 16, 21, 56, 73 and 129; the infested stone is not one.
+- **A strata block's strata is a function of its block and position, on both sides** (`strataAt`, :52-61): a deepslate
+  form is always deep (2); outside the Overworld top (0), as 4.B wrote strata in dimension 0 only; stone takes 4.B's
+  per-column edge (deep when y <= 24 + an edge bit, else mid when y <= 48 + another, :63-66), the ores 4.B's per-block
+  edge (:69-72). `edgeBit` (:78-87) is a fixed 64-bit mix of the position and a salt, standing for 4.B's `rand(2)`,
+  with no world seed (the client has none). A getter that is not a Level (the chunk-mesh threads) takes the Overworld
+  rule (`strataDimension`, :141-145).
+- **The position owns the strata bits** (no placed-stone memory): `deriveVanillaMetadata` reads them
+  (WorldBridge.java:379-380); FC's writes keep a strata cell's strata and store only FC's other bits, stone's cracked
+  bit 4, in the overlay (:275-276, :1385-1387; `positionBits`, StrataRule.java:104-106); an overlay entry stays valid
+  when only the strata under it changed and is read with the position's strata (WorldBridge.java:252-256,
+  FcMetaOverlay.java:231-234); a strata cell takes no 1.20.1 property write (WorldBridge.java:725-726).
+- **Deepslate forms have FC identity in the world only** (ProxyRegistry.java:983-992; `isDeepslateForm` :502,
+  `getBlockFormItemId` :514): deepslate reads as stone 1, cobbled deepslate as cobblestone 4 and each deepslate ore as
+  its stone ore id, listed after the stone forms, so FC's writes of those ids keep placing the stone forms. FC's dig,
+  harvest, conversion, hook and blast code then runs on them as on stone. Their items keep their own headless identity
+  (ProxyItem.java:125-126, ProxyRegistry.java:1103-1104 and :1289-1290, ModernCookingImport.java:69-70), so a deepslate
+  item never becomes stone in BTW storage or through BTW's placement.
+- **Counts-as items:** raw iron and raw gold read as FC's iron and gold ore chunks, one way (`COUNTS_AS`,
+  LegacyVariants.java:281-284, resolved by the FC fields `fcItemChunkIronOre` and `fcItemChunkGoldOre`), so every FC
+  path treats raw iron as the chunk; the chunk never turns back into raw iron (no alias, RecipeBridge.java:326), and
+  FC's furnace recipes of the chunk show for raw iron too (:417-418). A block of raw iron or gold unpacks into nine
+  chunks (`btw_recipe_replacements/raw_ores/`).
+- **4.B's cooking rule, generalised** (FcRecipeRemovals pass 3, FcRecipeRemovals.java:418-425): a `minecraft:` cooking
+  recipe goes when FC removed its 1.5.2 input or when FC's own furnace cooks that input into something else, so the
+  ingot recipes of raw iron and raw gold go. A deepslate form counts as its stone form here (world identity on purpose,
+  :553), so cobbled deepslate no longer smelts into deepslate. The nether gold ore's furnace and blast-furnace recipes
+  are removed by data (`btw_recipe_replacements/nether_gold_ore/`); its drops stay 1.20.1's.
+- Modern-Common `BlockOre` carries 1.5.2's drop methods (`idDropped`, `quantityDropped`, `quantityDroppedWithBonus`
+  with Fortune, `damageDropped`; no block XP, as 4.B), so Fortune multiplies the iron and gold chunks, coal, diamonds,
+  emeralds and lapis of the ores whose FC class keeps 1.5.2's `quantityDroppedWithBonus`, and nether quartz ore drops
+  quartz. FC's staged conversions eject without Fortune, as in 4.B.
+- 1.20.1 explosions read a strata block's resistance at its position through BLAST's hook (see [Explosions
+  (BlastRules)](#explosions-blastrules)): deep stone and deepslate resist more than mid and top stone, as in 4.B.
+
+```
+[SELF-AUDIT/strata] mapped strata ids [1, 14, 15, 16, 21, 56, 73, 129]; 9 deepslate forms (8 deep, cobbled deepslate
+  -> 4); raw_iron -> <FC id>, raw_gold -> <FC id>; blast resistance by position on; <n> warnings (0 expected)
+                                                                                              (logger BTW-Strata)
+```
+
+- `StrataRule.audit` (:171) runs from `runCommon` (BridgeSelfAudit.java:50-51). WARNs: other mapped ids;
+  `blocksList[1]` is not FCBlockStone; a deepslate form reads as something else; an FC id places a block other than its
+  stone form; the height rule answers other strata at its sample heights; raw iron or gold does not read as the chunk;
+  ExplosionDamageCalculatorMixin is not applied. W6 values: raw_iron -> 22571, raw_gold -> 22574, 0 warnings.
+- Known: the deep strata use the stone textures (darker deep-strata textures are a queued follow-up); deepslate, tuff
+  and calcite keep their 1.20.1 look; the `ItemBlockWithMetadata` stub still lacks the subtype flag (F-SUBTYPES).
+- Verification (2026-10-28, W6): P-STRATA 152 of 153 (E16[OD3a] fails by design); P-STRATA-C, the client's dig progress
+  equal to the server's in all six cells; the audit line above; `112 crafting + 2 special + 39 cooking recipes
+  removed`; the hook audit counts 253 blocks and 21 FC-owned pairs.
+
+---
+
+## FC-backed block entities and the beacon (FcBackedBlockEntities, FcBeacons)
+
+Added 2026-10-28 (round 3, wave W8; maintainer ruling 2026-10-21: the 4.B beacon, the pyramid's block decides the
+power, no menu, and soulforged steel binds the respawn, overriding the random respawn; `STUB_CATALOGUE.md` (bq),
+`INTEGRATIONS.md` #053). Code: `Forge/src/main/java/btw/forge/FcBackedBlockEntities.java`, `FcBackedBlockEntity.java`,
+`FcBeacons.java`, `mixin/BeaconBlockEntityMixin.java`, `mixin/fcext/FCTileEntityBeaconPyramidFloorMixin.java`,
+`HookPolicy.java`, `WorldBridge.java`, `client/ClientFcWorld.java`, `FcWorldSavedData.java`, `MagneticField.java`,
+`client/MagneticFieldClient.java`, `BTWMobEffects.java`, `PotionMapping.java`, `PlayerBridge.addPotionEffect`,
+`BridgeSelfAudit.runServerStart`, Modern-Common `TileEntityBeacon.java`.
+
+**Rule A (tag `fc_beacon`): a 1.20.1 block entity backs an FC tile entity.** A vanilla-id block whose FC block is a
+`BlockContainer` is FC-backed when its 1.20.1 block entity carries FC's tile entity as an attachment
+(`FcBackedBlockEntity`). For such a cell:
+
+- FC's world sees FC's tile entity (`WorldBridge.getBlockTileEntity`, WorldBridge.java:1157-1158; null when it could
+  not be made, never a TileEntityBridge FC would cast);
+- FC's block hooks run on it: the block-entity guard lifts (`HookPolicy.isTeGuarded(Block, fc)`,
+  HookPolicy.java:291-294), and an empty-handed sneak runs FC's activation too (:489-493), as 4.B activated on that
+  sneak;
+- the 1.20.1 ticker runs FC's `updateEntity`, on both sides as 1.5.2 did;
+- FC's NBT rides in the block entity's tag under `fcData` (`FcBackedBlockEntities.TAG`, :35): saved with the chunk,
+  sent in the chunk and update packets, restored by `load`; a copy whose `fcData` names another cell (`/clone`,
+  structures, a picked block) restarts as a new block of its kind;
+- the 1.20.1 block entity stays the cell's block entity: the same type id, renderer and view for other mods. FC
+  replaces its behaviour, not its identity.
+
+The table has one row (`ROWS`, :48): the beacon. The ender chest is the next candidate (4.B's antenna tiers, a queued
+unit); the note block and the furnace stay guarded.
+
+```
+Target (BeaconBlockEntity)                  | Hook (BeaconBlockEntityMixin)                 | Does
+────────────────────────────────────────────┼───────────────────────────────────────────────┼───────────────────────────────────────────────────
+(duck interface FcBackedBlockEntity)        | btw$fcTile / btw$setFcTile (:40-57)           | the attachment, made on first use once FC and the
+                                            |                                               | level exist (FcBackedBlockEntities.create, bind)
+load, saveAdditional, setLevel: TAIL        | btw$loadFc, btw$saveFc, btw$rebindFc (:59-72) | fcData in and out (kept until the tile entity
+                                            |                                               | exists); rebinds on a level change
+tick (static), HEAD                         | btw$tickFc (:74-79) -> FcBeacons.tick (:35)   | FC's updateEntity on both sides; the 1.20.1 body
+                                            |                                               | then runs its beam scan
+updateBase (static), HEAD, cancellable      | btw$fcLevels (:81-86) ->                      | the level 1.20.1 stores and renders (the beam,
+                                            | FcBeacons.mirroredLevels (:56)                | CONSTRUCT_BEACON) is FC's
+applyEffects (static), HEAD, cancellable    | btw$noVanillaEffects (:88-94)                 | no 1.20.1 power for an FC beacon
+tick's and setRemoved's playSound calls     | btw$tickSound (:96-102), btw$removedSound     | the hum stays; the activate and deactivate sounds
+                                            | (:104-109)                                    | are dropped (FC's wither sounds mark the power
+                                            |                                               | edges)
+createMenu, HEAD, cancellable               | btw$noMenu (:111-117)                         | null: no 1.20.1 menu by any path
+```
+
+- `fcext.FCTileEntityBeaconPyramidFloorMixin` (`@Pseudo`, `remap = false`): a `@ModifyConstant` in FC's
+  `IsPyramidLevelValid(III)Z` puts the pyramid's floor at the level's build floor, so a pyramid may reach below y = 0.
+- `FcBeacons` (FcBeacons.java:22-103): the tick, the mirrored level, the FC-beacon test, the silenced sounds, and
+  `onLootingLevel` (Forge's LootingLevelEvent, :85): 4.B's ambient looting for every mob dying in an emerald beacon's
+  range, 1.20.1 mobs included.
+- Modern-Common `TileEntityBeacon` carries 1.5.2's state (the power flag, the level, the effect, saved as "Primary",
+  "Secondary" and "Levels" inside `fcData`) and FC's accessors; the menu-only logic is not ported. FC's potions 29-31
+  (True Sight, Looting, Fortune) are BTW MobEffects (`BTWMobEffects`, `PotionMapping.java:48`), and FC's ambient flag
+  reaches 1.20.1 (PlayerBridge.java:737).
+- **Rule B (tag `sky_column`):** 1.5.2's sky test is an opacity column test, in every dimension.
+  `WorldBridge.fcCanSeeSky` (WorldBridge.java:1765-1771) keeps 1.20.1's sky light where the dimension has it, and
+  elsewhere (the End, the Nether, modded skylight-less dimensions) reads the chunk's sky-source column, which 1.20.1
+  keeps on both sides; ClientFcWorld uses the same helper (ClientFcWorld.java:183). In the Nether, FC's own test still
+  wants bedrock as the first block above the beacon, as in 4.B.
+- **The compass (tag `magnetic_compass`):** `MagneticField` (MagneticField.java:25-90) picks 4.B's strongest magnetic
+  point per player every 40 ticks (the world spawn, and every powered BTW beacon but a glass one) and sends it when it
+  changes; `MagneticFieldClient` points the local player's compass at it, and a lodestone compass keeps its lodestone.
+  FC's magnetic-point and looting-beacon lists are saved per world (`FCMagneticPoints`, `FCLootingBeacons`;
+  FcWorldSavedData.java:174-219) and validated as 4.B did (WorldBridge.java:3813).
+- **The bind:** a soulforged steel beacon's right-click (also an empty-handed sneak) calls FC's `setSpawnChunk` (Server
+  FCBlockBeacon.java:93); `PlayerBridge.setSpawnChunk` makes it 1.20.1's respawn point and remembers FC's bind, which
+  the hardcore respawn validates with 4.B's rules (see [Hardcore respawn
+  (HardcoreRespawn)](#hardcore-respawn-hardcorerespawn)).
+
+```
+[SELF-AUDIT/fcbe] 1 rows, beacon table ok, potions 3/3, 0 warnings (0 expected)              (logger BTW-SelfAudit)
+```
+
+- `auditFcBackedBlockEntities` (BridgeSelfAudit.java:303) runs in `runServerStart` right after the hook audit (:67-68).
+  WARNs: a row's block entity does not carry FC's tile entity (the mixin did not apply); FC's block makes no FC tile
+  entity; a row's USE owner is not FC or its REMOVE owner is VANILLA; FC's beacon table is empty; an FC potion maps to
+  another key.
+- Hook ownership: beacon USE is FC by the general rule (`EXPECTED_FC`, HookPolicy.java:213); the known block-entity
+  gaps drop from 6 to 4 (see [Hook ownership (HookPolicy)](#hook-ownership-hookpolicy)).
+- Known: True Sight shows no mob-spawn or spawn-chunk particles; a diamond beacon's Fortune does not reach blocks
+  1.20.1's loot tables drop; the ender chest's antenna tiers wait for their own unit (ruling 2026-10-22); other
+  players' compasses and compasses in item frames point at the world spawn.
+- Verification (2026-10-28, W8): P-BEACON 66/66, P-BEACON-PERSIST 3/3 + 4/4, P-BEACON-C 14/14, with P-MOBS 65/65 and
+  P-BLAST 79/79 rerun; the audit line above; the hook audit counts 257 blocks, 22 FC-owned and 180 VANILLA pairs, 4
+  known block-entity gaps; the refmap carries the mixin's nine names; no beacon ClassCastException.
+
+---
+
+## Hardcore respawn (HardcoreRespawn)
+
+Added 2026-10-28 (round 3, wave W9; maintainer rulings 2026-10-21: port 4.B's hardcore respawn, a charged respawn
+anchor in the Nether still works, a bound soulforged steel beacon overrides the random respawn, and 2026-10-22: every
+game mode except in worlds created as creative; CurseForge triage CF2-U1-HS; `STUB_CATALOGUE.md` (br),
+`INTEGRATIONS.md` #054). Code: `Forge/src/main/java/btw/forge/HardcoreRespawn.java`,
+`mixin/PlayerListRespawnMixin.java`, `mixin/ServerPlayerMixin.java` (`restoreFrom`, the bind marker),
+`PlayerBridge.setSpawnChunk`, `FcWorldSavedData.java` (the spawn list), `WorldBridge.ModSpecificTick` (its prune),
+`WorldInfoBridge.java`, `BedSpawnPolicy.isBed`, `NetherPortalProgress.java`, `BTWLifecycle.onServerStarting`.
+
+**The rule** (tags `hardcore_respawn`, `creative_world`). At every `PlayerList.respawn`, a respawn point 1.20.1 owns (a
+respawn anchor, `/spawnpoint`, a modded respawn block) is resolved by 1.20.1. The point FC itself set, the beacon bind
+(kept as `PlayerBridge.fcBindPos` / `fcBindDim`), is resolved by 4.B's `GetValidatedRespawnCoordinates`
+(`validateBeacon`, HardcoreRespawn.java:301). A non-forced point on a bed is never a respawn point. When no point is
+used, 4.B's `HandleHardcoreSpawn` (`handleHardcoreSpawn`, :357) places the player in the Overworld: a random point
+1000-2000 blocks from the original spawn (x1.5 after the Nether, x2 after the Wither, x4 after the End, x4 again on
+large-biomes worlds), a soft respawn for a death within a day of the assignment (near the old point, health 10, food -6
+with a floor of 12), the early-game shared respawn, and the spawn list. Leaving the End returns the player to the
+original spawn and keeps the respawn point. Every respawn ends with 4.B's fresh-player state: no hardcore home, time 0,
+bind cooldown 0, dimension-switch time 0.
+
+- **FC's numbers are FC's:** the radii, the progress and world-type multipliers, the soft radius, the 24000-tick
+  window, the Nether gate and the beacon's spawn effect are read from FC's own statics (`Fc`, :717); only the spatial
+  search (the surface column, chunk generation, placement) is ported, against 1.20.1, within a generation budget of
+  3000 ms per respawn (`-Dbtw.hardcoreRespawn.budgetMs`).
+- **Who gets it** (`appliesTo`, :578-580): every game mode, except in a world created as creative
+  (`WorldInfoBridge.isCreativeWorld`), where the respawn is 1.20.1's.
+- **FC data:** 4.B's `spawnChunk` is 1.20.1's respawn position (one slot, last write wins, in both games).
+  `m_HardcoreSpawnChunk` and `m_lTimeOfLastSpawnAssignment` are only the hardcore home and its time, never a respawn
+  point.
+
+```
+Target (SRG)                                | Hook                                            | Does
+────────────────────────────────────────────┼─────────────────────────────────────────────────┼───────────────────────────────────────────────────
+PlayerList.respawn m_11236_, HEAD           | PlayerListRespawnMixin (:47) ->                 | pushes the decision context for the dying player
+                                            | HardcoreRespawn.begin (:171)                    | (a per-thread chain keyed on it)
+respawn, the BlockPos STORE (ordinal 0)     | @ModifyVariable (:52) -> respawnPosition (:225) | null when 4.B ignores the point: a bed, or FC's
+                                            |                                                 | bind, which it validates itself
+respawn, the Optional STORE                 | @ModifyVariable (:57) -> respawnResult (:231)   | the validated beacon position
+ServerPlayer.restoreFrom m_9015_, TAIL      | ServerPlayerMixin.btw$restoreFrom (:218-269) -> | 4.B's fresh-player state and the placement, before
+(existing)                                  | HardcoreRespawn.onRestore (:244)                | 1.20.1's collision bump and the respawn packet
+                                            |                                                 | (PlayerList.java:470-477): no second teleport
+respawn, INVOKE of                          | @Inject (:62) -> beforeRespawnEvent (:273)      | the retained point and 4.B's message, before
+ForgeEventFactory.firePlayerRespawnEvent    |                                                 | listeners see the player
+(remap = false on the @At)                  |                                                 |
+respawn, RETURN                             | @Inject (:69) -> end (:285)                     | context cleanup only
+```
+
+- The mixin implements `HardcoreRespawn.Hooked`, a marker the self-audit reads. The decision context is a per-thread
+  chain keyed on the dying player, so a respawn a listener starts inside another respawn gets its own. Every entry
+  catches Throwable, logs once per site and leaves 1.20.1's behaviour, which is 4.B's original-spawn fallback.
+  ServerPlayerMixin's former `getRespawnPosition`, `getRespawnDimension` and `isRespawnForced` injects are gone
+  (CATALOGUE 2, 2.11).
+- **The bind** (CATALOGUE 3, 3.2 row 41): `PlayerBridge.setSpawnChunk` (PlayerBridge.java:821-840) writes 1.20.1's
+  `setRespawnPosition` with the legacy dimension resolved against the player's level (`levelForLegacyDim`,
+  HardcoreRespawn.java:591-598); a non-forced point 1.20.1 accepted (PlayerSetSpawnEvent may veto it) is remembered as
+  `fcBindPos` / `fcBindDim` and saved as `btwFcSpawnBind` {X, Y, Z, Dim} (`readBind` / `writeBind`, :603-635;
+  ServerPlayerMixin.java:170-171, :195).
+- **The beacon search** (`aroundBeacon`, HardcoreRespawn.java:321-344; 4.B's `GetRandomValidSpawnAroundBeaconLocation`,
+  EP:2931-2969): 20 tries on the pyramid's sides; since 2026-10-31 a candidate needs 4.B's solid top below it
+  (`doesBlockHaveSolidTopSurface`, EP:2962), asked of the level's WorldBridge (HardcoreRespawn.java:338; it asked
+  1.20.1's `isFaceSturdy`), see [Solid top surface (WorldBridge,
+  ClientFcWorld)](#solid-top-surface-worldbridge-clientfcworld).
+- **The spawn list:** "FCSpawnLocations", per world (FcWorldSavedData.java:185, :220; only the Overworld's ever has
+  points), pruned as 1.5.2's `ValidateSpawnLocationList` (WorldBridge.java:3847-3865).
+- **The Nether flag:** `NetherPortalProgress` (NetherPortalProgress.java:56-90), a LOWEST-priority listener of Forge's
+  PortalSpawnEvent that skips cancelled events, sets FC's nether-accessed flag the moment a portal is lit, as 4.B's
+  `tryToCreatePortal` did, for fire and campfire lighting alike (see [Nether portals
+  (NetherPortalShapes)](#nether-portals-netherportalshapes)); the portal's random tick still sets it too.
+
+The WorldInfo bridge (`WorldInfoBridge`, tag `creative_world` for the game-type rows):
+
+```
+btw.modern.WorldInfo member             | WorldInfoBridge answer                                  | Read by
+────────────────────────────────────────┼─────────────────────────────────────────────────────────┼─────────────────────────────────────────
+getTerrainType() (:85-94; VILLAGES)     | LARGE_BIOMES when the overworld's generator is          | FC's radii (FCUtilsHardcoreSpawn):
+                                        | noise-based with NoiseGeneratorSettings.LARGE_BIOMES,   | villages, the hardcore respawn
+                                        | else the inherited value; nothing sets it               |
+getGameType() (:127-131)                | worldGameType(server); before, the stand-in's SURVIVAL  | FCEntityCow, FCEntityVillager,
+                                        | in every world                                          | FCEntityWolf, FC's possession and
+                                        |                                                         | scroll-roll builds
+static isCreativeWorld(server)          | 1.20.1's default game type is CREATIVE (set at world    | VillageInhabitants,
+(:107-109)                              | creation, or by /defaultgamemode)                       | HardcoreRespawn.appliesTo,
+                                        |                                                         | FCGameplayBridge
+static worldGameType(server) (:114-118) | the default game type as 4.B's EnumGameType, SPECTATOR  | getGameType, the hcspawn self-audit
+                                        | (debug worlds) as SURVIVAL; no allocation               |
+```
+
+```
+[SELF-AUDIT/hcspawn] PlayerList hooked=true, creative world false (default game type survival, FC world game type
+  survival, hardcore false) -> hardcore respawn on, world type <name> (generator large biomes false), FC radius
+  1000-2000 (x1 x1), soft radius 100, reassignment 24000 ticks, spawn effect 22223, generation budget 3000 ms;
+  0 warning(s)                                                                    (logger BTW-HardcoreRespawn)
+```
+
+- `HardcoreRespawn.onServerStarting` (:642) runs once per world start from `BTWLifecycle.onServerStarting`
+  (BTWLifecycle.java:2011-2012). WARNs: PlayerListRespawnMixin not applied; FC's world game type differs from the
+  default game type; FC's world type disagrees with the overworld generator; an FC number differs from 4.B's; FC's
+  links are unavailable (every respawn then stays 1.20.1's).
+- Known: the point search loads and generates terrain on the server thread, as 4.B did, bounded by the budget (once
+  spent, the respawn falls back to the original spawn); spots 1.20.1 adds after the noise stage (icebergs, mangrove
+  roots, trees on low ground) are not used; FC's day is 1.20.1's day clock, so a slept night counts and with
+  `doDaylightCycle` false the one-day windows never end; mystery meat on a player's death is not ported.
+- Verification (2026-10-28, W9): P-HCR 53/53, P-HCR-CW 26/26, P-HCR-LB 8/8, P-HCR-PERSIST 1/1 + 2/2, P-HCR-BEACON 9/9,
+  P-HCR-C 6/6, the hcspawn line above; P-BEACON 66/66, P-VLB 5/5, P-VCURE 19/19 and P-VPLACE 23/23 rerun; refmap
+  PlayerListRespawnMixin `m_11236_`.
+
+---
+
+## Block model quads and the breaking crack (FCBakedModel, FCBreakingCrack)
+
+Added 2026-10-25 (round 3, wave W1; CurseForge triage CF2-R3; maintainer rulings 2026-10-22: the BTW web's crack is
+4.B's exact look, and 2026-10-23: with 1.20.1's crack images; `STUB_CATALOGUE.md` (bg), `INTEGRATIONS.md` #041). Code:
+`Forge/src/main/java/btw/forge/client/FCBakedModel.java`, `client/FCBreakingCrack.java`,
+`client/FCBlockEntityRenderer.java`, `client/BTWClientEvents.java`,
+`mixin/client/BlockRenderDispatcherCrackMixin.java`, `SheetedDecalAccessor.java`,
+`VertexMultiConsumerDoubleAccessor.java`.
+
+- **Quad normals (tag `fc_quad_normals`).** 1.5.2 meshed chunks without GL lighting, so a world quad's tessellator
+  normal was often a leftover (the capture's default UP, the previous face, or UP set by a port renderer on a vertical
+  plane); 1.20.1 reads it for the face shade, the ambient occlusion and the crack's projection axis. A world quad keeps
+  its normal only when it is its own (`planeNormalUnlessOwn`, FCBakedModel.java:1300); otherwise it is baked as 1.20.1
+  bakes its own cross, crop, ladder, vine and torch faces: the direction nearest its plane, the normal Forge packs for
+  such a face (the axis, or the exact plane normal under the `calculateAllNormals` client option), no face shade, no
+  ambient occlusion (`convertCapturedQuad`, :1204-1225). Item captures keep their normals.
+- **The per-meta digging particle** (Part B): each state's view of the one model carries that meta's particle, 1.5.2's
+  `getIcon(0, meta)` (FCBakedModel.java:1558; BTWClientEvents.java:296).
+- **The exact 4.B crack (tag `fc_crack_4b`, Part C).** The crack follows the renderer. A block whose world model is
+  FC's is cracked by FC's own `RenderBlockWithTexture` with the stage's destroy icon (`FCBakedModel.renderCrack`,
+  :688-709), drawn into the decal's own crumbling buffer, so the stage texture, blending and batching stay 1.20.1's; FC
+  tile-entity geometry gets no crack (FCBlockEntityRenderer.java:55-56), as 4.B drew none. Every other block, vanilla
+  JSON models and FC's 1.5.2 replacements at vanilla ids included, keeps 1.20.1's decal. A capture that throws logs one
+  WARN per block id, and 1.20.1's crack over the model quads is drawn instead.
+
+```
+Target                                        | Hook (client mixin config)              | Does
+──────────────────────────────────────────────┼─────────────────────────────────────────┼───────────────────────────────────────────────────
+BlockRenderDispatcher.renderBreakingTexture,  | BlockRenderDispatcherCrackMixin (remap  | a block whose world model is FC's is drawn by FC's
+the Forge overload with ModelData (no SRG     | = false) ->                             | RenderBlockWithTexture into the decal's buffer,
+name), HEAD, cancellable                      | FCBreakingCrack.renderBreakingTexture   | and the call returns; any other block keeps
+                                              | (:41)                                   | 1.20.1's decal
+SheetedDecalTextureGenerator.delegate         | SheetedDecalAccessor                    | the crumbling buffer of the stage, which 4.B's
+f_85867_                                      |                                         | crack is drawn into
+VertexMultiConsumer.Double first / second     | VertexMultiConsumerDoubleAccessor       | FCBreakingCrack.withoutCrumbling (:55) keeps the
+f_86171_ / f_86172_                           |                                         | real buffer for FC tile entities (no crack)
+```
+
+- Since RANB-PARITY the three BTW panes (the grate, the wicker pane, the slats) crack as their own posts (see
+  [Placement validity (WorldBridge)](#placement-validity-worldbridge)).
+- Verification (2026-10-25, W1): P-CRACK-C stage ABC, GATE OK (K1-K5, KG and KB passed); the A+B to A+B+C model dump,
+  36943 lines, 0 differ; refmap SheetedDecalAccessor `f_85867_`, VertexMultiConsumerDoubleAccessor `f_86171_` /
+  `f_86172_`.
+
+---
+
+## FC particles (FcParticles)
+
+Added 2026-10-25 (round 3, wave W1; CurseForge triage CF2-R5b; `STUB_CATALOGUE.md` (bh), `INTEGRATIONS.md` #042). Code:
+`Forge/src/main/java/btw/forge/FcParticles.java`, `FcParticleTypes.java`, `client/particle/` (the BTW particle classes
+and `LegacyParticleLimiter`), `WorldBridge.spawnParticle`, `ProxyBlock.java`, `ProxyBlockEntity.java`,
+`client/ClientFcWorld.java`, `BridgeSelfAudit.runCommon`.
+
+**The rule** (tag `fc_particles`). One table maps FC's 1.5.2 particle names for every FC world (`FcParticles.options`,
+FcParticles.java:89): a name maps to the 1.20.1 particle that descends from the same 1.5.2 FX class; where 1.20.1 has
+none (FC's own four FX classes and 1.5.2's EntitySnowShovelFX) it maps to the BTW particle type that ports that class
+(`FcParticleTypes`); `iconcrack_<id>` breaks the legacy item. Client-side FC calls are limited as 1.5.2's
+`RenderGlobal.doSpawnParticle` limited them (`limit`, :137-144): 16 blocks, 32 for `fccinders`, any distance for
+`hugeexplosion`, `largeexplode` and `fireworksSpark`. CATALOGUE 3, 3.1 row 4.
+
+```
+FC world                                    | Path                                        | Does
+────────────────────────────────────────────┼─────────────────────────────────────────────┼───────────────────────────────────────────────
+WorldBridge.spawnParticle                   | FcParticles.send (:196-205) ->              | to the players within 32 blocks; 1.5.2's
+(WorldBridge.java:2528-2538), server FC     | ServerLevel.sendParticles                   | server drew nothing, the port forwards
+calls                                       |                                             |
+ProxyBlock's client display world           | FcParticles.addLocal (:168-189) -> the      | randomDisplayTick particles: 4.B's limit, then
+(ProxyBlock.java:1224-1227)                 | LocalSink (LegacyParticleLimiter)           | 1.20.1's LevelRenderer
+ProxyBlockEntity's client world             | FcParticles.addLocal                        | FC tile entities' client ticks
+(ProxyBlockEntity.java:218-220)             |                                             |
+ClientFcWorld (ClientFcWorld.java:310-313)  | FcParticles.addLocal                        | FC's aux-FX handler and client block
+                                            |                                             | notifications
+```
+
+```
+[SELF-AUDIT/particles] all <n> particle names FC spawns resolve (and iconcrack_<id>); BTW types [...]
+                                                                                           (logger BTW-Particles)
+```
+
+- `FcParticles.audit` runs from `runCommon` (BridgeSelfAudit.java:46-47); its WARN lists any name that would draw
+  nothing. `addLocal` never throws: a failure is logged once per name and exception class.
+- Known: FC entities' client-only particles (a falling smouldering log's smoke) are not drawn (follow-up FU-PE).
+- Verification (2026-10-25, W1): P-R5B-T 32/32, P-R5B-C 35/35.
+
+---
+
+## Plain FC entities (ProxyEntity, FcEntityFactory)
+
+Added 2026-10-26 (round 3, wave W2, and the W2 fix; CurseForge triage CF2-R1; maintainer ruling 2026-10-22: a block
+saved mid-fall is kept, reloads, keeps falling and lands by FC's rules; `STUB_CATALOGUE.md` (bi), `INTEGRATIONS.md`
+#043). Code: `Forge/src/main/java/btw/forge/FcEntityFactory.java`, `ProxyEntity.java`, `ProxyMob.java`,
+`ProxyAnimal.java`, `ProxyPathfinderMob.java`, `BTWEntityRegistration.java`, `client/FCEntityRenderer.java`,
+`mixin/fcext/FCBlockNetherrackFallingMixin.java`, Modern-Common `RenderFallingSand.java`, `RenderBlocks.java` and
+`Block.java`.
+
+CATALOGUE 3, 3.1 note 15m covers the client world a ProxyEntity runs FC in. The rest of a plain FC entity's rules (tags
+`fc_entity_construction`, `falling_blocks`):
+
+- **The constructor rule** (`FcEntityFactory`, resolved once per class, shared with the mob proxies): a public (World)
+  constructor; else a no-argument one; else the public (World, x, y, z, primitives...) constructor with the fewest
+  parameters, called with the proxy's position and zeros, whose state the caller then applies (the spawn payload or the
+  save). FCEntityFallingBlock and FCEntityLightningBolt have only the last kind. The living proxies take (World) and
+  no-argument only (ProxyMob.java:173, ProxyAnimal.java:118, ProxyPathfinderMob.java:105). A renderer draws nothing the
+  client cannot build (FCEntityRenderer.java:139).
+- **Saved state.** A positional FC entity is rebuilt on the server only from its saved state, `FCData`
+  (ProxyEntity.java:126, :660; `REBUILD_SAVED_POSITIONAL`, :64): a block saved mid-fall falls on and lands by FC's
+  rules. One without state (a `/summon`, a save without FCData, unreadable FCData) has nothing to run, and its first
+  tick removes it (:412-415). A weather effect is never saved (BTWEntityRegistration.java:183-185).
+- **The client fall**, the one exception to a server-driven position: the client runs FC's falling block itself, as
+  1.5.2 and 1.20.1 do (ProxyEntity.java:452). A server position update that lies on the client's own fall is not
+  applied (`fitsClientFall` and `lerpTo`, :370-393: |dx|, |dz| below 1e-3, |dy| within two fall steps plus 0.05);
+  anything else (a crush, a teleport, a real divergence) is applied with the server's motion. The server's motion for a
+  simulated fall is kept aside, not applied over the client's (`lerpMotion`, :395-404).
+- **The landing order:** the server sends the cell FC just landed in (or crushed, combined, left empty) to the trackers
+  before the entity's removal, as 1.20.1's FallingBlockEntity does (:344-351), so the client never draws neither for a
+  tick.
+- **Drawing:** a falling block is shaded as a placed block (FCEntityRenderer.java:441-444) and drawn by 1.5.2's
+  `RenderStandardFallingBlock` (Modern-Common RenderBlocks.java:2568); a falling dragon egg keeps its egg shape
+  (RenderFallingSand.java:52); 1.5.2's `ShouldRenderWhileFalling` (Block.java:1439-1442) hides a falling block while
+  its own block still stands in its cell.
+- **Burning netherrack below y = 0** (the W2 fix): FC's `FCBlockNetherrackFalling.onStartFalling` finds its row with
+  `(int) entity.posY`, and below y = 0 the cast rounds toward zero, so FC tested the cell two above for fire.
+  `fcext.FCBlockNetherrackFallingMixin` (`@Pseudo`, `remap = false`; a `@Redirect` of that one `posY` read, `require =
+  1`, `allow = 1`) answers `Math.floor`: FC's (int) y means floor at every 4.B height.
+- Known: falling smouldering logs draw no smoke (FU-PE); FC's 1.5.2 void rule still drops a fall of more than 100
+  ticks that ends below y = 1 as an item, at 1.5.2's floor (FU-VOID); plain FC entities with a non-zero yOffset keep
+  the proxy convention (FU-YOFF, see [Dig face and drop position
+  (DigFace, EntityProxyFactory)](#dig-face-and-drop-position-digface-entityproxyfactory)).
+- Verification (2026-10-26, W2, and the fix of 2026-10-27): P-FALL 18/18; P-FALL-RESTART 2/2 + 2/2 (a block saved
+  mid-fall reloads and lands); P-FALL-C 16/16, with K3d the burning netherrack 1076 falling with meta 1 after the fix;
+  DIAG-K3D 6/6.
+
+---
+
+## Redstone and entity views (FcDetectorRailBlock, VanillaEntityViews)
+
+Added 2026-10-28 (round 3, wave W10, the bugs found with the report; maintainer rulings 2026-10-23: BTW containers give
+1.5.2 comparator readings while the comparator itself stays removed, the vanilla detector rail 28 follows 4.B, and
+2026-10-25: the block dispenser takes a 1.20.1 boat as that boat's own item; `STUB_CATALOGUE.md` (bt), (bu);
+`INTEGRATIONS.md` #056, #057). Code:
+`Forge/src/main/java/btw/forge/FcDetectorRailBlock.java`, `mixin/ButtonBlockMixin.java`,
+`mixin/DetectorRailBlockMixin.java`, `VanillaEntityViews.java`, `FcVehicles.java`,
+`mixin/fcext/FCBlockBlockDispenserBoatItemMixin.java`, `EntityBridge.java`, `LivingEntityBridge.java`,
+`EntityProxyFactory.java`, `WorldBridge.java` (the codecs, the queries, `func_96440_m`), `BTWRegistration.java`,
+`ProxyRegistry.java`, `HookPolicy.java`, `TickPolicy.java`, Modern-Common `BlockBasePressurePlate.java`,
+`BlockPressurePlate.java`, `BlockButton.java`, `BlockChest.java`, `BlockFurnace.java`, `BlockDetectorRail.java`,
+`TileEntity.java`.
+
+**`fc_redstone` (#056).**
+
+- **Plates press for their mob type.** Modern-Common `BlockBasePressurePlate` carries 1.5.2's plate mechanism
+  (BlockBasePressurePlate.java:81-189: FC's contact, FC's scheduled re-check, the power answers) and
+  `BlockPressurePlate` keeps the mob type (BlockPressurePlate.java:18-25): the soulforged steel plate 230 presses for
+  players only, the stone plate 70 for living entities, the wooden plate 72 for everything. FC's contact reaches them
+  through `ProxyBlock.entityInside` (230) and FC's own block collisions for FC mobs on 70 and 72, whose puppets never
+  run 1.20.1's `entityInside`.
+- **BTW arrows press wooden buttons.** Modern-Common `BlockButton` keeps 1.5.2's sensible flag and arrow contact
+  (BlockButton.java:21, :54); `ButtonBlockMixin` keeps 1.20.1's re-check from releasing a button an FC arrow still
+  touches.
+- **Comparator readings.** Modern-Common `BlockChest` (BlockChest.java:118, :180-191) and `BlockFurnace`
+  (BlockFurnace.java:66-78) give 1.5.2's comparator answers, so a comparator reads the BTW chest 1035 and the brick
+  oven 1023 / 1024; `TileEntity.onInventoryChanged` (TileEntity.java:85-98) tells the comparators around the block,
+  through `WorldBridge.func_96440_m` (1.20.1's `updateNeighbourForOutputSignal`). The vanilla-id chest 54 and furnaces
+  61 / 62 keep 1.20.1's answers. The comparator block itself stays removed (see [Stays removed
+  (RemovedContent)](#stays-removed-removedcontent)).
+- **Detector rails.** BTW's wooden 235 and soulforged steel 236 are `FcDetectorRailBlock`s: 1.20.1 detector rails
+  registered under their ProxyBlock names (`betterthanwolves:block_235`, `block_236`; BTWRegistration.java:56, :81)
+  with their FC identity (ProxyRegistry.java:112, :292), so carts ride them. FC reads and writes them through
+  WorldBridge's detector rail codec (shape | 8 pressed; WorldBridge.java:321-326, :576-581, :892), and they drop FC's
+  own item (`ProxyBlock.fcDrops`, ProxyBlock.java:959). FC's trigger rule filters the carts 1.20.1 counts, for every
+  DetectorRailBlock (`cartTriggers`, FcDetectorRailBlock.java:161): the vanilla rail 28 presses for a cart that is not
+  empty, 235 for every cart, 236 for a cart carrying a player. Detector rail INSIDE is EQUIVALENT
+  (HookPolicy.java:338-341); the tick table gives every detector rail and the plates 70 and 72 no FC random tick
+  (TickPolicy.java:269-275).
+
+**`fc_entity_views` (#057).** One rule: every entity FC finds is the entity in the world, seen as the 1.5.2 class 4.B
+gave it. `VanillaEntityViews.of` (VanillaEntityViews.java:112), the one function every entry point asks, answers in
+order: a BTW puppet's own FC object; a player's PlayerBridge; an item's ItemEntityBridge; a living entity's
+LivingEntityBridge (1.20.1-only living entities are EntityLiving to FC); a class view of a minecart (`EntityMinecart`,
+types 0-6, a container cart also an IInventory over its container), a boat, a painting or an orb (`xpValue` = value x
+count); else a generic view.
+
+- Each view is cached per entity (weak keys) and re-synced from the entity each time FC is handed it. FC's writes go
+  back: `setDead` discards the entity (a container cart's contents spill), `attackEntityFrom` is its own hurt, motion
+  and position writes are flushed as deltas at the next sync and at the end of the level tick.
+- Entry points: WorldBridge's three queries (`getEntitiesWithinAABB`, the untyped one, `getEntityByID`:
+  WorldBridge.java:2091, :2116, :2969) and the contact wrappers (`forContact`, VanillaEntityViews.java:143) of
+  ProxyBlock, BlockMixin and BlockBehaviorMixin. FC's every-entity effects (the BTW hopper's storage cart, the block
+  dispenser, the detector block, the mining charge, the bellows, platforms, FC mobs' pushes) reach 1.20.1 entities, as
+  they reached every entity in 4.B.
+- **Spawns** (`FcVehicles`): an FC object of a frozen 1.5.2 minecart or boat class spawns as that 1.20.1 entity
+  (EntityProxyFactory.java:127); a puppet an earlier jar saved converts once its chunk has loaded.
+
+```
+Target (SRG)                                | Hook                                          | Does
+────────────────────────────────────────────┼───────────────────────────────────────────────┼───────────────────────────────────────────────────
+ButtonBlock.checkPressed m_51120_, HEAD,    | ButtonBlockMixin (:52-82); shadows            | an arrows-pressable button with no AbstractArrow
+cancellable                                 | arrowsCanPress f_243959_, ticksToStayPressed  | but an FC arrow (VanillaEntityViews.isFcArrow)
+                                            | f_244105_, updateNeighbours m_51124_,         | runs 1.20.1's pressed branch instead of releasing
+                                            | playSound m_51067_                            |
+DetectorRailBlock.checkPressed m_52432_,    | DetectorRailBlockMixin (@ModifyArg, :45-55)   | 1.20.1's cart predicate and FC's rule, for every
+its one getInteractingMinecartOfType call   | -> FcDetectorRailBlock.cartTriggers (:161)    | DetectorRailBlock (28, 235, 236); another mod's
+m_52436_, argument 3                        |                                               | rail keeps 1.20.1's
+FC FCBlockBlockDispenser.                   | fcext.FCBlockBlockDispenserBoatItemMixin      | a 1.20.1 boat the dispenser takes is filed as that
+ConsumeEntityAtTargetLoc (remapped FC       | (@Pseudo, remap = false): HEAD inject and     | boat's own item (the oak boat is FC's 333)
+class)                                      | @ModifyArg on the item id of the first        |
+                                            | AddSingleItemToInventory after the Item.boat  |
+                                            | read                                          |
+```
+
+```
+[SELF-AUDIT/views] <n> view overrides on the running 1.5.2 classes, frozen minecart class true, orb count field true,
+  0 warnings (0 expected)                                                                 (logger BTW-EntityViews)
+[SELF-AUDIT/rails] BTW detector rails 235 and 236 as 1.20.1 detector rails, FC's cart rule on 3/3 ids, 0 warnings
+  (0 expected)                                                                           (logger BTW-DetectorRail)
+```
+
+- `VanillaEntityViews.audit` (:201) and `FcDetectorRailBlock.audit` (:102) run from `runServerStart`
+  (BridgeSelfAudit.java:80-83). WARNs: a view override overrides nothing in the running class chain; the minecart class
+  is not the frozen 1.5.2 one; `ExperienceOrb.count` did not resolve; 235 or 236 is not a detector rail with its FC
+  identity or not in `#minecraft:rails`; FC's rail rule does not resolve for an id.
+- Known: BTW detector rails saved before this version reload as north-south, unpowered rails; FC's wither may target an
+  armor stand (4.B parity); FC's every-entity effects also reach 1.20.1 technical entities (markers, display and
+  interaction entities, item frames).
+- Verification (2026-10-28, W10): P-FOUND-RS 80/80, P-FOUND-RS-C 9/9, P-FOUND-CARTS 80/80; both audit lines above
+  (75 view overrides, 3/3 ids, 0 warnings); the tick audit gives 235 and 236 random NONE and scheduled VANILLA; the
+  ProxyBlocks drop from 182 to 180 (235 and 236 are 1.20.1 rails now); refmap ButtonBlockMixin `m_51120_`,
+  DetectorRailBlockMixin `m_52432_` / `m_52436_`.
+
+---
+
+## Nether portals (NetherPortalShapes)
+
+Added 2026-10-28 (round 3, wave W10; maintainer ruling 2026-10-23: 1.20.1 portals larger than 2x3 and campfire-lit
+portals are fixed this round; defaults: a campfire opens any frame fire opens, up to 21x21, and the campfire path has
+no dimension gate, as in 4.B; no stub entry of its own, a note in `STUB_CATALOGUE.md` (br); `INTEGRATIONS.md` #058).
+Code: `Forge/src/main/java/btw/forge/NetherPortalShapes.java`, `mixin/PortalShapeMixin.java`,
+`mixin/fcext/FCBlockPortalShapeMixin.java`, `NetherPortalProgress.java` (#054).
+
+**The rule** (tag `nether_portal`). 1.20.1's PortalShape creates, sizes and orients every portal; FC keeps its lighting
+entry (a campfire catching fire in a frame, `FCBlockCampfire.SetOnFireDirectly`), its interior rule (FC's four campfire
+blocks count as open interior, for every lighting, fire's too) and its random tick (possession and the Nether flag).
+FC's own 1.5.2 frame test wrote every cell as `nether_portal[axis=x]`, so a north-south frame got cells turned the
+wrong way that its first neighbour update from the side emptied; it lit only 2x3 frames; and it counted campfires as
+interior where 1.20.1's `PortalShape.isEmpty` (air, fire, portal) refused them, so 1.20.1 fire never lit a frame with a
+campfire in it.
+
+```
+Target                                        | Hook                                          | Does
+──────────────────────────────────────────────┼───────────────────────────────────────────────┼───────────────────────────────────────────────────
+FC FCBlockPortal.tryToCreatePortal(World,     | fcext.FCBlockPortalShapeMixin (@Pseudo, remap | on a server WorldBridge:
+int, int, int) (remapped FC class), HEAD,     | = false, require 1) ->                        | PortalShape.findEmptyPortalShape from FC's cell
+cancellable                                   | NetherPortalShapes.tryToCreatePortal (:87)    | (axis X first, as BaseFireBlock), Forge's
+                                              |                                               | PortalSpawnEvent, createPortalBlocks; any other FC
+                                              |                                               | world answers false and writes nothing
+PortalShape.isEmpty(BlockState) m_77717_      | PortalShapeMixin (:28-38), both sides ->      | a false answer becomes true for an FC campfire,
+(private static), RETURN, cancellable         | NetherPortalShapes.isFcPortalInterior (:113)  | lit or not
+```
+
+- `NetherPortalBlock.updateShape`'s completeness test counts only portal cells, so a campfire never keeps a broken
+  portal standing; `createPortalBlocks` fills the campfire's cell with portal, as 4.B's `setBlock(90)` did. The Nether
+  flag comes from Forge's PortalSpawnEvent through NetherPortalProgress, for fire and campfire lighting alike (see
+  [Hardcore respawn (HardcoreRespawn)](#hardcore-respawn-hardcorerespawn)); FC's own setter call in its lighting no
+  longer runs.
+- Fire keeps 1.20.1's Overworld and Nether gate; the campfire path has none, as 4.B's had none. FC's possession tick
+  stays per portal cell, so a larger portal possesses as often as the same number of cells in 2x3 portals.
+- Log, once: `[nether_portal] FC's campfire blocks [1013, 1014, 1015, 1016] count as open portal interior` (logger
+  BTW-NetherPortal); never `did not all resolve` or `FC's portal lighting at ... failed`.
+- Known: a mod that cancels PortalSpawnEvent also stops campfire portals; a north-south portal a campfire lit before
+  this version keeps `axis=x` until it is relit.
+- Verification (2026-10-28, W10): P-FPORTAL 38/38, with the log line above exactly once and no failure line; refmap
+  PortalShapeMixin `m_77717_`.
+
+---
+
+## Legacy icons (Modern-Common icon members, FCBakedModel)
+
+Added 2026-10-28 (round 3, wave W10; maintainer rulings 2026-10-23: the wicker pane's missing texture is fixed this
+round, and 2026-10-25: restore 1.5.2's icon code in every Modern-Common base class, dead members too; a platform-lifted
+redstone wire draws a cross composed at build time from 1.20.1's dust textures, with no 1.5.2 art shipped;
+`STUB_CATALOGUE.md` (bv), `INTEGRATIONS.md` #059). Code: the Modern-Common block and item base classes (70 files carry
+the tag), `ItemBlock.getIconFromDamage`, `Block`, `Item` and `ItemBlock` `GetHopperFilterIcon`,
+`Forge/src/main/java/btw/forge/client/FCBakedModel.java` (`VANILLA_TEXTURE_MAP`),
+`Forge/gradle/legacy-icon-textures.gradle`.
+
+**The rule** (tags `legacy_icons`, `legacy_icon_textures`). FC draws a vanilla-id block or item through the icon
+members of its 1.5.2 class: a block or item a mob holds or wears, an enderman carries or a platform lifts, a hopper's
+filter, an item's flat icon. The Modern-Common bases had lost those members, so those draws fell to the missing texture
+(the lost-texture cause on vanilla-only block and item bases). Every Modern-Common base class with a 1.5.2 namesake now
+carries every 1.5.2 icon member of its class: texture names, `registerIcons`, `getIcon` / `getIconFromDamage` /
+`getIconFromDamageForRenderPass` and the named getters, the dead ones too.
+
+- The wicker pane, the soulforged steel plate, the BTW workbench and the mushroom caps draw 4.B's icons (`BlockPane`,
+  `BlockBasePressurePlate` with its name constructor, `BlockPressurePlate`, `BlockMushroomCap`, `BlockWorkbench`,
+  `BlockChest`, `BlockDetectorRail`). `GetHopperFilterIcon` is 1.5.2's: `Block` and `Item` answer null
+  (Block.java:1298-1302, Item.java:422-425), `ItemBlock` forwards to its block (ItemBlock.java:117-124), so a hopper's
+  filter shows the right texture, and none for items that are not filters.
+- `ItemBlock.getIconFromDamage` (ItemBlock.java:50, an exact ItemBlock only) answers the 1.5.2 item class's flat icon:
+  ItemColored at 31 / 106, ItemMultiTextureTile at 6 / 24 / 97 / 98 / 139 / 155, ItemSlab at 43 / 44 / 125 / 126,
+  ItemLeaves at 18, ItemCloth at 35.
+- `FCBakedModel.VANILLA_TEXTURE_MAP` (FCBakedModel.java:1797-1859) gains 55 keys: the 1.5.2 icon names the restored
+  members register that named no 1.20.1 texture (`rail_turn` -> `rail_corner`, `pumpkin_face` -> `carved_pumpkin`,
+  `stoneslab_top` -> `smooth_stone`, ...). Each resolved to the missing texture before, so no earlier draw changes.
+- **`legacy_icon_textures`** (`Forge/gradle/legacy-icon-textures.gradle`, applied from Forge/build.gradle:2362): the
+  task `composeLegacyIconTextures` composes 1.5.2's `redstoneDust_cross` from 1.20.1's `redstone_dust_dot`, `_line0`
+  and `_line1`, laid out as 1.20.1 lays out a four-way wire, into `textures/block/redstonedust_cross.png` (255 of 256
+  pixels equal 1.5.2's), which `lookupSprite` finds at its first step; FC tints it as 1.5.2 tinted its grey cross. The
+  input is ForgeGradle's client-extra jar (`-PbtwClientExtraJar` overrides it); without it the build WARNs and keeps
+  the checked-in file, and it rewrites the PNG only when its pixels differ.
+- Left on purpose: `BlockDoor` (the door codec), `BlockFire.getIcon` and `BlockGrass.getBlockTexture` (FCBlockGrass
+  overrides it).
+- Verification (2026-10-28, W10): P-WICKER-C 28/28 with its 36 client probes, P-WICKER-H 19/19 with 7 probes and
+  P-TEXTURES-C 4/4 with 52 probes, each GATE after OK; the wicker and texture quad-dump gates (0 missingno); the first
+  build prints `composeLegacyIconTextures: 1 texture checked (1 written)`, the rebuild `(0 written)`; LinkAudit's
+  missing members drop from 6 to 5 (SlotArmor's `ItemArmor.func_94602_b` resolves with the restored members).
+
+---
+
+## Attachment support (FcAttachSupport)
+
+Added 2026-10-25 (round 3, wave W1; the redstone torch family in W10, the floor families on 2026-10-31 (SUPPORT-VETO)
+and the modern plates' twins on 2026-11-02 (SUPPORT-REL); maintainer rulings 2026-10-23: torches and ladders are refused
+by placement wherever 4.B refused them, with no pop-off window, and soul torches take the torch's 4.B support rule;
+ruling Q-P1 (a): the redstone torch takes 4.B's redstone torch rule; 2026-10-25: a soul torch also drops at any
+neighbour change, as a torch does; 2026-10-31: with 4.B's solid top, weather snow and a sneaking player's snow layer,
+pressure plate and rail take FC's veto too, and their survival ends where 4.B's ends, and the modern pressure plates
+take the oak or stone plate's rule; `STUB_CATALOGUE.md` (bs), `INTEGRATIONS.md` #055). Code:
+`Forge/src/main/java/btw/forge/FcAttachSupport.java`, `mixin/AttachableSupportMixin.java`,
+`mixin/RailSupportMixin.java`, `ProxyBlock.canSurvive`, `client/ClientAttachSupport.java`,
+`mixin/BlockBehaviorMixin.java` (the support twins' neighbour check), Modern-Common `BlockTorch.java`.
+
+**The rule** (tag `attach_support_rules`). `FcAttachSupport.refuses` (FcAttachSupport.java:309) is true when the state's
+rule block belongs to one of FC's attachment families and that family's 4.B predicate refuses the state at its position;
+every other answer is false (no veto). The rule block is the state's FC block, or its support twin's. The families,
+keyed on FC's class hierarchy:
+
+- the torch (FCBlockTorchBase): orientation 5 stands on `canPlaceTorchOn` below, 1-4 hang from a centre hard point
+  behind;
+- the ladder (FCBlockLadderBase): `CanAttachToFacing` toward the block behind;
+- the redstone torch (Modern-Common `BlockTorch`, 1.5.2's, for FC's 75 and 76): 5 on a torch support below (a solid top,
+  else 1.5.2's ids of the fence, the nether brick fence, glass and the cobblestone wall), 1-4 on a normal cube behind.
+  The same class gives FC's item route 1.5.2's placement: a side click places a wall torch, a support that is not valid
+  falls back to 1.5.2's orientation search, and the torch has no collision box;
+- ground cover (FCBlockGroundCover: the snow layer 78, which is `minecraft:snow`, and ash 1046): FC's `canPlaceBlockAt`,
+  the block below's `CanGroundCoverRestOnBlock` and, for snow, a block below that is not warm; the test FC's neighbour
+  check repeats and the one 4.B's weather asks before it lays snow (vanilla/server World.canSnowAt,
+  World.java:2970-3002);
+- the pressure plate (FCBlockPressurePlate: 70, 72 and the soulforged plate 230): FC's `canPlaceBlockAt`, a solid top
+  below;
+- the rail (Modern-Common `BlockRailBase`, 1.5.2's: FC's 66 and 28, BTW's detector rails 235 and 236): a solid top
+  below; 4.B's neighbour check also drops an ascending rail whose climb has no solid top (`railDropped`,
+  FcAttachSupport.java:408-429).
+
+For a 1.20.1 state the orientation is FC's metadata of the state asked about, not of the cell, so 1.20.1's placement
+probes are answered for the facing they try. The three floor predicates read the block below and never the cell (javap
+of the shipped classes; a probe of 7021 cases found none that depends on the cell), so one call answers a placement
+probe and the survival of the block already there. FC's own blocks in these families (ProxyBlocks: BTW's torches 1025,
+1026, 1033 and 1057, ladders 1051 and 1052, ash 1046, the soulforged plate 230) reach `ProxyBlock.canSurvive` only from
+1.20.1's BlockItem placement (a sneaking player, a clicked block without Stage 2), so their rule is the test 4.B's
+ItemBlock asks before it places, FC's own `canPlaceBlockAt`, which reads no orientation (FcAttachSupport.java:346-353):
+a BTW ladder with no side to hang from and a BTW torch with no support are refused (before, the ladder was placed
+floating, and the torch was placed with orientation 0 and dropped at once by FC's onBlockAdded).
+
+Support twins (`SUPPORT_TWIN`, :145, read before the block's own FC block): the soul torch and the soul wall torch ask
+the torch's FC block (50) with their own orientation; the powered rail asks the rail's (66), since 4.B's powered rail is
+a BlockRailPowered, a BlockRailBase (vanilla/server Block.java:193), while the port's FC block 27 is a plain block (the
+powered rail keeps its identity 27 for everything else); since 2026-11-02 the ten modern wooden pressure plates ask the
+oak plate's (72) and the polished blackstone plate the stone plate's (70), see [Support relatives (FcAttachSupport,
+ModernBlockStandIn)](#support-relatives-fcattachsupport-modernblockstandin). A read path only: a twin keeps no FC
+identity, no world id and no tick owner, and it is keyed on the exact block, so other mods' torches and plates are not
+twins. The weighted plates 147 and 148 and the activator rail 157 are FC's stubs (rock cubes; 4.B removed them): no
+family, no veto. The FC classes are resolved by name on first use (one INFO line); a missing one WARNs once and vetoes
+nothing.
+
+Worlds: a ServerLevel answers through its WorldBridge; a client level on the render thread through the read-only
+ClientFcWorld's support view (`ClientAttachSupport.worldFor`, ClientAttachSupport.java:26-33), and only where both views
+read the support alike (air, an FC identity both views read, or a support relative: `sameOnBothViews`,
+FcAttachSupport.java:442-449; for FC's own torches and ladders every block their `canPlaceBlockAt` reads,
+`supportsReadAlike`, :452-457), so the client never refuses where the server accepts; any other reader (a
+WorldGenRegion, another thread) keeps 1.20.1's answer. The floor families take that gate on the server too: another
+modern block's stand-in answers 1.20.1's full sturdy face, which is not 1.20.1's own snow, plate or rail rule, so FC's
+answer there would be no 4.B rule, and 1.20.1's stands.
+
+```
+Target (SRG)                                  | Hook                                          | Does
+──────────────────────────────────────────────┼───────────────────────────────────────────────┼───────────────────────────────────────────────────
+TorchBlock / WallTorchBlock / LadderBlock /   | AttachableSupportMixin (:98-108) ->           | true becomes false where FC's rule refuses: every
+SnowLayerBlock / BasePressurePlateBlock /     | FcAttachSupport.refuses (:309)                | 1.20.1 placement, weather snow (Biome.shouldSnow)
+BaseRailBlock                                 |                                               | and pop-off asks it; RedstoneTorchBlock inherits
+.canSurvive(BlockState, LevelReader,          |                                               | TorchBlock's, RedstoneWallTorchBlock asks
+BlockPos) m_7898_, RETURN, cancellable        |                                               | WALL_TORCH's with its own state, the plates and
+                                              |                                               | rails their base class's
+BaseRailBlock.shouldBeRemoved(BlockPos,       | RailSupportMixin (:52-58) ->                  | a rail 1.20.1 keeps drops where FC's rail rule
+Level, RailShape) m_49398_ (private static),  | FcAttachSupport.railDropped (:408)            | drops it: no solid top below, or under an
+RETURN, cancellable                           |                                               | ascending rail's climb (server only)
+ProxyBlock.canSurvive (the bridge's own       | FcAttachSupport.refuses (ProxyBlock.java:935) | FC's own torches, ladders, ash and soulforged
+block class)                                  |                                               | plate: FC's canPlaceBlockAt, before canBlockStay
+BlockBehaviour.neighborChanged                | BlockBehaviorMixin (:142-150) ->              | a soul torch or a modern pressure plate on a
+(BlockBehaviorMixin's NOTIFY executor)        | FcAttachSupport.isSupportTwin (:249)          | support 4.B refuses drops at any neighbour change,
+                                              |                                               | by 1.20.1's own pop
+```
+
+- The veto only removes supports: the few supports FC accepts and 1.20.1 refuses (leaves tops, the stub weighted plates,
+  activator rails and trapped chests; snow on bottom slabs, fences and walls) stay refused on this path; BTW's own torch
+  and ladder keep 4.B's whole rule through FC's item route.
+- The floor families' refusals (every 1.20.1 state as the support, offline): snow layers on 10 blocks (glass, glowstone,
+  TNT, the redstone lamp, the beacon, pistons and the piston head, the closed upper oak trapdoor, eight-layer snow),
+  rails on those and ice, the hopper and the cauldron (13 blocks), plates on those and the anvils, the oak and nether
+  brick fences, the oak fence gate, the cobblestone and mossy walls, the glass pane, iron bars, the dragon egg and the
+  end portal frame (25 blocks; 71 since 2026-11-02, with every modern fence, wall and stained glass pane through the
+  support relatives); FC's machines whose top FC does not make solid join every family. They follow FC's solid top (see
+  [Solid top surface (WorldBridge, ClientFcWorld)](#solid-top-surface-worldbridge-clientfcworld)). 1.20.1's weather asks
+  the vetoed `SnowLayerBlock.canSurvive` through `Biome.shouldSnow`, so weather snow falls on none of these supports, as
+  4.B's `World.canSnowAt` lays none there.
+- One INFO line at first use (logger BTW-AttachSupport): `FC attachment rules resolved: FCBlockTorchBase,
+  FCBlockLadderBase, FCBlockGroundCover and FCBlockPressurePlate answer 1.20.1's torch, ladder, snow layer and pressure
+  plate supports`.
+- Known: FC's route accepts a powered rail anywhere (FC's block 27 is a plain block whose `canPlaceBlockAt` is true),
+  and the rail then drops at once, giving the item back as an entity instead of refusing the click (follow-up
+  FU-RAIL27). Worldgen snow (SnowAndFreezeFeature on a WorldGenRegion) is not vetoed; on a top 4.B refuses it goes at
+  its first neighbour change (follow-up FU-WGSNOW). FC's own neighbour check of the snow layer 78 and the plates 70 and
+  72 (BlockBehaviorMixin's NOTIFY) still asks the stand-in of a modern support without a relative when a neighbour
+  changes: a snow layer on a honey block goes then. Where a block FC's torch or ladder rule reads is a modern block
+  without a relative, the client does not predict; a BTW torch or ladder the server then refuses leaves the client's
+  stack count wrong until the next slot sync, as for the vanilla torch and ladder over such supports. The client
+  prediction of snow layers, rails and FC's own blocks has no client proof row.
+- Verification (2026-10-25, W1): P-RANB-PLACE 114 of 117, GATE OK (its 3 redstone torch rows waited for W10),
+  P-RANB-PLACE-C 13/13; refmap AttachableSupportMixin `canSurvive` -> `m_7898_`. W10 (2026-10-28): P-FOUND-RT 20/24 and
+  P-RANB-PLACE 115/117: the side clicks, the mid-air refusals and the wall torch on glowstone's side passed, and the
+  redstone torch's rows on top of glowstone and ice (R4, R7, R8, R15, C11, V25) failed on the bridge's solid top, fixed
+  on 2026-10-31: P-FOUND-RT 24/24 and P-RANB-PLACE 117/117 `--wave W10`, GATE after OK. The floor families
+  (2026-10-31): P-SUPPORT-VETO, 106 checks (48 GAP, 41 CONTROL, 17 SANITY), 58/48 before landing (every GAP failing,
+  GATE head OK) and 106/106 after (GATE after OK), with the INFO line above, Mixin config OK (78) and the refmap's
+  RailSupportMixin `shouldBeRemoved` -> `m_49398_`. With the W10 guard batch (2026-11-03): P-SUPPORT-VETO, amended for
+  the plate twins (C12, V16, V18), 106/106; P-FOUND-RT 24/24, P-RANB-PLACE 117/117, P-FOUND-RS 80/80 and P-FOUND-CARTS
+  80/80, all `--wave W10`, GATE after OK; P-RANB-PLACE-C 13/13 with place_client_gate.py GATE after OK; P-PLACE 28/29
+  as its last record. Gate W10: PASS.
+
+---
+
+## Solid top surface (WorldBridge, ClientFcWorld)
+
+Added 2026-10-31 (round 3, the W10 fix SOLIDTOP-FIX, found by the redstone torch rows of P-FOUND-RT and P-RANB-PLACE;
+`STUB_CATALOGUE.md` (bw), `INTEGRATIONS.md` #061). Code: `WorldBridge.doesBlockHaveSolidTopSurface`,
+`client/ClientFcWorld.java` (the same method), `HardcoreRespawn.aroundBeacon`.
+
+**The rule** (tag `solid_top_surface`). 4.B's `World.doesBlockHaveSolidTopSurface` is FC's rule, `block != null &&
+block.HasLargeCenterHardPointToFacing(this, i, j, k, 1)` (vanilla/server World.java:4786-4791, the client's :5190-5195;
+FCMOD commented out 1.5.2's own). The bridge answered 1.20.1's `isFaceSturdy(UP)`, so every FC rule that asks whether
+something may stand on a block took 1.20.1's sturdy top, where 4.B refuses on glass, glowstone, ice and more.
+WorldBridge now asks the FC block it reads at the cell (`getBlockId`): a modern block FC reads through a stand-in
+answers as its stand-in (the solid stand-in is a normal cube and a collider asks `isFaceSturdy`, as before; since
+2026-11-02 a support relative answers as its BTW relative), and a double slab answers as FC's double slab. Only a cell
+FC reads as air keeps 1.20.1's sturdy face: a non-colliding modern or modded block such as powder snow, or any modern
+block when the stand-ins could not be allocated; an empty cell answers false either way. ClientFcWorld answers the same
+rule (it answered the normal-cube test), and HardcoreRespawn's beacon search asks the bridge, as 4.B's
+EntityPlayer.java:2962 asks the World.
+
+```
+Entry point                                   | Code                                          | Answers
+──────────────────────────────────────────────┼───────────────────────────────────────────────┼───────────────────────────────────────────────────
+WorldBridge.doesBlockHaveSolidTopSurface      | WorldBridge.java:2833-2842 (javadoc           | the FC block's large centre hard point on top;
+(btw.modern.World, the server)                | :2794-2832)                                   | 1.20.1's isFaceSturdy(UP) only for a cell FC
+                                              |                                               | reads as air
+ClientFcWorld.doesBlockHaveSolidTopSurface    | ClientFcWorld.java:153-169                    | the same rule on the client (FcAttachSupport's
+                                              |                                               | prediction); it answered the normal-cube test
+HardcoreRespawn.aroundBeacon                  | HardcoreRespawn.java:321-344 (the test :338)  | a candidate cell needs the bridge's solid top
+                                              |                                               | below it (it asked isFaceSturdy)
+```
+
+- **What changes** (every 1.20.1 state against the bridge's FC reading, offline: 24135 states, 21531 with an FC id, 123
+  states of 15 blocks differ). No solid top where 1.20.1 has one (43 states): glass, glowstone, ice, TNT, the redstone
+  lamp, the beacon, the piston and sticky piston (retracted, any facing, and extended facing down), the piston head
+  facing up, the closed upper oak trapdoor and eight-layer snow. A solid top where 1.20.1 has none (80 states): the four
+  RemovedContent T1 stubs, FC's rock-cube FCBlockStub (the trapped chest 146, the weighted plates 147 and 148, the
+  activator rail 157). FC's own blocks lose a top 1.20.1 gave them only because their shape is full (about 49 ids: the
+  light bulbs, the BTW hopper, the cauldron, the crucible, the mill stone and others). Every stand-in, and leaves,
+  fences, walls, panes, hoppers, chests, cauldrons, farmland, slabs and stairs, answer alike.
+- **Who asks** (51 call sites, audited by javap): the 1.5.2 redstone torch (FcAttachSupport's family and FC's item
+  route), FC's pressure plates (placement and neighbour check), ground cover resting on a block (snow layers, ash), fire
+  (FCBlockFire's tick; Modern-Common BlockFire's neighbour check and placement), rails (FC's route and
+  `FcAttachSupport.railDropped`), mushrooms (their spread and, through PlantSoilMixin, their survival), stem fruit,
+  nether growth, the mining charge, the beacon's enderman and silverfish spawns, FC endermen's end stone weighting, an
+  FC rider's dismount and a tamed wolf's or ocelot's teleport cell, and the hardcore respawn's beacon search. Path
+  finding (Modern-Common ChunkCache) already answered 4.B's rule, so the pathfinder and the world now agree.
+- 1.20.1's own paths that never ask FC (weather snow, a sneaking player's snow layer, pressure plate and rail) take the
+  same answer through FcAttachSupport's floor families since 2026-10-31 (see [Attachment support
+  (FcAttachSupport)](#attachment-support-fcattachsupport)).
+- Known: the T1 stubs answer FC's rock cube, so FC's route can stand a redstone torch, a plate or a rail on one, and
+  snow and fire rest there, where 1.20.1's own `canSurvive` refuses; only /setblock or /give puts them in a world (4.B's
+  reading, as `isBlockNormalCube` has answered since W1). Eight-layer snow reads as FC's ground cover 78, which 4.B
+  never stacks: no solid top, so a redstone torch, a plate, a rail or fire is refused on it, and FC removes a layer
+  stacked on it. Within a 1.20.1 family only the member with an FC identity takes FC's answer: the oak trapdoor (96) but
+  not the other trapdoors, glass (20) but not stained or tinted glass, ice (79) but not packed or blue ice; fences,
+  walls and stained panes are ruled (see [Support relatives (FcAttachSupport,
+  ModernBlockStandIn)](#support-relatives-fcattachsupport-modernblockstandin)), the rest wait for rulings (follow-up
+  FU-REL-FAMILIES). The bonus chest feature keeps 1.20.1's sturdy top on its WorldGenLevel (BonusChestFeatureMixin; no
+  FC world exists over a worldgen region). P-HCR-BEACON is not in the W10 runs; it was predicted unchanged (the level-1
+  pyramid's block 209 is a cube on both rules).
+- Verification (2026-10-31, the W10 fix): P-FOUND-RT 24/24 (R4, R7, R8 and R15 FAIL -> PASS) and P-RANB-PLACE 117/117
+  `--wave W10`, GATE after OK (C11 and V25 FAIL -> PASS), no keep-up lines; build Mixin config OK (77), LinkAudit
+  MISSING 5 / FOREIGN 0, BridgeAudit 0 high. The W10 guard batch (2026-11-03, with all four W10 fixes) reran
+  P-FOUND-RT 24/24, P-RANB-PLACE 117/117, P-FOUND-RS 80/80 and P-FOUND-CARTS 80/80 (all `--wave W10`, GATE after OK),
+  P-USE 39/39, P-HOOK-CRASH 1/1 and P-SMOKE1-post 4/4, with P-PLACE 28/29 and P-RM as their last records, and the
+  clients P-RANB-PLACE-C 13/13, placeconsume 30/30 and P-FOUND-RS-C 9/9. Gate W10: PASS.
+
+---
+
+## Support relatives (FcAttachSupport, ModernBlockStandIn)
+
+Added 2026-11-02 (round 3, the W10 unit SUPPORT-REL; placed tools 2026-11-03, the unit STICK; maintainer rulings
+2026-10-31 and 2026-11-02: (1) the modern wooden pressure plates take the oak plate's 4.B rule and the polished
+blackstone plate the stone plate's, the weighted plates stay stubs; (2) the modern fences, walls and stained glass panes
+count as their BTW relatives for every support question, not for drops, hooks, ticks, connections, collision, rendering
+or identity, and all ten modern wooden fences answer as the oak fence, not as BTW's fence of the same wood; whether a
+placed tool sticks is a support question (2026-11-02); ground cover drawn above a related support is a follow-up;
+`STUB_CATALOGUE.md` (bx), `INTEGRATIONS.md` #062). Code: `Forge/src/main/java/btw/forge/FcAttachSupport.java`
+(`SUPPORT_RELATIVE`, `supportRelative`, `supportRelativeId`, `supportBlock`, `sameOnBothViews`, `audit`),
+`ModernBlockStandIn.java`, `client/ClientFcWorld.java` (`forSupport`), `client/ClientAttachSupport.java`,
+`WorldBridge.getSupportBlockId`, `mixin/fcext/FCItemToolStickRelativeMixin.java`, `BridgeSelfAudit.runServerStart`,
+Modern-Common `World.java` and `BlockTorch.java`.
+
+**The rule** (tag `support_relatives`). `SUPPORT_RELATIVE` (FcAttachSupport.java:197, filled at :211-231) maps exact
+blocks, not tags: the ten modern wooden fences (crimson and warped among them) to the oak fence (85, FCBlockFenceWood),
+the twenty walls without FC identity to the cobblestone wall (139, FCBlockWall), the sixteen stained glass panes to the
+glass pane (102, FCBlockPane). A relative applies at a cell when the block is in the table, has no FC identity and FC
+reads the cell through a stand-in (`supportRelative`, :260-277: `ModernBlockStandIn.isStandIn` of `getWorldBlockId`, the
+same reading on both sides). The related support then answers every support question FC asks with its relative's FC
+block, on the same world and cell; its identity (`getBlockId`, `getWorldBlockId`), drops, the saw, hooks, ticks,
+connections, collision, path finding and rendering stay the stand-in's. The plates of ruling (1) are the rule side of
+the same question: rule twins in FcAttachSupport's twin table (tag `attach_support_rules`, 14 entries with the soul
+torches and the powered rail; see [Attachment support (FcAttachSupport)](#attachment-support-fcattachsupport)), which
+also drop at a neighbour change on a support 4.B refuses.
+
+```
+Seam                                          | Code                                          | Does
+──────────────────────────────────────────────┼───────────────────────────────────────────────┼───────────────────────────────────────────────────
+the server stand-in (ModernBlockStandIn)      | HasLarge/HasSmall/HasCenterHardPointToFacing, | ask the relative's FC block first on a WorldBridge
+                                              | CanGroundCoverRestOnBlock,                    | read (supportRelative :494-500; the solid stand-in
+                                              | GroundCoverRestingOnVisualOffset (:433-485)   | never: no related state is a full cube);
+                                              |                                               | CanSupportFallingBlocks follows the centre point
+the client support view                       | ClientFcWorld.forSupport (:92-108) and        | identity 0 reads as the relative's id in the view
+                                              | getBlockId (:114-121), handed out by          | FcAttachSupport predicts on; forLevel (bone meal,
+                                              | ClientAttachSupport.worldFor (:26-33)         | the aux-FX handler, FC's client beacon) keeps
+                                              |                                               | identity reads
+the redstone torch id list                    | World.getSupportBlockId (World.java:826-835,  | 1.5.2's id list (fence, nether brick fence,
+                                              | default getBlockId), the WorldBridge override | glass, cobblestone wall) reads the relative's id:
+                                              | (WorldBridge.java:219-232), BlockTorch.       | a standing redstone torch stands on a modern
+                                              | canPlaceTorchOn (BlockTorch.java:57-70)       | fence or wall as on the oak fence or the
+                                              |                                               | cobblestone wall
+the floor gate                                | FcAttachSupport.sameOnBothViews (:442-449)    | a related support reads alike on both views, so
+                                              |                                               | the floor families veto there and the client
+                                              |                                               | predicts it
+placed tools                                  | fcext.FCItemToolStickRelativeMixin (@Pseudo,  | FCItemTool.onItemUse's CanToolStickInBlock is
+                                              | @ModifyArg index 1, :60-69) ->                | asked of the relative's FC block; the stuck-in
+                                              | FcAttachSupport.supportBlock (:293-302)       | block stays the stand-in
+```
+
+- **Modern fences and walls** answer as the oak fence and the cobblestone wall: a standing redstone torch stands on top
+  (the server refused it while the client predicted it); stone, oak, soulforged and modern plates are refused on top, at
+  placement and at survival; stakes, placed tools and lightning rods attach to the top and the bottom, and FC falling
+  blocks rest on top (the centre hard point); an iron spike on a connected side drops at its next neighbour change; ash
+  and snow that FC places above rest on the ground under the fence when that has a solid top, and grass under them
+  counts as covered. 1.20.1's own snow stays refused on fences and walls (the veto never grants).
+- **Stained glass panes** answer as the glass pane: torches, soul torches, BTW torches, candles, iron spikes, chunk ore,
+  ash and plates are refused on top; the standing redstone torch stays refused, now on both sides, so its held-stack
+  desync is gone on all 46 related blocks.
+- **Placed tools** (`supportBlock`, ruling 2026-11-02): FC's tool test (`FCItemTool.CanToolStickInBlock`, the tool's
+  efficiency against the block's material) is asked of the relative. Every axe sticks into the top and the bottom of a
+  modern wooden fence, as into the oak fence, and no pickaxe, shovel, hoe or iron chisel does (before, nothing stuck in
+  the eight flammable wooden fences, and pickaxes and the iron chisel, no axe, stuck in crimson, warped and every
+  waterlogged wooden fence); walls take pickaxes and the iron chisel, as the cobblestone wall; panes take nothing. The
+  stuck-in block, its `CanToolsStickInBlock` and the placement sound stay the stand-in's, and so do mining speed,
+  harvest and drops. Server only: onItemUse runs on the server, and the held slot is resent.
+- **Not handed over:** `IsNormalCube` (also suffocation, push-out and path finding; it answers alike on every related
+  state), the opaque cube, contact points, warmth, mob spawning and the material.
+- `FcAttachSupport.audit` (:474-515) runs from `BridgeSelfAudit.runServerStart` (BridgeSelfAudit.java:84-85), after the
+  block tags are bound. WARNs: a table entry whose target has no FC block (inert); a `minecraft:` fence, wall
+  (`#minecraft:fences`, `#minecraft:walls`) or stained glass pane without FC identity that the table misses (expected
+  none).
+
+```
+Support relatives: 46 supports answer as {FCBlockFenceWood 85=10, FCBlockPane 102=16, FCBlockWall 139=20}; rule
+  twins: 14 blocks take the rule of {FCBlockPressurePlatePlanks 72=10, FCBlockPressurePlateStone 70=1,
+  FCBlockRailRegular 66=1, FCBlockTorchLegacy 50=2}                                  (logger BTW-AttachSupport)
+```
+
+- Known: ground cover above a related support is drawn on top of the post (FCBakedModel's live access and ProxyBlock's
+  shape world read the stand-in, offset 0), while FC's rules treat it as resting on the ground under the fence; above an
+  oak fence it is drawn on the ground (follow-up FU-REL-DRAW).
+- Known, unruled families (follow-up FU-REL-FAMILIES; each difference is the stand-in's answer against its BTW
+  relative's): the ten modern fence gates (oak fence gate 107): a closed modern gate has a small centre hard point on
+  top, so FC torches, soul torches and candles stand on it and not on the oak gate, a plate is not vetoed on it but is
+  on the oak gate, and a redstone torch on it desyncs (160 states); stained and tinted glass (glass 20): every face of
+  the stand-in is sturdy and none of glass's, so plates, snow, rails, ash and stakes on top and wall torches and ladders
+  on the sides are allowed on stained glass and refused on glass (the redstone torch and the FC torch on top agree);
+  packed and blue ice (ice 79; frosted ice, read through the collider stand-in, belongs here too): on their solid
+  stand-in every hard point, the solid top and the normal cube are true, and on ice false, so plates, rails, stakes,
+  the redstone torch and snow are allowed there and refused on ice (1.20.1's own snow rule already refuses packed ice;
+  the normal cube is also suffocation, push-out and path finding); the other trapdoors, ten wooden and the iron one
+  (oak trapdoor 96): a closed lower one's bottom face, a closed upper one's top face (torches, redstone torches, plates,
+  snow, rails, ash, stakes, candles) and an open one's side face (wall torches, ladders) are sturdy where 96 holds
+  nothing, and a waterlogged block without FC identity derives metadata 0 before the trapdoor branch, so table entries
+  alone would not do; the modern leaves (acacia, dark oak, azalea, flowering azalea, mangrove, cherry; oak leaves 18):
+  with ignore-transparency FC torches and candles stand on oak leaves only, FC's snow and ash rest on oak leaves only,
+  and the opaque cube, a rendering answer, differs too; the doors, eight wooden plus crimson and warped (oak door 64): a
+  closed modern door's flat face holds wall torches and ladders, the oak door's does not.
+- Known: the 40 empty wall states (`up=false` with no side, waterlogged or not) have no collision, so both views read
+  air where the cobblestone wall reads 139 (only /setblock makes them). BTW's own wood fences (the wood sidings' fence
+  subtype, the port's 1093-1099) keep their 4.B answers, and modded fences, walls and panes get no relative (exact
+  blocks). Pre-existing held-stack desyncs stay (redstone torches on gates, hanging signs, bells, chains and similar
+  blocks; torches on hanging signs; BTW torches sneaked over modern blocks without a relative), and one narrow new one:
+  a BTW torch sneaked onto a stained pane beside a modern block that has neither FC identity nor a relative and no
+  centre hard point toward the cell (the client does not predict, the server now refuses). In existing worlds and
+  generated structures, attachments now refused go at their next neighbour or shape change: torches, candles and chunk
+  ore on stained panes; plates on modern fences, walls and panes (the taiga and savanna village tables survive
+  generation and pop then, as plains' oak tables have since 2026-10-31); iron spikes on modern fence and wall arms.
+- Verification (2026-11-02, SUPPORT-REL): before landing (W10 with the solid-top fix and SUPPORT-VETO) P-SUPPORT-REL
+  51/49, row F03 the one mismatch (FC's route placed BTW's torch on the stained pane and it popped at once as an item,
+  where the plan predicted it standing); with F03 tightened to "air and no dropped item", 50/50, GATE head as
+  predicted; P-SUPPORT-REL-C 7/17 with its probe gate GATE head OK. After: P-SUPPORT-REL 100/100 (50 GAP, 36 CONTROL,
+  14 SANITY), GATE after OK, P-SUPPORT-VETO amended (C12, V16, V18 flip as designed) 106/106, GATE after OK, the line
+  above with no WARN; Mixin config OK (78), LinkAudit MISSING 5 / FOREIGN 0, BridgeAudit 0 high. The harness's
+  `ranb world` gained the support keys (`centerHardpoint`, `smallHardpoint`, `groundCoverRest`, `supportsFalling`,
+  `groundCoverOffset`). STICK (2026-11-03): P-TOOLSTICK-REL (38 checks: 20 GAP, 15 CONTROL, 3 SANITY) 18/20 before
+  landing (GATE head OK) and 38/38 after (GATE after OK), the six `btwproof dig` lines identical (mining speed and
+  harvest unchanged); Mixin config OK (79), refmap unchanged (48 classes: the `@Pseudo`, `remap = false` mixin adds no
+  entry). With the W10 guard batch (2026-11-03): P-SUPPORT-REL 100/100, P-SUPPORT-REL-C 17/17 with
+  suprel_client_gate.py GATE after OK, P-USE 39/39. Gate W10: PASS.
+
+---
+
+## Block-swap lift (WorldBridge.setBlock)
+
+Added 2026-10-27 (round 3, the W2 fix, found with the bone-meal plan's row P15a; no stub entry of its own, a note in
+`STUB_CATALOGUE.md` (bi); `INTEGRATIONS.md` #060). Code:
+`WorldBridge.setBlock` (`fcCollisionGapUnderEntities`, `liftOutOfFcCollisionGap`).
+
+**The rule** (tag `block_swap_lift`). Entities rest on the 1.20.1 shape, and FC reads some 1.20.1 blocks as 4.B blocks
+with a taller collision box: `minecraft:farmland` is 15/16 high, while FC reads it as its farmland 60, which collides
+as a full block, as do the blocks FC turns it into (fertilized farmland 204, dirt). An item on farmland that bone meal
+fertilised was left 1/16 inside block 204, and 1.20.1's `ItemEntity.tick` pushed it out sideways, up to about 2 blocks;
+in 4.B it lay on the full box and stayed. So an FC swap lifts what 4.B had on the block:
+
+- before the write (WorldBridge.java:1199-1200), `fcCollisionGapUnderEntities` (:1252-1313) reads the part of the cell
+  that FC's own collision boxes for the block there fill (`addCollisionBoxesToList`, its 4.B shape) and its 1.20.1
+  collision shape leaves open;
+- after it (:1222-1224 for a ProxyBlock, :1243-1246 for a vanilla state), `liftOutOfFcCollisionGap` (:1315-1335) lifts
+  every entity in the part of that gap the new block's shape fills onto its top: the body of 1.20.1's
+  `Block.pushEntitiesUp` (the same entities, no spectators, the same drop test, `teleportRelative`), which
+  `FarmBlock.turnToDirt` runs for the same farmland. The new shape is read after the write, because a ProxyBlock's
+  shape reads its metadata from the level.
+
+- Only that gap counts, so every other swap leaves its entities where 4.B leaves them: a ProxyBlock collides with FC's
+  own box, and a block FC reads with its live 1.20.1 shape (stand-ins, plant twins) has no gap. A mob on an FC slab
+  that a falling slab completes stays inside the full block, as in 4.B; an entity standing in a cell with no 1.20.1
+  collision is left alone, as 1.20.1 leaves it. An air, ProxyBlock, walk-through or full cell, or a cell with nobody in
+  it, costs no FC call. Server thread only; an FC throw is logged once (`SWAP-LIFT`) and lifts nothing.
+- Verification (2026-10-27, the W2 fix): the bone-meal plan three times, row P15a passing each time with the item
+  0.0000 from where it lay (1.5848 before); SET-FULL-S as W2 except that row (FAIL -> PASS).
 
 ---
 
@@ -2478,7 +3961,7 @@ then synced BACK after btw.modern tick logic completes (btw→MC).
 47 | FC-only   | —                              | m_iTicksSinceEmoteSound       | Incremented each tick
 48 | FC-only   | —                              | m_iInGloomCounter             | Gloom tracking
 49 | FC-only   | —                              | m_fCurrentMiningSpeedModifier | Computed each tick
-50 | FC-only   | —                              | m_HardcoreSpawnChunk          | FC spawn system
+50 | FC-only   | —                              | m_HardcoreSpawnChunk          | 4.B's hardcore home (soft-respawn centre), set by HardcoreRespawn; not a respawn point (#054)
 51 | FC-only   | —                              | m_iSpawnDimension             | FC spawn system
 52 | FC-only   | —                              | m_lTimeOfLastSpawnAssignment  | FC spawn system
 53 | FC-only   | —                              | m_lTimeOfLastDimensionSwitch  | FC spawn system
@@ -2530,6 +4013,10 @@ fcGloomCounter                 | m_iInGloomCounter                  | int
 fcFoodLevelAdjusted            | (migration flag)                   | boolean
 ```
 
+`m_HardcoreSpawnChunk` (fcHCSpawnX/Y/Z) is 4.B's hardcore home, the soft-respawn centre, set by HardcoreRespawn and
+never a respawn point (2026-10-28, `INTEGRATIONS.md` #054). FC's beacon bind is saved beside 1.20.1's own respawn point
+as `btwFcSpawnBind` {X, Y, Z, Dim} (`HardcoreRespawn.readBind` / `writeBind`, HardcoreRespawn.java:603-635).
+
 ---
 
 ## CATALOGUE 2: SYSTEM OVERRIDES (37 mixins)
@@ -2557,7 +4044,7 @@ fcFoodLevelAdjusted            | (migration flag)                   | boolean
 9  | LivingEntity.travel() ladder speed  | @Redirect on ladder calc   | × GetLadderVerticalMovementModifier()
 10 | jumpMovementFactor assignment       | @Redirect                  | × GetJumpingHorizontalMovementModifier()
 11 | LivingEntity.getJumpPower()         | @Inject HEAD cancel        | CanJump(): health>4, food>12, sat<18
-12 | Swimming upward logic               | @Inject HEAD cancel        | CanSwim(): !weighted, health>4
+12 | Swimming upward logic               | @Inject HEAD cancel        | CanSwim(): !weighted, health>4; weighted: armour weight 10+ or a squid on the head (isWeighted, #047)
 13 | LivingEntity.onClimbable()          | @Inject HEAD cancel        | false when GetHealthPenaltyLevel()>=4
 ```
 
@@ -2657,13 +4144,15 @@ fake players are never ticked, so they fail the rule (maintainer ruling 2026-10-
 29 | Player.setRespawnPosition()        | @Overwrite                 | Add dimension tracking
 ```
 
-Neither row is an `@Overwrite` (2026-10-21 note). The respawn hooks are `ServerPlayerMixin` HEAD injects on
-`getRespawnPosition`, `getRespawnDimension` and `isRespawnForced` (ServerPlayerMixin.java:275-323), which answer FC's
-`m_HardcoreSpawnChunk` when it is set; `setRespawnPosition` is not hooked. A bed never sets the spawn:
-`BedSpawnPolicy` cancels every non-forced `PlayerSetSpawnEvent` at a bed (2.6 row 22a, `INTEGRATIONS.md` #037). The
-FC spawn is set only by the FC beacon bind, which stays unreachable until hup-43 bridges the beacon, and 4.B's random
-hardcore respawn is not ported (CurseForge triage CF2-U1-HS), so players respawn at the world spawn or a charged
-respawn anchor.
+Neither row is an `@Overwrite` (2026-10-21 note). Since 2026-10-28 (`INTEGRATIONS.md` #054) the respawn hooks are
+`PlayerListRespawnMixin` on `PlayerList.respawn` and a call at the end of `ServerPlayerMixin.btw$restoreFrom` (see
+[Hardcore respawn (HardcoreRespawn)](#hardcore-respawn-hardcorerespawn)); ServerPlayerMixin's former
+`getRespawnPosition`, `getRespawnDimension` and `isRespawnForced` injects are gone. `setRespawnPosition` is not hooked:
+FC's `setSpawnChunk`, the beacon bind, writes it (`PlayerBridge.setSpawnChunk`, PlayerBridge.java:821-840) and
+remembers FC's bind beside it. A bed never sets the spawn: `BedSpawnPolicy` cancels every non-forced
+`PlayerSetSpawnEvent` at a bed (2.6 row 22a, `INTEGRATIONS.md` #037). Without a respawn point, 4.B's random hardcore
+respawn places the player; a charged respawn anchor and `/spawnpoint` still work, and worlds created as creative
+respawn as in 1.20.1.
 
 ### 2.12 Wolf AI (1 override)
 
@@ -2709,16 +4198,20 @@ Row 36 is not a mixin: since 2026-10-18 it is `ProxyItem.shouldCauseReequipAnima
 1  | World.playSoundEffect(x,y,z,name,vol,pitch)    | level.playSound(except, x,y,z, SoundEvent,..)| EXISTS: name via LegacySounds.resolve (S4); except: 15l
 2  | World.playSoundAtEntity(entity,name,vol,pitch)| level.playSound(null, player, SoundEvent, ..) | TODO
 3  | World.playSoundToNearExcept(pl,name,vol,pitch)| level.playSound(player, x,y,z, SoundEvent,..)| TODO
-4  | World.spawnParticle(type,x,y,z,vx,vy,vz)     | level.sendParticles(ParticleOptions, ...)     | TODO: particle mapping
-5  | World.spawnEntityInWorld(entity)               | level.addFreshEntity(proxy)                  | EXISTS (EntityProxyFactory)
-6  | World.removeEntity(entity)                     | proxy.discard()                              | EXISTS
+4  | World.spawnParticle(type,x,y,z,vx,vy,vz)     | FcParticles.send -> level.sendParticles       | EXISTS (2026-10-25, #042): one name table; client FC worlds use FcParticles.addLocal, 4.B's limit
+5  | World.spawnEntityInWorld(entity)               | level.addFreshEntity(proxy)                  | EXISTS (EntityProxyFactory); FC drops: feet = posY - yOffset (fc_drop_position, #044)
+6  | World.removeEntity(entity)                     | unmount, setDead(), proxyFor(e).discard()    | EXISTS (2026-10-28, #048: puppets too, WorldBridge.java:2069-2081; was registered proxies only, no setDead)
 7  | World.createExplosion(entity,x,y,z,str,fire)  | level.explode(...)                           | EXISTS
 8  | World.playAuxSFX(effectID,x,y,z,data)          | = playAuxSFXAtEntity(null, ...): 15j / 15k   | EXISTS (ids < 2222 through AuxSfxMapping)
-9  | World.getEntitiesWithinAABB(class,aabb)        | level.getEntities(null, aabb, predicate)     | EXISTS
+9  | World.getEntitiesWithinAABB(class,aabb)        | level.getEntities(null, aabb, predicate)     | EXISTS (each entity as its FC view since 2026-10-28, VanillaEntityViews, #057)
+9a | World.playerEntities (the field)               | PlayerEntitiesView over level.players()      | EXISTS (2026-10-28, #046): live, read-only, no spectators (WorldBridge.java:2874)
+9b | World.getClosestVulnerablePlayer(ToEntity)     | closestVulnerablePlayer, level.players()     | EXISTS (2026-10-28, #046): FcTargetRule.isTargetable; range x getVisibilityPercent (:2942)
 10 | World.setBlock(x,y,z,id,meta,flags)           | level.setBlock(pos, state, flags)            | EXISTS
 11 | World.getBlockId(x,y,z)                        | state→ProxyRegistry.getBlockId(block)        | EXISTS
 12 | World.getBlockMetadata(x,y,z)                  | META; else derive + FcMetaOverlay            | EXISTS (2026-10-14, see Tick ownership)
 13 | World.getBlockMaterial(x,y,z)                  | blocksList[id].blockMaterial                 | EXISTS
+13a| World.doesBlockHaveSolidTopSurface(x,y,z)      | FC block's large centre hard point on top    | EXISTS (2026-10-31, #061): WorldBridge.java:2834; isFaceSturdy(UP) only where FC reads air (was isFaceSturdy everywhere)
+13b| World.getSupportBlockId(x,y,z) (port read)     | support relative's FC id, else getBlockId    | EXISTS (2026-11-02, #062): WorldBridge.java:227; read only by BlockTorch.canPlaceTorchOn's id list
 14 | World.scheduleBlockUpdate(x,y,z,id,delay)      | level.scheduleTick(pos, block, delay)        | EXISTS
 15 | World.notifyBlockChange(x,y,z,id)              | level.updateNeighborsAt(pos, source)         | EXISTS (2026-10-11, F3; was sendBlockUpdated)
 15a| World.notifyBlocksOfNeighborChange(x,y,z,id)   | level.updateNeighborsAt(pos, source)         | EXISTS (source: see the note on 15)
@@ -2748,15 +4241,23 @@ Rows 1, 8 and 15-15m were re-mapped on 2026-10-11 (`STUB_CATALOGUE.md` (an), (ao
 for this table: a row maps the 1.5.2 *body* of the FC primitive (vanilla/server and vanilla/client,
 FC-edited), never its name.
 
+- **13a, 13b:** 4.B's `World.doesBlockHaveSolidTopSurface` (vanilla/server World.java:4786-4791,
+  FCMOD's replacement of 1.5.2's) is the block's large centre hard point on top; until 2026-10-31
+  the bridge answered 1.20.1's sturdy top face. ClientFcWorld answers the same rule
+  (ClientFcWorld.java:163-169). `getSupportBlockId` has no 1.5.2 body: a port read (Modern-Common
+  World.java:826-835, default `getBlockId`) that only 1.5.2 `BlockTorch.canPlaceTorchOn`'s id list
+  asks. See [Solid top surface (WorldBridge,
+  ClientFcWorld)](#solid-top-surface-worldbridge-clientfcworld) and [Support relatives
+  (FcAttachSupport, ModernBlockStandIn)](#support-relatives-fcattachsupport-modernblockstandin).
 - **15, 15a:** 1.5.2 `notifyBlockChange` is `notifyBlocksOfNeighborChange` (vanilla/server
   World.java:649-652, :694-702), a neighbour update, not a client resync. The source block is air for
   id 0 (FC passes 0 after clearing a cell, FCEntityUrn.java:315-317), the variant at `pos` when it
   reads as that id, else the id's canonical block, and for an unmapped id whatever is at `pos`
-  (`WorldBridge.neighbourSource`, WorldBridge.java:966-980).
+  (`WorldBridge.neighbourSource`, WorldBridge.java:1632-1646).
 - **15b:** the id FC's `onNeighborBlockChange` receives is `getWorldBlockId` of the source block's
   default state: a ProxyBlock or legacy-id vanilla block gives its legacy id, a colliding post-1.5.2
-  block its stand-in id (160/161), air 0 (ProxyRegistry.java:280-288; ProxyBlock.java:379,
-  BlockBehaviorMixin.java:178). 1.5.2 passes the notifying id through, the old id for `setBlock`
+  block its stand-in id (160/161), air 0 (ProxyRegistry.java:280-288; ProxyBlock.java:377,
+  BlockBehaviorMixin.java:157). 1.5.2 passes the notifying id through, the old id for `setBlock`
   (World.java:461-478), as 1.20.1 `neighborChanged` passes the old block. FCBlockBuddyBlock ignores
   id 0 (Client FCBlockBuddyBlock.java:78-80), so a 0 here makes buddy blocks blind.
 - **15d:** vanilla/server World.java:4152-4155. With flag 0, 1.20.1 `Level.setBlock` never calls
@@ -2773,7 +4274,7 @@ FC-edited), never its name.
   actor (WorldManager.java:103-106), whose client played the event itself. The bridge leaves the
   actor out only where its 1.20.1 client really predicted it: 2001 (the break, predicted by
   `MultiPlayerGameMode.destroyBlock`), and any id raised off a ProxyBlock, whose `use()` runs FC on
-  the server only (the FC wood door, Client FCBlockDoor.java:63) (WorldBridge.java:2059-2085).
+  the server only (the FC wood door, Client FCBlockDoor.java:63) (WorldBridge.java:2663-2688).
   `playAuxSFX` = `playAuxSFXAtEntity(null, ...)` (World.java:3912-3915).
 - **15k:** FC ids are played by FC's own client handler, never re-implemented on the server:
   `WorldBridge.sendFcAuxSfx` -> `BTWNetwork.sendFcAuxSfx` (BTWNetwork.java:183-202, network protocol 5
@@ -2785,14 +4286,15 @@ FC-edited), never its name.
   vanilla/client RenderGlobal.java:1812). A 1.20.1 client that got PASS from a block's `use()`
   predicts `BlockItem.useOn` and plays the place sound itself, so while BlockBehaviorMixin stage 2
   places for a held BlockItem, `WorldBridge.withPredictingActor` makes `playSoundEffect` leave that
-  player out (WorldBridge.java:1770-1793, BlockBehaviorMixin.java:255-266). `ProxyBlock.use` needs no
-  scope: its client returns SUCCESS and predicts nothing.
+  player out (WorldBridge.java:2442-2466, BlockBehaviorMixin.java:257-270, HookPolicy.java:448).
+  `ProxyBlock.use` needs no scope: its client returns SUCCESS and predicts nothing.
 - **15m:** every client-side FC world (ProxyEntity, ProxyBlockEntity, ProxyBlock's client view,
   ClientFcWorld) implements 1.5.2 WorldClient + RenderGlobal through
   `btw.forge.client.LegacyClientSound`: `playSound` plays locally (WorldClient.java:483-505),
   `playAuxSFX*` plays vanilla ids as local level events and FC ids through `ClientPlayCustomAuxFX`,
   and `playSoundEffect` / `playSoundAtEntity` do nothing (RenderGlobal.java:1812/:1817). Names resolve
-  through `LegacySounds.resolve` on both sides (row 1).
+  through `LegacySounds.resolve` on both sides (row 1). A plain FC entity's construction, saved state and client fall:
+  see [Plain FC entities (ProxyEntity, FcEntityFactory)](#plain-fc-entities-proxyentity-fcentityfactory).
 
 ### 3.2 Player Actions (28 hooks) — implement in PlayerBridge
 
@@ -2814,10 +4316,10 @@ FC-edited), never its name.
 35 | EntityPlayer.heal(amount)                      | serverPlayer.heal(float) [int→float]         | TODO
 36 | EntityPlayer.attackEntityFrom(source,amount)   | serverPlayer.hurt(DamageSource, float)       | TODO: DamageSource map
 37 | EntityPlayer.addExhaustion(float)              | fcFoodStats.addExhaustion() × armor modifier | TODO
-38 | EntityLiving.addPotionEffect(effect)           | serverPlayer.addEffect(MobEffectInstance)     | TODO: potion ID map
+38 | EntityLiving.addPotionEffect(effect)           | serverPlayer.addEffect(MobEffectInstance)     | EXISTS: PlayerBridge.addPotionEffect through PotionMapping; since 2026-10-28 (#053) FC's potions 29-31 are BTW MobEffects and FC's ambient flag is kept
 39 | EntityLiving.isPotionActive(potion)            | serverPlayer.hasEffect(MobEffect)            | TODO
 40 | EntityLiving.getActivePotionEffect(potion)     | serverPlayer.getEffect(MobEffect)            | TODO
-41 | EntityPlayer.setSpawnChunk(coords,forced,dim)  | serverPlayer.setRespawnPosition(dim,pos,...) | TODO
+41 | EntityPlayer.setSpawnChunk(coords,forced,dim)  | serverPlayer.setRespawnPosition(dim,pos,...) | EXISTS (2026-10-28, #054): PlayerBridge.java:821; the legacy dim resolved against the player's level; FC's bind kept beside it
 42 | EntityPlayer.wakeUpPlayer(a,b,c)               | serverPlayer.stopSleeping()                  | not needed: 1.20.1 owns sleep (ruling 3); FC never puts a player to sleep
 43 | EntityPlayer.DetonateCarriedBlastingOil()       | Clear inv, kill, explode at MC coords        | TODO (complex)
 44 | EntityPlayer.dropHead()                         | Spawn ItemEntity with player skull           | TODO
@@ -2827,6 +4329,13 @@ FC-edited), never its name.
 48 | EntityPlayer.OnCantConsume()                    | Play eat fail aux SFX                        | TODO
 49 | EntityPlayer.GetWornArmorWeight()               | Sum FC item GetWeightWhenWorn() on armor     | TODO
 50 | EntityPlayer.IsWearingFullSuitSoulforgedArmor() | Check 4 armor slots against FC item IDs     | TODO
+50a| EntityPlayer.GetCanBeHeadCrabbed(inWater)     | 4.B's latch rule, on the real player         | EXISTS (2026-10-28, #047): PlayerBridge.java:955; Modern-Common EntityPlayer.java:629
+50b| IsValidOngoingAttackTargetForSquid()          | a living player stays a target               | EXISTS (2026-10-28, #047): Modern-Common EntityPlayer.java:635
+50c| IsImmuneToHeadCrabDamage()                    | IsWearingSoulforgedHelm()                    | EXISTS (2026-10-28, #047): Modern-Common EntityPlayer.java:640
+50d| Entity.getMountedYOffset()                    | eye height + 0.025 x height                  | EXISTS (2026-10-28, #047): PlayerBridge.java:967; where a head-crab squid sits
+50e| EntityPlayer.isBlocking()                     | main-hand BTW item with use action BLOCK     | EXISTS (2026-10-28, #047): PlayerBridge.java:1095; a 1.20.1 shield is not 4.B blocking
+50f| EntityLiving.OnFlungBySquidTentacle(squid)    | motion onto the real player (hurtMarked)     | EXISTS (2026-10-28, #047): PlayerBridge.java:306; leaves a vehicle first; a disarm syncs at once
+50g| Entity.OnKickedByCow(cow)                     | the same, from the real velocity             | EXISTS (2026-10-28, #047): PlayerBridge.java:322
 ```
 
 ### 3.3 NBT Persistence Hooks (4 hooks)
@@ -2950,6 +4459,9 @@ slot is unchanged, writes FC's pending edit through first and re-reads only a sl
 - FC: integer block IDs via `Block.blocksList[id]`
 - MC 1.20.1: `BlockState` registry
 - ProxyRegistry already handles this mapping — extend as needed
+- Deepslate, cobbled deepslate and the seven deepslate ores have FC identity in the world only (stone 1, cobblestone 4,
+  the stone ore ids); their items keep their own headless identity (`ProxyRegistry.getBlockFormItemId`, 2026-10-28; see
+  [Strata and deepslate (StrataRule)](#strata-and-deepslate-stratarule)).
 
 ### FC Penalty Thresholds (for reference)
 
@@ -3014,9 +4526,9 @@ Level 5: health <= 2
 19. Sound mapping
 
 ### Phase 5: World Integration
-20. WorldBridge additions — FC-only systems (magnetic points, spawn locations, beacons)
+20. WorldBridge additions — FC-only systems (magnetic points, spawn locations, beacons): done 2026-10-28 (#053, #054)
 21. ServerLevel mixin — ModSpecificTick
-22. Spawn/respawn system — beacon-based spawn
+22. Spawn/respawn system — beacon-based spawn: done 2026-10-28 (4.B's hardcore respawn and the beacon bind, #054)
 
 ### Phase 6: Remaining Event Hooks
 23. Player action hooks (chat, GUI, XP, drops, clone)

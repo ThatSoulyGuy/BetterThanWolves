@@ -12,7 +12,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * The Forge item of an FC block (registered by BTWRegistration as {@code betterthanwolves:block_<id>} for every
- * ProxyBlock). The FC metadata subtype of a stack rides its {@code Damage} tag (ItemStackHelper.toMcStack), so one
+ * ProxyBlock, and for the FC blocks registered as 1.20.1 block classes: BTW's detector rails, FcDetectorRailBlock). The FC metadata subtype of a stack rides its {@code Damage} tag (ItemStackHelper.toMcStack), so one
  * item carries every subtype, as 1.5.2's one ItemBlock id did.
  *
  * <ul>
@@ -35,7 +35,8 @@ public class ProxyBlockItem extends BlockItem {
     /** Last-resort name (BTWRegistration.formatFcName of the block's name) when FC has no translation. */
     private final String displayName;
 
-    public ProxyBlockItem(ProxyBlock block, Properties props, int legacyId, String displayName) {
+    // FCMOD-INTEGRATION(1.20.1): fc_redstone: also the item of an FC block registered as a 1.20.1 class (FcDetectorRailBlock)
+    public ProxyBlockItem(Block block, Properties props, int legacyId, String displayName) {
         super(block, props);
         this.legacyId = legacyId;
         this.displayName = displayName;

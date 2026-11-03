@@ -49,6 +49,13 @@ public class ProxyRegistry {
     private static final Map<Block, Integer> vanillaBlockToLegacyId = new LinkedHashMap<>();
     /** Reverse mapping: legacy block ID → modern MC Block (first listed wins). Built from vanillaBlockToLegacyId. */
     private static final Map<Integer, Block> legacyIdToVanillaBlock = new HashMap<>();
+    /**
+     * Deepslate forms (ruling 2026-10-21): BTW's deep-strata stone, its cobblestone and its ores in the world. FC identity
+     * for the world only: their items keep their own identity (getBlockFormItemId), and StrataRule reads them as deep.
+     * Filled by initVanillaBlockMap under the class lock, published by vanillaBlockMapInitialized.
+     */
+    private static final java.util.Set<Block> DEEPSLATE_FORMS =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
     // volatile: the maps are filled under the class lock, then published by this write (RE4)
     private static volatile boolean vanillaBlockMapInitialized = false;
 
@@ -72,6 +79,28 @@ public class ProxyRegistry {
     }
 
     /**
+     * FCMOD-INTEGRATION(1.20.1): fc_redstone: FC blocks of id 175+ that are 1.20.1 block classes rather than ProxyBlocks,
+     * registered under the same {@code betterthanwolves:block_<id>} name: BTW's detector rails 235 and 236
+     * ({@link FcDetectorRailBlock}), so 1.20.1's minecarts ride them. Each keeps its FC identity here (getBlockId,
+     * getModernBlock); FC's world reads, hooks, ticks and drops follow it as for a vanilla-id FC block. Written during
+     * block registration only, read everywhere after.
+     */
+    private static final Map<Integer, Block> fcOwnBlocksByLegacyId = new ConcurrentHashMap<>();
+
+    /**
+     * Records {@code block} as the 1.20.1 block of FC id {@code legacyId} (block registration, BTWRegistration). The
+     * block knows its own id ({@link FcDetectorRailBlock#getLegacyId}), which getBlockId reads.
+     */
+    public static void registerFcOwnBlock(int legacyId, Block block) {
+        fcOwnBlocksByLegacyId.put(legacyId, block);
+    }
+
+    /** The 1.20.1 block class FC id {@code legacyId} is registered as when it is no ProxyBlock, or null. */
+    public static Block getFcOwnBlock(int legacyId) {
+        return fcOwnBlocksByLegacyId.get(legacyId);
+    }
+
+    /**
      * Returns the Forge {@link net.minecraft.world.level.block.Block} for a
      * legacy block ID. Checks ProxyBlocks first, then falls back to the
      * vanilla reverse mapping (legacy ID → modern MC block).
@@ -80,6 +109,9 @@ public class ProxyRegistry {
         // Check ProxyBlocks first (FC blocks 175+)
         ProxyBlock proxy = blocksByLegacyId.get(legacyId);
         if (proxy != null) return proxy;
+        // FCMOD-INTEGRATION(1.20.1): fc_redstone: FC blocks 175+ that are 1.20.1 block classes (detector rails 235, 236)
+        Block fcOwn = fcOwnBlocksByLegacyId.get(legacyId);
+        if (fcOwn != null) return fcOwn;
 
         // Fall back to vanilla reverse mapping (IDs 1-158)
         ensureVanillaBlockMapInitialized();
@@ -161,8 +193,9 @@ public class ProxyRegistry {
 
     static {
         // FCMOD-INTEGRATION(1.20.1): modern_woods: FC planks subtypes are FC wood types: 0-3 FC's, 4 blood wood (no
-        // 1.20.1 block: oak, as before), 5-8 acacia, dark oak, mangrove and cherry (ModernWoods). Item level only:
-        // the four modern planks keep no FC identity (getBlockId 0), so an FC-placed 5:5 is plain acacia planks.
+        // 1.20.1 block: oak, as before), 5-8 acacia, dark oak, mangrove and cherry (ModernWoods). Item and world: the
+        // four modern planks answer 5 while their sub-blocks exist (getBlockId, ModernWoodSubBlocks), so FC's planks
+        // rule and saw run on them, and an FC-placed 5:5 is acacia planks.
         variants(5, 15, Blocks.OAK_PLANKS, Blocks.SPRUCE_PLANKS, Blocks.BIRCH_PLANKS, Blocks.JUNGLE_PLANKS, null,
                 Blocks.ACACIA_PLANKS, Blocks.DARK_OAK_PLANKS, Blocks.MANGROVE_PLANKS, Blocks.CHERRY_PLANKS);
         variants(6, 3, Blocks.OAK_SAPLING, Blocks.SPRUCE_SAPLING, Blocks.BIRCH_SAPLING, Blocks.JUNGLE_SAPLING);
@@ -191,6 +224,13 @@ public class ProxyRegistry {
         variants(126, 3, woodSlabs);
         variants(125, 3, woodSlabs);
         variants(139, 1, Blocks.COBBLESTONE_WALL, Blocks.MOSSY_COBBLESTONE_WALL);
+        // FCMOD-INTEGRATION(1.20.1): flower_subtypes: the small flowers 1.5.2 never had are port-only subtypes of the rose 38:
+        // 1.7.2's red_flower order for 0-8 (0 poppy, 1 blue orchid, 2 allium, 3 azure bluet, 4-7 red, orange, white and
+        // pink tulip, 8 oxeye daisy), then 9 cornflower and 10 lily of the valley: FC places, reads and stores each flower
+        // as itself (triage CF2-P8c). 11-15 read as the poppy.
+        variants(38, 15, Blocks.POPPY, Blocks.BLUE_ORCHID, Blocks.ALLIUM, Blocks.AZURE_BLUET, Blocks.RED_TULIP,
+                Blocks.ORANGE_TULIP, Blocks.WHITE_TULIP, Blocks.PINK_TULIP, Blocks.OXEYE_DAISY, Blocks.CORNFLOWER,
+                Blocks.LILY_OF_THE_VALLEY);
     }
 
     /**
@@ -239,15 +279,27 @@ public class ProxyRegistry {
      * acacia, dark oak, mangrove and cherry logs answer log2 ({@link ModernWoods#LOG2_ID}, 165, FC wood types 5-8),
      * a plain FCBlockLog, so FC's log code runs on them as it runs on oak (id 17). They answer 0 when log2 was not
      * built ({@link ModernWoods#isBuilt}: id 165 taken at start-up), so another block at 165 never receives them.
+     * A second, the deepslate forms (StrataRule): deepslate, cobbled deepslate and the seven deepslate ores answer 1, 4,
+     * 14, 15, 16, 21, 56, 73 and 129, so FC's stone, cobblestone and ore code runs on them; their items keep their own
+     * identity ({@link #getBlockFormItemId}).
+     * A third, the acacia, dark oak, mangrove and cherry planks answer 5 (FC planks 5:5-8) while their sub-blocks exist
+     * ({@link ModernWoodSubBlocks#isBuilt}), so FC's planks code and saw run on them as on oak planks.
      */
     public static int getBlockId(Block block) {
         if (block instanceof ProxyBlock pb) {
             return pb.getLegacyId();
         }
+        // FCMOD-INTEGRATION(1.20.1): fc_redstone: an FC block 175+ registered as a 1.20.1 block class (detector rails)
+        if (block instanceof FcDetectorRailBlock rail) {
+            return hasFcBlock(rail.getLegacyId()) ? rail.getLegacyId() : 0;
+        }
         ensureVanillaBlockMapInitialized();
         Integer id = vanillaBlockToLegacyId.get(block);
         if (id == null || !hasFcBlock(id)) return 0;
-        return id != ModernWoods.LOG2_ID || ModernWoods.isBuilt() ? id : 0;
+        if (id == ModernWoods.LOG2_ID && !ModernWoods.isBuilt()) return 0;
+        // FCMOD-INTEGRATION(1.20.1): modern_wood_subblocks: the four newer planks answer 5 only while their sub-blocks exist
+        if (id == 5 && ModernWoodSubBlocks.withholdsPlanksIdentity(block)) return 0;
+        return id;
     }
 
     /** True if btw.modern.Block.blocksList[id] is populated. */
@@ -259,7 +311,8 @@ public class ProxyRegistry {
     /** True if any 1.20.1 block maps to this legacy id (ProxyBlock or vanilla table). Stand-in ids must avoid these. */
     static boolean isLegacyIdMapped(int id) {
         ensureVanillaBlockMapInitialized();
-        return blocksByLegacyId.containsKey(id) || legacyIdToVanillaBlock.containsKey(id);
+        return blocksByLegacyId.containsKey(id) || legacyIdToVanillaBlock.containsKey(id)
+                || fcOwnBlocksByLegacyId.containsKey(id);
     }
 
     /** 1.5.2 Block.waterMoving: what Blocks.WATER reads as (vanilla/client Block.java:98). */
@@ -391,7 +444,7 @@ public class ProxyRegistry {
      *       the planted mangrove propagule, azaleas, beetroots, the torchflower crop, the pitcher crop's lower half,
      *       crimson and warped fungi) reads as its twin's id, so the twin's FC tick finds itself at its cell;</li>
      *   <li>a colliding 1.20.1 state with no usable 1.5.2 id reads as a {@link ModernBlockStandIn}
-     *       instead of air (design_blockmap U4: puppets fell through deepslate/tuff);</li>
+     *       instead of air (design_blockmap U4: puppets fell through tuff, calcite, ...);</li>
      *   <li>a non-colliding unmapped state whose fluid is water (seagrass, kelp, bubble column, coral,
      *       waterlogged plants) reads as water: in 1.5.2 terms that cell IS water (triage D5).</li>
      * </ul>
@@ -440,6 +493,29 @@ public class ProxyRegistry {
         return null;
     }
 
+    private static void deepslateForm(Block block, int legacyId) {
+        vanillaBlockToLegacyId.put(block, legacyId);
+        DEEPSLATE_FORMS.add(block);
+    }
+
+    /** True for deepslate, cobbled deepslate and the seven deepslate ores (StrataRule: always the deep strata). */
+    public static boolean isDeepslateForm(Block block) {
+        ensureVanillaBlockMapInitialized();
+        return block != null && DEEPSLATE_FORMS.contains(block);
+    }
+
+    /**
+     * Legacy id of a BlockItem's block form, for item identity (getOrCreateLegacyId, hasRealLegacyId, ProxyItem.fcItemFor,
+     * ModernCookingImport.isMapped): getBlockId, but 0 for a deepslate form, whose item stays its own 1.20.1 item (a
+     * headless passthrough, as before the forms had FC identity), so BTW containers and BTW's placement never turn it into
+     * stone. World identity (FC's reads of the cell, its dig, harvest and hooks) keeps getBlockId.
+     */
+    // FCMOD-INTEGRATION(1.20.1): strata: deepslate forms are BTW blocks in the world only; their items keep their identity
+    public static int getBlockFormItemId(Block block) {
+        ensureVanillaBlockMapInitialized();
+        return DEEPSLATE_FORMS.contains(block) ? 0 : getBlockId(block);
+    }
+
     // Double-checked: getBlockId runs per block read on the server thread, the render thread and the
     // chunk-mesh threads; only the first call needs the lock (RE4).
     private static void ensureVanillaBlockMapInitialized() {
@@ -474,6 +550,12 @@ public class ProxyRegistry {
         vanillaBlockToLegacyId.put(Blocks.SPRUCE_PLANKS, 5);
         vanillaBlockToLegacyId.put(Blocks.BIRCH_PLANKS, 5);
         vanillaBlockToLegacyId.put(Blocks.JUNGLE_PLANKS, 5);
+        // FCMOD-INTEGRATION(1.20.1): modern_wood_subblocks: the four newer planks are FC planks 5:5-8 (FC wood types 5-8,
+        // ModernWoods), with FC's planks rule and saw, while their sub-blocks exist (ModernWoodSubBlocks.withholdsPlanksIdentity)
+        vanillaBlockToLegacyId.put(Blocks.ACACIA_PLANKS, 5);
+        vanillaBlockToLegacyId.put(Blocks.DARK_OAK_PLANKS, 5);
+        vanillaBlockToLegacyId.put(Blocks.MANGROVE_PLANKS, 5);
+        vanillaBlockToLegacyId.put(Blocks.CHERRY_PLANKS, 5);
         // ID 6: Sapling
         vanillaBlockToLegacyId.put(Blocks.OAK_SAPLING, 6);
         vanillaBlockToLegacyId.put(Blocks.SPRUCE_SAPLING, 6);
@@ -597,6 +679,9 @@ public class ProxyRegistry {
         vanillaBlockToLegacyId.put(Blocks.WHITE_TULIP, 38);
         vanillaBlockToLegacyId.put(Blocks.PINK_TULIP, 38);
         vanillaBlockToLegacyId.put(Blocks.OXEYE_DAISY, 38);
+        // FCMOD-INTEGRATION(1.20.1): flower_subtypes: cornflower and lily of the valley are small flowers whose nearest 1.5.2 relative is the rose (post-1.5.2 plants by lore, ruling 2026-10-15): BTW's flower rules and the port-only subtypes 38:9 and 38:10. The wither rose (Nether soils) and the torchflower (the torchflower crop twin's last stage) stay unmapped
+        vanillaBlockToLegacyId.put(Blocks.CORNFLOWER, 38);
+        vanillaBlockToLegacyId.put(Blocks.LILY_OF_THE_VALLEY, 38);
         // ID 39: Brown Mushroom
         vanillaBlockToLegacyId.put(Blocks.BROWN_MUSHROOM, 39);
         // ID 40: Red Mushroom
@@ -895,6 +980,17 @@ public class ProxyRegistry {
         // ID 173: Block of Coal
         vanillaBlockToLegacyId.put(Blocks.COAL_BLOCK, 173);
 
+        // FCMOD-INTEGRATION(1.20.1): strata: deepslate, cobbled deepslate and the deepslate ores are BTW's deep-strata stone, cobblestone and ores; listed after the stone forms, so FC's writes of these ids keep placing the stone forms (the reverse map takes the first block listed)
+        deepslateForm(Blocks.DEEPSLATE, 1);
+        deepslateForm(Blocks.COBBLED_DEEPSLATE, 4);
+        deepslateForm(Blocks.DEEPSLATE_GOLD_ORE, 14);
+        deepslateForm(Blocks.DEEPSLATE_IRON_ORE, 15);
+        deepslateForm(Blocks.DEEPSLATE_COAL_ORE, 16);
+        deepslateForm(Blocks.DEEPSLATE_LAPIS_ORE, 21);
+        deepslateForm(Blocks.DEEPSLATE_DIAMOND_ORE, 56);
+        deepslateForm(Blocks.DEEPSLATE_REDSTONE_ORE, 73);
+        deepslateForm(Blocks.DEEPSLATE_EMERALD_ORE, 129);
+
         // Build reverse mapping: legacy ID → modern Block (insertion order: the first block listed for an
         // id is its canonical pick -- oak, white wool, smooth stone slab, ...)
         for (var entry : vanillaBlockToLegacyId.entrySet()) {
@@ -1004,7 +1100,8 @@ public class ProxyRegistry {
 
         // Then the block form (getBlockId already filters ids with an empty blocksList slot)
         if (modernItem instanceof net.minecraft.world.item.BlockItem bi) {
-            int blockId = getBlockId(bi.getBlock());
+            // FCMOD-INTEGRATION(1.20.1): strata: a deepslate form's item keeps its own (headless) identity
+            int blockId = getBlockFormItemId(bi.getBlock());
             if (blockId > 0) {
                 return blockId;
             }
@@ -1189,7 +1286,8 @@ public class ProxyRegistry {
     private static boolean hasRealLegacyId(Item item) {
         ensureVanillaItemMapInitialized();
         if (vanillaItemToLegacyId.containsKey(item)) return true;
-        if (item instanceof net.minecraft.world.item.BlockItem bi && getBlockId(bi.getBlock()) > 0) return true;
+        // FCMOD-INTEGRATION(1.20.1): strata: a deepslate form's item has no real legacy id (restoreHeadlessIds keeps mapping its saved headless id)
+        if (item instanceof net.minecraft.world.item.BlockItem bi && getBlockFormItemId(bi.getBlock()) > 0) return true;
         Integer proxyId = proxyItemToLegacyId.get(item);
         return proxyId != null && proxyId < HEADLESS_BASE_ID;
     }

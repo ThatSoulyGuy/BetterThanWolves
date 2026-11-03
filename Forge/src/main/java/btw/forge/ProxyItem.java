@@ -77,7 +77,7 @@ public class ProxyItem extends Item implements LegacyProxyItem {
 
     /**
      * True when {@code legacyBlockId} names a populated FC block slot. ProxyRegistry.getBlockId
-     * returns 0 for modern-only blocks (deepslate, tuff, granite, ...), and 1.5.2 item code
+     * returns 0 for modern-only blocks (tuff, granite, calcite, ...), and 1.5.2 item code
      * dereferences {@code Block.blocksList[iBlockID]} unguarded -- FCItemTool.onBlockDestroyed
      * (Client FCItemTool.java:66), FCItemClub.onBlockDestroyed (Client FCItemClub.java:58);
      * FCItemAxe (Common FCItemAxe.java:123) null-checks but then calls the FCItemTool super -- so
@@ -122,7 +122,8 @@ public class ProxyItem extends Item implements LegacyProxyItem {
         if (item == null) return null;
         btw.modern.Item fcItem = fcItemAt(ProxyRegistry.getItemId(item));
         if (fcItem == null && item instanceof net.minecraft.world.item.BlockItem bi) {
-            fcItem = fcItemAt(ProxyRegistry.getBlockId(bi.getBlock()));
+            // FCMOD-INTEGRATION(1.20.1): strata: a deepslate form's item is not FC stone or ore (world-only identity)
+            fcItem = fcItemAt(ProxyRegistry.getBlockFormItemId(bi.getBlock()));
         }
         return fcItem;
     }
@@ -762,7 +763,7 @@ public class ProxyItem extends Item implements LegacyProxyItem {
         if (fc() == null) return super.mineBlock(stack, level, state, pos, entity);
         if (level instanceof ServerLevel sl) {
             // Reached for blocks ServerPlayerGameModeMixin.btw$destroyBlock leaves to vanilla: no FC block
-            // (deepslate, tuff, granite, ...), and the beds and doors of vanilla_pair_drops. FC gets their
+            // (tuff, granite, polished deepslate, ...), and the beds and doors of vanilla_pair_drops. FC gets their
             // world-read id (minedBlockIdForFc), so FCItemTool.onBlockDestroyed (Client FCItemTool.java:64-72)
             // wears the tool as 1.5.2 did for any block of hardness > 0.
             int blockId = minedBlockIdForFc(state, sl, pos);
@@ -973,10 +974,11 @@ public class ProxyItem extends Item implements LegacyProxyItem {
     }
 
     /**
-     * Drops of 1.20.1-only blocks that need a tool tier (deepslate and its ores, copper, tuff, calcite, amethyst):
+     * Drops of 1.20.1-only blocks that need a tool tier (decorative deepslate, copper, tuff, calcite, amethyst):
      * an FC tool qualifies when its family digs one of the state's mineable tags and FC's harvest level reaches the
      * block's tier, as DiggerItem.isCorrectToolForDrops (DiggerItem.java:80-82). Without it destroyBlock skipped
-     * playerDestroy (ServerPlayerGameMode.java:249) and the steel pickaxe got nothing from deepslate diamond ore.
+     * playerDestroy (ServerPlayerGameMode.java:249) and the steel pickaxe got nothing from deepslate diamond ore (FC's
+     * ore since StrataRule).
      * Blocks with an FC identity are FC's harvest (ServerPlayerGameModeMixin), so they are never decided here.
      */
     // FCMOD-INTEGRATION(1.20.1): fc_tool_actions: post-1.5.2 blocks gate their drops on Forge's tool query, which FC tools never answered

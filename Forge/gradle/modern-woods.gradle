@@ -12,15 +12,23 @@
 // written as textures/block/fcblockworkstump<x>.png (the lower-cased icon names FCBlockWorkStumpWoodMixin registers).
 // The lower rows keep the plain 1.20.1 bark: FC has no root flare for these species, so none is made up.
 //
-// Inputs, read only: FC's textures in the release zip (MINECRAFT-JAR/textures/blocks/) and the 1.20.1 log textures in
-// ForgeGradle's client-extra jar (-PbtwClientExtraJar=<path> overrides). A missing input WARNs and skips: the outputs
-// are checked in, so builds without the zip or the cache keep working. Each output is rewritten only when its pixels
-// and its bytes differ, so a build with unchanged inputs writes nothing (the dev-run rule: no file a running server
-// reads is rewritten needlessly).
+// FCMOD-INTEGRATION(1.20.1): modern_wood_subblocks: the column sides of the same four woods' moulding blocks
+// (btw.forge.ModernWoodSubBlocks, FU-W1). FC's column side is its planks face turned a quarter (all five FC woods,
+// 256/256 pixels: fcBlockColumnWood<X>_side(x, y) == fcBlockDecorativeWood<X>(15 - y, x)), so the newer woods' column
+// side is the 1.20.1 planks turned the same way; no art is invented. Written as
+// textures/block/fcblockcolumnwood<x>_side.png (the lower-cased icon names ModernWoodSubBlocks gives FC's moulding
+// constructor). Every other surface of the newer woods' sub-blocks names the 1.20.1 planks texture itself and follows
+// resource packs; these four do not.
+//
+// Inputs, read only: FC's textures in the release zip (MINECRAFT-JAR/textures/blocks/) and the 1.20.1 log and planks
+// textures in ForgeGradle's client-extra jar (-PbtwClientExtraJar=<path> overrides). A missing input WARNs and skips:
+// the outputs are checked in, so builds without the zip or the cache keep working. Each output is rewritten only when
+// its pixels and its bytes differ, so a build with unchanged inputs writes nothing (the dev-run rule: no file a running
+// server reads is rewritten needlessly).
 // ============================================================
 
 tasks.register('deriveModernWoodTextures') {
-    description = "Derives the modern woods' work-stump side textures from FC's work-stump overlay and the 1.20.1 logs"
+    description = "Derives the modern woods' work-stump sides (FC's overlay on the 1.20.1 logs) and column sides (the 1.20.1 planks turned a quarter)"
     group = 'btw'
 
     def modZip = project.file("${project.rootProject.projectDir}/BTWMod4-B0000003.zip")
@@ -36,19 +44,27 @@ tasks.register('deriveModernWoodTextures') {
             'fcblockworkstumpmangrove': ['mangrove_log', 'Jungle'],
             'fcblockworkstumpcherry'  : ['cherry_log', 'Birch'],
     ]
+    // FU-W1: output name -> 1.20.1 planks texture; out(x, y) = planks(15 - y, x), as FC's column side is its planks face
+    def columns = [
+            'fcblockcolumnwoodacacia_side'  : 'acacia_planks',
+            'fcblockcolumnwooddarkoak_side' : 'dark_oak_planks',
+            'fcblockcolumnwoodmangrove_side': 'mangrove_planks',
+            'fcblockcolumnwoodcherry_side'  : 'cherry_planks',
+    ]
 
     inputs.property('species', species.toString())
+    inputs.property('columns', columns.toString())
     // Always run: cheap, and each PNG is only rewritten when it changes
     outputs.upToDateWhen { false }
 
     doLast {
         if (!modZip.isFile()) {
-            logger.warn("deriveModernWoodTextures: BTW mod zip not found at ${modZip}; the checked-in work-stump textures are kept")
+            logger.warn("deriveModernWoodTextures: BTW mod zip not found at ${modZip}; the checked-in work-stump and column-side textures are kept")
             return
         }
         if (!clientExtra.isFile()) {
             logger.warn("deriveModernWoodTextures: 1.20.1 client-extra jar not found at ${clientExtra} (run :Forge:runClient " +
-                    "once, or pass -PbtwClientExtraJar=<path>); the checked-in work-stump textures are kept")
+                    "once, or pass -PbtwClientExtraJar=<path>); the checked-in work-stump and column-side textures are kept")
             return
         }
         javax.imageio.ImageIO.setUseCache(false)
@@ -61,6 +77,22 @@ tasks.register('deriveModernWoodTextures') {
                 throw new GradleException("deriveModernWoodTextures: ${entry} is ${img.width}x${img.height}, expected 16x16")
             }
             return img
+        }
+        // Rewrites dest only when its pixels and its bytes differ (the dev-run rule above); 1 when written, else 0
+        def writeIfChanged = { File dest, java.awt.image.BufferedImage out ->
+            if (dest.isFile()) {
+                def old = javax.imageio.ImageIO.read(dest)
+                boolean samePixels = old != null && old.width == 16 && old.height == 16 &&
+                        (0..<16).every { int y -> (0..<16).every { int x -> old.getRGB(x, y) == out.getRGB(x, y) } }
+                if (samePixels) return 0
+            }
+            def bytes = new ByteArrayOutputStream()
+            javax.imageio.ImageIO.write(out, 'png', bytes)
+            byte[] png = bytes.toByteArray()
+            if (dest.isFile() && Arrays.equals(dest.bytes, png)) return 0
+            blockDst.mkdirs()
+            dest.bytes = png
+            return 1
         }
         int written = 0
         new java.util.zip.ZipFile(modZip).withCloseable { fc ->
@@ -85,28 +117,33 @@ tasks.register('deriveModernWoodTextures') {
                             if (mask) overlay++
                         }
                     }
-                    File dest = new File(blockDst, "${outName}.png")
-                    boolean samePixels = false
-                    if (dest.isFile()) {
-                        def old = javax.imageio.ImageIO.read(dest)
-                        samePixels = old != null && old.width == 16 && old.height == 16 &&
-                                (0..<16).every { int y -> (0..<16).every { int x -> old.getRGB(x, y) == out.getRGB(x, y) } }
-                    }
-                    if (!samePixels) {
-                        def bytes = new ByteArrayOutputStream()
-                        javax.imageio.ImageIO.write(out, 'png', bytes)
-                        byte[] png = bytes.toByteArray()
-                        if (!dest.isFile() || !Arrays.equals(dest.bytes, png)) {
-                            blockDst.mkdirs()
-                            dest.bytes = png
-                            written++
+                    written += writeIfChanged(new File(blockDst, "${outName}.png"), out)
+                    logger.info("deriveModernWoodTextures: ${outName}: ${overlay} FC overlay pixels (fcBlockWorkStump${relative}) over ${log}")
+                }
+                // FU-W1: the rule the column sides follow, re-checked on FC's own oak pair
+                def dec = readPng(fc, 'MINECRAFT-JAR/textures/blocks/FCBlockDecorativeWoodOak.png')
+                def col = readPng(fc, 'MINECRAFT-JAR/textures/blocks/fcBlockColumnWoodOak_side.png')
+                if (!(0..<16).every { int y -> (0..<16).every { int x -> col.getRGB(x, y) == dec.getRGB(15 - y, x) } }) {
+                    logger.warn("deriveModernWoodTextures: FC's oak column side is no longer its planks face turned a quarter")
+                }
+                columns.each { String outName, String planks ->
+                    def face = readPng(mc, "assets/minecraft/textures/block/${planks}.png")
+                    def out = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+                    for (int y = 0; y < 16; y++) {
+                        for (int x = 0; x < 16; x++) {
+                            int argb = face.getRGB(15 - y, x)
+                            if ((argb >>> 24) != 0xFF) {
+                                throw new GradleException("deriveModernWoodTextures: ${outName} pixel ${x},${y} is not opaque")
+                            }
+                            out.setRGB(x, y, argb)
                         }
                     }
-                    logger.info("deriveModernWoodTextures: ${outName}: ${overlay} FC overlay pixels (fcBlockWorkStump${relative}) over ${log}")
+                    written += writeIfChanged(new File(blockDst, "${outName}.png"), out)
+                    logger.info("deriveModernWoodTextures: ${outName}: ${planks} turned a quarter")
                 }
             }
         }
-        logger.lifecycle("deriveModernWoodTextures: ${species.size()} work-stump textures checked (${written} written)")
+        logger.lifecycle("deriveModernWoodTextures: ${species.size() + columns.size()} textures checked (${written} written)")
     }
 }
 

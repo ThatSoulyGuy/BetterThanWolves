@@ -136,8 +136,8 @@ final class LegacyVariants {
                 for (int m = 0; m < 4; m++) both(woodIds[r], m, wood[r][m]);
             }
             // FCMOD-INTEGRATION(1.20.1): modern_woods: acacia, dark oak, mangrove and cherry are FC wood types 5-8
-            // (ModernWoods): log2 at legacy id 165 with species = wood type - 5, and FC planks subtypes 5-8 (item level
-            // only; FC "any planks" recipes accept them, RecipeBridge.java:500-524).
+            // (ModernWoods): log2 at legacy id 165 with species = wood type - 5, and FC planks subtypes 5-8 (item and
+            // world, ModernWoodSubBlocks; FC "any planks" recipes accept them, RecipeBridge.java:529-555).
             ItemLike[] log2 = {Blocks.ACACIA_LOG, Blocks.DARK_OAK_LOG, Blocks.MANGROVE_LOG, Blocks.CHERRY_LOG};
             ItemLike[] planks2 = {Blocks.ACACIA_PLANKS, Blocks.DARK_OAK_PLANKS, Blocks.MANGROVE_PLANKS, Blocks.CHERRY_PLANKS};
             for (int s = 0; s < 4; s++) {
@@ -188,6 +188,13 @@ final class LegacyVariants {
             // BlockWall.java:19 {normal, mossy}
             both(139, 0, Blocks.COBBLESTONE_WALL);
             both(139, 1, Blocks.MOSSY_COBBLESTONE_WALL);
+
+            // FCMOD-INTEGRATION(1.20.1): flower_subtypes: port-only subtypes of the rose 38, as ProxyRegistry's 38 variant
+            // table (1.7.2's red_flower order 0-8, then 9 cornflower, 10 lily of the valley); 38:0 stays the poppy, 4.B's rose
+            ItemLike[] flowers = {Blocks.POPPY, Blocks.BLUE_ORCHID, Blocks.ALLIUM, Blocks.AZURE_BLUET, Blocks.RED_TULIP,
+                    Blocks.ORANGE_TULIP, Blocks.WHITE_TULIP, Blocks.PINK_TULIP, Blocks.OXEYE_DAISY, Blocks.CORNFLOWER,
+                    Blocks.LILY_OF_THE_VALLEY};
+            for (int m = 0; m < flowers.length; m++) both(38, m, flowers[m]);
 
             // BlockAnvil.java:19 {intact, slightlyDamaged, veryDamaged}
             both(145, 0, Blocks.ANVIL);
@@ -253,13 +260,69 @@ final class LegacyVariants {
     }
 
     /**
-     * Returns {legacyId, damage} for a modern item that is a flattened 1.5.2 subtype, or null.
-     * The damage of a modern spelling carries {@link #MODERN_SPELLING} ({@link #baseSubtype} strips it).
-     * The returned array is shared; callers must not modify it.
+     * Returns {legacyId, damage} for a modern item that is a flattened 1.5.2 subtype, or that counts as an FC item
+     * ({@link #COUNTS_AS}), or null. The damage of a modern spelling carries {@link #MODERN_SPELLING}
+     * ({@link #baseSubtype} strips it). The returned array is shared; callers must not modify it.
      */
     static int[] toLegacy(Item item) {
         if (item == null) return null;
-        return TO_LEGACY.get(item);
+        int[] legacy = TO_LEGACY.get(item);
+        if (legacy != null) return legacy;
+        Map<Item, int[]> table = countsAs();
+        return table != null ? table.get(item) : null;
+    }
+
+    /**
+     * 1.20.1 items that count as an FC item, one way (1.20.1 to FC): raw iron and raw gold are FC's iron and gold ore
+     * chunks (maintainer ruling 2026-10-21). FC hands back its own chunk item (toMcStack has no reverse entry), and
+     * RecipeBridge.legacyAlias skips them (not a spelling of the chunk). Resolved by FCBetterThanWolves field name once
+     * FC is ready (the BTW ID config sets the ids).
+     */
+    // FCMOD-INTEGRATION(1.20.1): raw_ore_chunks: raw iron and raw gold read as BTW's ore chunks on every FC path
+    private static final Object[][] COUNTS_AS = {
+            {Items.RAW_IRON, "fcItemChunkIronOre"},
+            {Items.RAW_GOLD, "fcItemChunkGoldOre"}};
+    private static volatile Map<Item, int[]> countsAs;
+
+    /** The COUNTS_AS table, or null before FC is ready (never cached early). Built once: a row whose FC field does not
+     *  resolve is left out with one WARN, and the item stays its own (headless) item. */
+    private static Map<Item, int[]> countsAs() {
+        Map<Item, int[]> table = countsAs;
+        if (table != null) return table;
+        if (!BTWLifecycle.isFcReady()) return null;
+        synchronized (COUNTS_AS) {
+            if (countsAs == null) {
+                Map<Item, int[]> built = new IdentityHashMap<>();
+                for (Object[] row : COUNTS_AS) {
+                    int id = btw.forge.compat.FcRefs.legacyItemId((String) row[1]);
+                    if (id > 0) {
+                        built.put((Item) row[0], new int[]{id, 0});
+                    } else {
+                        LOGGER.warn("[LEGACY-VARIANTS] {} counts as FCBetterThanWolves.{}, which did not resolve; it"
+                                + " stays its own item", row[0], row[1]);
+                    }
+                }
+                countsAs = Collections.unmodifiableMap(built);
+            }
+            return countsAs;
+        }
+    }
+
+    /** True for an item of the COUNTS_AS table (raw iron, raw gold) once FC is ready. */
+    static boolean isCountsAs(Item item) {
+        Map<Item, int[]> table = countsAs();
+        return table != null && table.containsKey(item);
+    }
+
+    /** The items that count as FC (id, meta): extra inputs of FC's exported smelting recipe (RecipeBridge). */
+    static java.util.List<Item> countsAsItems(int id, int meta) {
+        Map<Item, int[]> table = countsAs();
+        if (table == null) return java.util.List.of();
+        java.util.List<Item> out = new java.util.ArrayList<>();
+        table.forEach((item, legacy) -> {
+            if (legacy[0] == id && legacy[1] == meta) out.add(item);
+        });
+        return out;
     }
 
     /** Returns the modern item for a 1.5.2 (id, damage) subtype, or null if the pair is not a table entry. */

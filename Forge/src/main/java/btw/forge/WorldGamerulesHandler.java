@@ -60,6 +60,8 @@ public final class WorldGamerulesHandler {
         setRule(rules, GameRules.RULE_DO_TRADER_SPAWNING, false, server);
         setRule(rules, GameRules.RULE_DO_WARDEN_SPAWNING, false, server);
         setRule(rules, GameRules.RULE_KEEPINVENTORY, false, server);
+        // FCMOD-INTEGRATION(1.20.1): fc_blast_rules: TNT drops like every other blast, 1 in radius (4.B: 1 / size for every explosion, decision D1 = C); new worlds only, /gamerule tntExplosionDropDecay false restores 1.20.1's
+        setRule(rules, GameRules.RULE_TNT_EXPLOSION_DROP_DECAY, true, server);
 
         LOGGER.info("BTW: Gamerule defaults applied. Players can override via /gamerule.");
     }
